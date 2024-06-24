@@ -15,6 +15,8 @@ using System.Collections.Generic;
 using RibbonPanel = Autodesk.Revit.UI.RibbonPanel;
 using RibbonItem = Autodesk.Revit.UI.RibbonItem;
 using ComboBox = Autodesk.Revit.UI.ComboBox;
+using Autodesk.Revit.UI.Events;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -65,7 +67,7 @@ namespace FerrumAddin
 
             a.CreateRibbonTab(tabName);
             RibbonPanel panelFerrum = a.CreateRibbonPanel(tabName, "Железно");
-            PushButtonData iss = new PushButtonData("Конфигуратор", "Конфигуратор", Assembly.GetExecutingAssembly().Location, "velcon_Addin.Issues");
+            PushButtonData iss = new PushButtonData("Конфигуратор", "Конфигуратор", Assembly.GetExecutingAssembly().Location, "FerrumAddin.Issues");
             iss.Image = Convert(Properties.Resources.Image1);
             iss.LargeImage = Convert(Properties.Resources.Image1);
             ComboBoxData comboBoxData = new ComboBoxData("ChangeRazd");
@@ -80,8 +82,46 @@ namespace FerrumAddin
                                                                              new ComboBoxMemberData("Control", "Управление")});
 
             cb.CurrentChanged += Cb_CurrentChanged;
+
+
+            PushButtonData FamilyManager = new PushButtonData("Менеджер семейств", "Менеджер семейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.Show");
+            panelFerrum.AddItem(FamilyManager);
+
+            Viewer dock = new Viewer();
+            dockableWindow = dock;
+
+            DockablePaneId id = new DockablePaneId(new Guid("{68D44FAC-CF09-46B2-9544-D5A3F809373C}"));
+            try
+            {
+                a.RegisterDockablePane(id, "Менеджер семейств Железно",
+                        dockableWindow as IDockablePaneProvider);
+                a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
+            }
+            catch (Exception ex)
+            {
+
+            }
+            AllowLoad = false;
             return Result.Succeeded;
         }
+        public static bool AllowLoad;
+        private void ControlledApplication_FamilyLoadingIntoDocument(object sender, Autodesk.Revit.DB.Events.FamilyLoadingIntoDocumentEventArgs e)
+        {
+            if (AllowLoad)
+            {
+              
+            }
+            else
+            {
+                e.Cancel();
+                TaskDialog.Show("Запрет загрузки", "Загрузите семейство из менеджера семейств");
+            }
+        }
+
+        Viewer dockableWindow = null;
+        ExternalCommandData edata = null;
+
+        
 
         private void Cb_CurrentChanged(object sender, Autodesk.Revit.UI.Events.ComboBoxCurrentChangedEventArgs e)
         {
@@ -91,6 +131,22 @@ namespace FerrumAddin
         public Result OnShutdown(UIControlledApplication a)
         {
             return Result.Succeeded;
+        }
+    }
+
+    public class CommandAvailability : IExternalCommandAvailability
+    {
+        // interface member method
+        public bool IsCommandAvailable(UIApplication app, CategorySet cate)
+        {
+            // zero doc state
+            if (app.ActiveUIDocument == null)
+            {
+                // disable register btn
+                return true;
+            }
+            // enable register btn
+            return false;
         }
     }
 }
