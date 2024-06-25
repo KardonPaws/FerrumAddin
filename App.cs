@@ -17,6 +17,10 @@ using RibbonItem = Autodesk.Revit.UI.RibbonItem;
 using ComboBox = Autodesk.Revit.UI.ComboBox;
 using Autodesk.Revit.UI.Events;
 using System.Threading.Tasks;
+using System.Windows.Controls;
+using Autodesk.Windows;
+using TaskDialog = Autodesk.Revit.UI.TaskDialog;
+using System.Xml.Linq;
 
 #endregion
 
@@ -46,7 +50,7 @@ namespace FerrumAddin
         }
 
 
-        public static BitmapImage Convert(Image img)
+        public static BitmapImage Convert(System.Drawing.Image img)
         {
             using (var memory = new MemoryStream())
             {
@@ -67,9 +71,7 @@ namespace FerrumAddin
 
             a.CreateRibbonTab(tabName);
             RibbonPanel panelFerrum = a.CreateRibbonPanel(tabName, "Железно");
-            PushButtonData iss = new PushButtonData("Конфигуратор", "Конфигуратор", Assembly.GetExecutingAssembly().Location, "FerrumAddin.Issues");
-            iss.Image = Convert(Properties.Resources.Image1);
-            iss.LargeImage = Convert(Properties.Resources.Image1);
+            PushButtonData iss = new PushButtonData("frmConfig", "Конфигуратор", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ConfiguratorShow");
             ComboBoxData comboBoxData = new ComboBoxData("ChangeRazd");
             List<RibbonItem> items = panelFerrum.AddStackedItems(iss, comboBoxData).ToList();
             AW.RibbonItem ri = GetButton(tabName, "Железно", comboBoxData.Name);
@@ -84,10 +86,13 @@ namespace FerrumAddin
             cb.CurrentChanged += Cb_CurrentChanged;
 
 
-            PushButtonData FamilyManager = new PushButtonData("Менеджер семейств", "Менеджер семейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.Show");
+            PushButtonData FamilyManager = new PushButtonData("frmManager", "Менеджер семейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FamilyManagerShow");
+            FamilyManager.Image = Convert(Properties.Resources.FamilyManager);
+            FamilyManager.LargeImage = Convert(Properties.Resources.FamilyManager);
+
             panelFerrum.AddItem(FamilyManager);
 
-            Viewer dock = new Viewer();
+            FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;
 
             DockablePaneId id = new DockablePaneId(new Guid("{68D44FAC-CF09-46B2-9544-D5A3F809373C}"));
@@ -96,14 +101,91 @@ namespace FerrumAddin
                 a.RegisterDockablePane(id, "Менеджер семейств Железно",
                         dockableWindow as IDockablePaneProvider);
                 a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
+                a.ControlledApplication.DocumentOpened += ControlledApplication_DocumentOpened;
+                a.ViewActivated += A_ViewActivated;
+                LoadEvent = ExternalEvent.Create(new LoadEvent());
             }
             catch (Exception ex)
             {
 
             }
             AllowLoad = false;
+            xmlFilePath = a.ControlledApplication.CurrentUserAddinsLocation + "\\Settings.xml";
+            XElement root = null;
+            if (System.IO.File.Exists(xmlFilePath))
+            {
+                root = XElement.Load(xmlFilePath);
+            }
+            else
+            {
+                root = new XElement("Settings");
+
+                XElement frmMangerElement = root.Element("frmManager");
+                frmMangerElement = new XElement("frmManager");
+                root.Add(frmMangerElement);
+                frmMangerElement.SetAttributeValue("IsChecked", true);
+
+                root.Save(xmlFilePath);
+            }
+            ButtonConf(root);
             return Result.Succeeded;
         }
+        public static string xmlFilePath;
+        public static Dictionary<string, bool> GetElementStates(XElement root)
+        {
+            var elementStates = new Dictionary<string, bool>();
+
+            foreach (var element in root.Elements())
+            {
+                if (bool.TryParse(element.Attribute("IsChecked")?.Value, out bool isChecked))
+                {
+                    elementStates[element.Name.LocalName] = isChecked;
+                }
+            }
+
+            return elementStates;
+        }
+        public static void ButtonConf(XElement root)
+        {
+            Dictionary<string,bool> names = GetElementStates(root);
+            Autodesk.Windows.RibbonControl ribbon = Autodesk.Windows.ComponentManager.Ribbon;
+            foreach (Autodesk.Windows.RibbonTab tab in ribbon.Tabs)
+            {
+                if (tab.Title.Contains("Железно"))
+                {
+                    foreach (Autodesk.Windows.RibbonPanel panel in tab.Panels)
+                    {
+
+                        RibbonItemCollection collctn = panel.Source.Items;
+                        foreach (Autodesk.Windows.RibbonItem ri in collctn)
+                        {
+                            string name = ri.Id.Split('%').Last();
+                            if (names.Keys.ToList().Contains(name))
+                            {
+                                ri.IsVisible = names[name];
+                                ri.ShowText = names[name];
+                                ri.ShowImage = names[name];
+                            }
+                        }
+                        
+                    }
+                }
+            }
+        }
+
+        private void A_ViewActivated(object sender, ViewActivatedEventArgs e)
+        {
+            Document d = e.Document;
+            dockableWindow.CustomInitiator(d);
+        }
+
+        private void ControlledApplication_DocumentOpened(object sender, Autodesk.Revit.DB.Events.DocumentOpenedEventArgs e)
+        {
+            Document d = e.Document;
+            dockableWindow.CustomInitiator(d);
+        }
+
+        public static ExternalEvent LoadEvent;
         public static bool AllowLoad;
         private void ControlledApplication_FamilyLoadingIntoDocument(object sender, Autodesk.Revit.DB.Events.FamilyLoadingIntoDocumentEventArgs e)
         {
@@ -118,7 +200,7 @@ namespace FerrumAddin
             }
         }
 
-        Viewer dockableWindow = null;
+        FamilyManagerWindow dockableWindow = null;
         ExternalCommandData edata = null;
 
         
@@ -131,6 +213,37 @@ namespace FerrumAddin
         public Result OnShutdown(UIControlledApplication a)
         {
             return Result.Succeeded;
+        }
+    }
+
+    public class LoadEvent : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+
+            List<MenuItem> list = new List<MenuItem>();
+            foreach (TabItemViewModel tab in FamilyManagerWindow.mvm.TabItems)
+            {
+                list.AddRange(tab.MenuItems.Where(x => x.IsSelected).ToList());
+            }
+            App.AllowLoad = true;
+            using (Transaction tx = new Transaction(FamilyManagerWindow.doc))
+            {
+                tx.Start("Загрузка семейств");
+                foreach (MenuItem tab in list)
+                {
+                    FamilyManagerWindow.doc.LoadFamily(tab.Path);
+                }
+                tx.Commit();
+            }
+            App.AllowLoad = false;
+            FamilyManagerWindow.Reload();
+        }
+
+
+        public string GetName()
+        {
+            return "xxx";
         }
     }
 

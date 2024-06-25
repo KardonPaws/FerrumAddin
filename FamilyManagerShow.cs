@@ -12,7 +12,7 @@ namespace FerrumAddin
 {
 
     [Transaction(TransactionMode.Manual)]
-    public class Show : IExternalCommand
+    public class FamilyManagerShow : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
