@@ -65,23 +65,25 @@
             </TabControl.ItemTemplate>
             <TabControl.ContentTemplate>
                 <DataTemplate>
-                    <StackPanel>
-                        <ItemsControl ItemsSource="{Binding MenuItems}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button BorderThickness="1" BorderBrush="LightGray" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Padding="5" Click="ElementClick" >
-                                        <StackPanel Orientation="Horizontal">
-                                            <Image Width="50" Height="50" Source="{Binding ImagePath}"/>
-                                            <StackPanel Margin="10,0,0,0">
-                                                <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                                                <TextBlock Text="{Binding Category}" Foreground="Gray"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding MenuItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button BorderThickness="1" BorderBrush="LightGray" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Padding="5" Click="ElementClick" >
+                                            <StackPanel Orientation="Horizontal">
+                                                <Image Width="50" Height="50" Source="{Binding ImagePath}"/>
+                                                <StackPanel Margin="10,0,0,0">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding Category}" Foreground="Gray"/>
+                                                </StackPanel>
                                             </StackPanel>
-                                        </StackPanel>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
                 </DataTemplate>
             </TabControl.ContentTemplate>
         </TabControl>
