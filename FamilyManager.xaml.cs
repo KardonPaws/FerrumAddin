@@ -54,12 +54,60 @@ namespace FerrumAddin
             doc = d;
 
         }
+        public void Newpath()
+        {
+            mvm = new MainViewModel();
+            Tabs.ItemsSource = mvm.TabItems;
+        }
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             SearchText = (sender as TextBox).Text;
             FilterItems(SearchText);
         }
+        public ObservableCollection<TabItemViewModel> filteredTabItems;
 
+        private void UpdateIsSelectedStates()
+        {
+            if (filteredTabItems != null)
+            {
+                if (SearchText == "" || SearchText == String.Empty)
+                {
+                    foreach (var filteredTab in filteredTabItems)
+                    {
+                        var originalTab = mvm.TabItems.FirstOrDefault(t => t.Header == filteredTab.Header);
+                        if (originalTab != null)
+                        {
+                            foreach (var filteredItem in filteredTab.MenuItems)
+                            {
+                                var originalItem = originalTab.MenuItems.FirstOrDefault(i => i.Name == filteredItem.Name && i.Category == filteredItem.Category);
+                                if (originalItem != null)
+                                {
+                                    originalItem.IsSelected = filteredItem.IsSelected;
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var originalTab in mvm.TabItems)
+                    {
+                        var filteredTab = filteredTabItems.FirstOrDefault(t => t.Header == originalTab.Header);
+                        if (filteredTab != null)
+                        {
+                            foreach (var originalItem in originalTab.MenuItems)
+                            {
+                                var filteredItem = originalTab.MenuItems.FirstOrDefault(i => i.Name == originalItem.Name && i.Category == originalItem.Category);
+                                if (filteredItem != null)
+                                {
+                                    filteredItem.IsSelected = originalItem.IsSelected;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         private void FilterItems(string searchText)
         {
             int index = Tabs.SelectedIndex;
@@ -70,7 +118,7 @@ namespace FerrumAddin
             }
             else
             {
-                var filteredTabItems = new ObservableCollection<TabItemViewModel>();
+                filteredTabItems = new ObservableCollection<TabItemViewModel>();
 
                 foreach (var tab in mvm.TabItems)
                 {
@@ -125,7 +173,7 @@ namespace FerrumAddin
             var menuItem = frameworkElement?.DataContext as MenuItem;
             if (menuItem != null)
             {
-                menuItem.IsSelected = !menuItem.IsSelected;
+                menuItem.IsSelected = !menuItem.IsSelected;              
                 if (menuItem.IsSelected)
                 {
                     (frameworkElement as Button).Background = Brushes.LightBlue;
@@ -133,8 +181,8 @@ namespace FerrumAddin
                 else
                 {
                     (frameworkElement as Button).Background = Brushes.White;
-                }    
-
+                }
+                UpdateIsSelectedStates();
             }
         }
 
@@ -187,7 +235,7 @@ namespace FerrumAddin
         public MainViewModel()
         {
             TabItems = new ObservableCollection<TabItemViewModel>();
-            LoadTabItemsFromXml("C:\\Users\\Igor\\Downloads\\TabItems.xml");
+            LoadTabItemsFromXml(App.TabPath);
         }
         private void LoadTabItemsFromXml(string filePath)
         {

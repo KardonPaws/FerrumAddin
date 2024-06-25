@@ -67,13 +67,44 @@ namespace FerrumAddin
         }
         public Result OnStartup(UIControlledApplication a)
         {
+            
+            xmlFilePath = a.ControlledApplication.CurrentUserAddinsLocation + "\\Settings.xml";
+            XElement root;
+            if (System.IO.File.Exists(xmlFilePath))
+            {
+                root = XElement.Load(xmlFilePath);
+            }
+            else
+            {
+                root = new XElement("Settings");
+            }
+
+
+            XElement frmMangerElement = root.Element("frmManger");
+            if (frmMangerElement == null)
+            {
+                frmMangerElement = new XElement("frmManger");
+                root.Add(frmMangerElement);
+            }
+            XElement frmTabPath = root.Element("TabPath");
+            if (frmTabPath == null)
+            {
+                frmTabPath = new XElement("TabPath");
+                frmTabPath.SetAttributeValue("Path", a.ControlledApplication.CurrentUserAddinsLocation + "\\TabItems.xml");
+                root.Add(frmTabPath);
+            }
+            TabPath = frmTabPath.Attribute("Path").Value;
+            root.Save(xmlFilePath);
+
             string tabName = "Железно";
 
             a.CreateRibbonTab(tabName);
             RibbonPanel panelFerrum = a.CreateRibbonPanel(tabName, "Железно");
-            PushButtonData iss = new PushButtonData("frmConfig", "Конфигуратор", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ConfiguratorShow");
+            PushButtonData conf = new PushButtonData("frmConfig", "Конфигуратор", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ConfiguratorShow");
+            conf.Image = Convert(Properties.Resources.ferrum);
+            conf.LargeImage = Convert(Properties.Resources.ferrum);
             ComboBoxData comboBoxData = new ComboBoxData("ChangeRazd");
-            List<RibbonItem> items = panelFerrum.AddStackedItems(iss, comboBoxData).ToList();
+            List<RibbonItem> items = panelFerrum.AddStackedItems(conf, comboBoxData).ToList();
             AW.RibbonItem ri = GetButton(tabName, "Железно", comboBoxData.Name);
             ri.Width = 110;
             ComboBox cb = (items[1] as ComboBox);
@@ -110,27 +141,13 @@ namespace FerrumAddin
 
             }
             AllowLoad = false;
-            xmlFilePath = a.ControlledApplication.CurrentUserAddinsLocation + "\\Settings.xml";
-            XElement root = null;
-            if (System.IO.File.Exists(xmlFilePath))
-            {
-                root = XElement.Load(xmlFilePath);
-            }
-            else
-            {
-                root = new XElement("Settings");
 
-                XElement frmMangerElement = root.Element("frmManager");
-                frmMangerElement = new XElement("frmManager");
-                root.Add(frmMangerElement);
-                frmMangerElement.SetAttributeValue("IsChecked", true);
-
-                root.Save(xmlFilePath);
-            }
             ButtonConf(root);
+
             return Result.Succeeded;
         }
         public static string xmlFilePath;
+        public static string TabPath;
         public static Dictionary<string, bool> GetElementStates(XElement root)
         {
             var elementStates = new Dictionary<string, bool>();
@@ -200,7 +217,7 @@ namespace FerrumAddin
             }
         }
 
-        FamilyManagerWindow dockableWindow = null;
+        public static FamilyManagerWindow dockableWindow = null;
         ExternalCommandData edata = null;
 
         

@@ -9,6 +9,7 @@
       Title="Page1">
     <Page.Resources>
         <ResourceDictionary>
+            <local:BooleanToBrushConverter x:Key="BooleanToBrushConverter" x:Name="BooleanToBrushConverter"/>
             <BitmapImage x:Key="name" UriSource="Resources/Железно-верт-синий.png" />
         </ResourceDictionary>
     </Page.Resources>
@@ -68,7 +69,7 @@
                         <ItemsControl ItemsSource="{Binding MenuItems}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Button BorderThickness="1" BorderBrush="LightGray" Background="White" Margin="5" Padding="5" Click="ElementClick" >
+                                    <Button BorderThickness="1" BorderBrush="LightGray" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Padding="5" Click="ElementClick" >
                                         <StackPanel Orientation="Horizontal">
                                             <Image Width="50" Height="50" Source="{Binding ImagePath}"/>
                                             <StackPanel Margin="10,0,0,0">

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -39,6 +40,8 @@ namespace FerrumAddin
                 {
                     frmManger.IsChecked = isChecked;
                 }
+                XElement frmTabPath = root.Element("TabPath");
+                path.Text = frmTabPath.Attribute("Path").Value;
             }
             catch (Exception ex)
             {
@@ -56,7 +59,8 @@ namespace FerrumAddin
                 root.Add(frmMangerElement);
             }
             frmMangerElement.SetAttributeValue("IsChecked", frmManger.IsChecked);
-
+            XElement frmTabPath = root.Element("TabPath");
+            frmTabPath.SetAttributeValue("Path", path.Text);
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)
@@ -75,7 +79,21 @@ namespace FerrumAddin
             SaveToggleButtonState(root);
             root.Save(xmlFilePath);
             App.ButtonConf(root);
+            App.TabPath = path.Text;
+            App.dockableWindow.Newpath();
             this.Close();
+        }
+
+        private void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "Файлы XML (*.xml)|*.xml";
+            if ((bool)ofd.ShowDialog())
+            {
+                
+                path.Text = ofd.FileName;
+            }
+            
         }
     }
 }

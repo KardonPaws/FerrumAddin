@@ -99,6 +99,9 @@
   <ItemGroup>
     <Resource Include="Resources\FamilyManager.png" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\ferrum.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"
