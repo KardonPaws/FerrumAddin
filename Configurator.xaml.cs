@@ -8,11 +8,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
+using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Xml.Linq;
+using MessageBox = System.Windows.MessageBox;
 
 namespace FerrumAddin
 {
@@ -79,21 +81,58 @@ namespace FerrumAddin
             SaveToggleButtonState(root);
             root.Save(xmlFilePath);
             App.ButtonConf(root);
-            App.TabPath = path.Text;
+            App.FamilyFolder = path.Text;
+            RecreateXmlFile(App.FamilyFolder);
             App.dockableWindow.Newpath();
             this.Close();
         }
 
-        private void Button_Click_1(object sender, RoutedEventArgs e)
+        private void RecreateXmlFile(string folderPath)
         {
-            OpenFileDialog ofd = new OpenFileDialog();
-            ofd.Filter = "Файлы XML (*.xml)|*.xml";
-            if ((bool)ofd.ShowDialog())
+            string tabPath = App.TabPath;
+            XElement root = new XElement("Settings");
+
+            foreach (var dir in System.IO.Directory.GetDirectories(folderPath))
             {
-                
-                path.Text = ofd.FileName;
+                XElement tabElement = new XElement("TabItem");
+                tabElement.Add(new XElement("Header", System.IO.Path.GetFileName(dir)));
+
+                foreach (var categoryDir in System.IO.Directory.GetDirectories(dir))
+                {
+                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rfa"))
+                    {
+                        string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(file);
+                        string imagePath = System.IO.Path.Combine(categoryDir, fileNameWithoutExtension + ".png");
+
+
+                        XElement menuItemElement = new XElement("MenuItem");
+                        menuItemElement.Add(new XElement("Name", fileNameWithoutExtension));
+                        menuItemElement.Add(new XElement("Category", System.IO.Path.GetFileName(categoryDir)));
+                        menuItemElement.Add(new XElement("Path", file));
+
+                        menuItemElement.Add(new XElement("ImagePath", imagePath));
+
+                        tabElement.Add(menuItemElement);
+
+                    }
+                }
+
+                root.Add(tabElement);
             }
-            
+
+            root.Save(tabPath);
+        }
+    
+
+    private void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            FolderBrowserDialog fbd = new FolderBrowserDialog();
+            if (fbd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                path.Text = fbd.SelectedPath;
+            }
+
+
         }
     }
 }

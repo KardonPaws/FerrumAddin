@@ -100,7 +100,7 @@ namespace FerrumAddin
 
             a.CreateRibbonTab(tabName);
             RibbonPanel panelFerrum = a.CreateRibbonPanel(tabName, "Железно");
-            PushButtonData conf = new PushButtonData("frmConfig", "Конфигуратор", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ConfiguratorShow");
+            PushButtonData conf = new PushButtonData("frmConfig", "Настройки", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ConfiguratorShow");
             conf.Image = Convert(Properties.Resources.ferrum);
             conf.LargeImage = Convert(Properties.Resources.ferrum);
             ComboBoxData comboBoxData = new ComboBoxData("ChangeRazd");
@@ -148,6 +148,7 @@ namespace FerrumAddin
         }
         public static string xmlFilePath;
         public static string TabPath;
+        public static string FamilyFolder;
         public static Dictionary<string, bool> GetElementStates(XElement root)
         {
             var elementStates = new Dictionary<string, bool>();

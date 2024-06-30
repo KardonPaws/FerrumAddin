@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FerrumAddin"
         mc:Ignorable="d"
-        Title="Конфигуратор" Height="450" Width="400" ResizeMode="NoResize">
+        Title="Настройки" Height="450" Width="400" ResizeMode="NoResize">
     <Window.Resources>
         <Style x:Key="AnimatedSwitch" TargetType="{x:Type ToggleButton}">
             <Setter Property="Foreground" Value="Black" />
@@ -79,7 +79,7 @@
                 <Expander Header="Настройки менеджера семейств" IsExpanded="True" Margin="10px">
                     <DockPanel>
                         <Label Content="Путь к файлу" VerticalAlignment="Center"/>
-                        <Button Content="Выбрать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
+                        <Button Content="Создать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                         <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
                             <TextBlock x:Name="path"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                         </Border>
