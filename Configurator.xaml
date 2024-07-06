@@ -77,14 +77,16 @@
                 </StackPanel>
             </Expander>
                 <Expander Header="Настройки менеджера семейств" IsExpanded="True" Margin="10px">
-                    <DockPanel>
-                        <Label Content="Путь к файлу" VerticalAlignment="Center"/>
-                        <Button Content="Создать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
-                        <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                            <TextBlock x:Name="path"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
-                        </Border>
-                        
-                    </DockPanel>
+                    <StackPanel x:Name="FamilyManager">
+                        <DockPanel>
+                            <Label Content="Путь к файлу" VerticalAlignment="Center"/>
+                            <Button Content="Создать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
+                            <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
+                                <TextBlock x:Name="path"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                            </Border>
+                        </DockPanel>
+
+                    </StackPanel>
                 </Expander>
             </StackPanel>
         </ScrollViewer>

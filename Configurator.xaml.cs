@@ -14,6 +14,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Xml.Linq;
+using CheckBox = System.Windows.Controls.CheckBox;
 using MessageBox = System.Windows.MessageBox;
 
 namespace FerrumAddin
@@ -26,13 +27,13 @@ namespace FerrumAddin
         public Configurator()
         {
             InitializeComponent();
+            CreateCheckboxesFromXml();
             LoadToggleButtonState();
         }
         private void LoadToggleButtonState()
         {
             try
             {
-                // Замените путь к вашему XML файлу
                 string xmlFilePath = App.xmlFilePath;
                 XElement root = XElement.Load(xmlFilePath);
 
@@ -44,6 +45,8 @@ namespace FerrumAddin
                 }
                 XElement frmTabPath = root.Element("TabPath");
                 path.Text = frmTabPath.Attribute("Path").Value;
+
+
             }
             catch (Exception ex)
             {
@@ -62,7 +65,7 @@ namespace FerrumAddin
             }
             frmMangerElement.SetAttributeValue("IsChecked", frmManger.IsChecked);
             XElement frmTabPath = root.Element("TabPath");
-            frmTabPath.SetAttributeValue("Path", path.Text);
+            //frmTabPath.SetAttributeValue("Path", path.Text);
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)
@@ -83,6 +86,8 @@ namespace FerrumAddin
             App.ButtonConf(root);
             App.FamilyFolder = path.Text;
             RecreateXmlFile(App.FamilyFolder);
+            CreateCheckboxesFromXml();
+            SaveCheckboxesToXml();
             App.dockableWindow.Newpath();
             this.Close();
         }
@@ -90,49 +95,94 @@ namespace FerrumAddin
         private void RecreateXmlFile(string folderPath)
         {
             string tabPath = App.TabPath;
-            XElement root = new XElement("Settings");
-
-            foreach (var dir in System.IO.Directory.GetDirectories(folderPath))
+            if (folderPath != App.TabPath)
             {
-                XElement tabElement = new XElement("TabItem");
-                tabElement.Add(new XElement("Header", System.IO.Path.GetFileName(dir)));
+                XElement root = new XElement("Settings");
 
-                foreach (var categoryDir in System.IO.Directory.GetDirectories(dir))
+                foreach (var dir in System.IO.Directory.GetDirectories(folderPath))
                 {
-                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rfa"))
+                    XElement tabElement = new XElement("TabItem");
+                    tabElement.Add(new XElement("Header", System.IO.Path.GetFileName(dir)));
+                    tabElement.Add(new XElement("Visibility", true));
+
+                    foreach (var categoryDir in System.IO.Directory.GetDirectories(dir))
                     {
-                        string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(file);
-                        string imagePath = System.IO.Path.Combine(categoryDir, fileNameWithoutExtension + ".png");
+                        foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rfa"))
+                        {
+                            string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(file);
+                            string imagePath = System.IO.Path.Combine(categoryDir, fileNameWithoutExtension + ".png");
 
 
-                        XElement menuItemElement = new XElement("MenuItem");
-                        menuItemElement.Add(new XElement("Name", fileNameWithoutExtension));
-                        menuItemElement.Add(new XElement("Category", System.IO.Path.GetFileName(categoryDir)));
-                        menuItemElement.Add(new XElement("Path", file));
+                            XElement menuItemElement = new XElement("MenuItem");
+                            menuItemElement.Add(new XElement("Name", fileNameWithoutExtension));
+                            menuItemElement.Add(new XElement("Category", System.IO.Path.GetFileName(categoryDir)));
+                            menuItemElement.Add(new XElement("Path", file));
+                            menuItemElement.Add(new XElement("ImagePath", imagePath));
 
-                        menuItemElement.Add(new XElement("ImagePath", imagePath));
+                            tabElement.Add(menuItemElement);
 
-                        tabElement.Add(menuItemElement);
-
+                        }
                     }
+
+                    root.Add(tabElement);
                 }
 
-                root.Add(tabElement);
+                root.Save(tabPath);
             }
-
-            root.Save(tabPath);
         }
-    
+        private void SaveCheckboxesToXml()
+        {
+            string filePath = App.TabPath;
+            if (!System.IO.File.Exists(filePath))
+                return;
 
-    private void Button_Click_1(object sender, RoutedEventArgs e)
+            var xdoc = XDocument.Load(filePath);
+            var children = FamilyManager.Children;
+            List<string> values = new List<string>();
+            foreach (var child in children)
+            {
+                if (child is CheckBox check)
+                {
+                    values.Add(check.IsChecked.ToString());
+                }
+            }
+            int i = 0;
+            foreach (var tabItem in xdoc.Descendants("TabItem"))
+            {
+                tabItem.Element("Visibility").SetValue(values[i]);
+                i++;
+            }
+            xdoc.Save(filePath);
+        }
+        private void CreateCheckboxesFromXml()
+        {
+            string filePath = App.TabPath;
+            if (!System.IO.File.Exists(filePath))
+                return;
+
+            var xdoc = XDocument.Load(filePath);
+            int i = 0;
+            foreach (var tabItem in xdoc.Descendants("TabItem"))
+            {
+                var header = tabItem.Element("Header")?.Value;
+                var checkBox = new CheckBox
+                {
+                    Name = "a" + i.ToString(),
+                    Content = header,
+                    Margin = new Thickness(5),
+                    IsChecked = Convert.ToBoolean(tabItem.Element("Visibility")?.Value)
+                };
+                i++;
+                FamilyManager.Children.Add(checkBox);
+            }
+        }
+        private void Button_Click_1(object sender, RoutedEventArgs e)
         {
             FolderBrowserDialog fbd = new FolderBrowserDialog();
             if (fbd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 path.Text = fbd.SelectedPath;
             }
-
-
         }
     }
 }

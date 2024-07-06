@@ -246,26 +246,31 @@ namespace FerrumAddin
 
             foreach (var tabItemElement in xdoc.Descendants("TabItem"))
             {
-                var tabItemViewModel = new TabItemViewModel
+                if (Convert.ToBoolean(tabItemElement.Element("Visibility")?.Value) == true)
                 {
-                    Header = tabItemElement.Element("Header")?.Value,
-                    MenuItems = new ObservableCollection<MenuItem>()
-                };
-
-                foreach (var menuItemElement in tabItemElement.Descendants("MenuItem"))
-                {
-                    var menuItem = new MenuItem
+                    var tabItemViewModel = new TabItemViewModel
                     {
-                        Name = menuItemElement.Element("Name")?.Value,
-                        Category = menuItemElement.Element("Category")?.Value,
-                        ImagePath = menuItemElement.Element("ImagePath")?.Value,
-                        Path = menuItemElement.Element("Path")?.Value
+                        Header = tabItemElement.Element("Header")?.Value,
+                        MenuItems = new ObservableCollection<MenuItem>()
                     };
 
-                    tabItemViewModel.MenuItems.Add(menuItem);
-                }
+                    foreach (var menuItemElement in tabItemElement.Descendants("MenuItem"))
+                    {
 
-                TabItems.Add(tabItemViewModel);
+                        var menuItem = new MenuItem
+                        {
+                            Name = menuItemElement.Element("Name")?.Value,
+                            Category = menuItemElement.Element("Category")?.Value,
+                            ImagePath = menuItemElement.Element("ImagePath")?.Value,
+                            Path = menuItemElement.Element("Path")?.Value
+                        };
+
+                        tabItemViewModel.MenuItems.Add(menuItem);
+
+                    }
+
+                    TabItems.Add(tabItemViewModel);
+                }
             }
         }
 
