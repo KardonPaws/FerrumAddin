@@ -85,7 +85,7 @@
                                 <TextBlock x:Name="path"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
-
+                        <Label Content="Видимость вкладок"/>
                     </StackPanel>
                 </Expander>
             </StackPanel>
