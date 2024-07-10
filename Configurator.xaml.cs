@@ -64,8 +64,6 @@ namespace FerrumAddin
                 root.Add(frmMangerElement);
             }
             frmMangerElement.SetAttributeValue("IsChecked", frmManger.IsChecked);
-            XElement frmTabPath = root.Element("TabPath");
-            //frmTabPath.SetAttributeValue("Path", path.Text);
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)
@@ -84,8 +82,9 @@ namespace FerrumAddin
             SaveToggleButtonState(root);
             root.Save(xmlFilePath);
             App.ButtonConf(root);
-            App.FamilyFolder = path.Text;
-            RecreateXmlFile(App.FamilyFolder);
+            App.FamilyFolder = pathText;
+            if (pathText != null)
+                RecreateXmlFile(App.FamilyFolder);
             CreateCheckboxesFromXml();
             SaveCheckboxesToXml();
             App.dockableWindow.Newpath();
@@ -176,12 +175,13 @@ namespace FerrumAddin
                 FamilyManager.Children.Add(checkBox);
             }
         }
+        public static string pathText;
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
             FolderBrowserDialog fbd = new FolderBrowserDialog();
             if (fbd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                path.Text = fbd.SelectedPath;
+                pathText = fbd.SelectedPath;
             }
         }
     }

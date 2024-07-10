@@ -23,16 +23,16 @@
             <RowDefinition Height="50"/>
         </Grid.RowDefinitions>
         <TextBox Name="SearchTextBox"
-         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-         VerticalAlignment="Center"
-         Margin="10,5,5,5"
-         Padding="5"
-         FontSize="14"
-         Height="30" TextChanged="SearchTextBox_TextChanged"/>
+                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                 VerticalAlignment="Center"
+                 Margin="10,5,5,5"
+                 Padding="5"
+                 FontSize="14"
+                 Height="30" TextChanged="SearchTextBox_TextChanged"/>
         <TextBlock Text="Поиск"
-           Foreground="Gray"
-           Margin="18,10,5,10"
-           IsHitTestVisible="False">
+                   Foreground="Gray"
+                   Margin="18,10,5,10"
+                   IsHitTestVisible="False">
             <TextBlock.Style>
                 <Style TargetType="TextBlock">
                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -47,13 +47,34 @@
                 </Style>
             </TextBlock.Style>
         </TextBlock>
-        <TabControl x:Name="Tabs" Grid.Column="1" Grid.Row="1" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
+        <TabControl x:Name="Tabs" Grid.Column="0" Grid.Row="1" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                     <Setter Property="VerticalContentAlignment" Value="Stretch" />
                 </Style>
             </TabControl.Resources>
+            <TabControl.Template>
+                <ControlTemplate TargetType="TabControl">
+                    <Grid KeyboardNavigation.TabNavigation="Local">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                            <TabPanel x:Name="HeaderPanel" 
+                                      Panel.ZIndex="1" 
+                                      IsItemsHost="True" 
+                                      Margin="2,2,2,0" 
+                                      Background="Transparent" />
+                        </ScrollViewer>
+                        <ContentPresenter x:Name="PART_SelectedContentHost"
+                                          Margin="2"
+                                          Grid.Column="0"
+                                          ContentSource="SelectedContent" />
+                    </Grid>
+                </ControlTemplate>
+            </TabControl.Template>
             <TabControl.ItemTemplate>
                 <DataTemplate>
                     <TextBlock Text="{Binding Header}">
@@ -70,7 +91,7 @@
                             <ItemsControl ItemsSource="{Binding MenuItems}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Button BorderThickness="1" BorderBrush="LightGray" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Padding="5" Click="ElementClick" >
+                                        <Button BorderThickness="1" BorderBrush="LightGray" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Padding="5" Click="ElementClick">
                                             <StackPanel Orientation="Horizontal">
                                                 <Image Width="50" Height="50" Source="{Binding ImagePath}"/>
                                                 <StackPanel Margin="10,0,0,0">

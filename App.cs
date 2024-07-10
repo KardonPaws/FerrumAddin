@@ -126,9 +126,40 @@ namespace FerrumAddin
                 }
             }
         }
-
+        public static UIControlledApplication application;
+        public static UIApplication uiapp;
+        public static string name;
         public Result OnStartup(UIControlledApplication a)
         {
+            application = a;
+            Type type = a.GetType();
+
+            string propertyName = "m_uiapplication";
+            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic
+              | BindingFlags.GetField | BindingFlags.Instance;
+            Binder binder = null;
+            object[] args = null;
+
+            object result = type.InvokeMember(
+                propertyName, flags, binder, a, args);
+
+            uiapp = (UIApplication)result;
+
+            name = uiapp.Application.Username;
+            List<string> admins = new List<string>();
+            string filePath = "P:\\10_Документы\\Bim\\Библиотека ресурсов\\Revit\\Плагины\\Железно\\Admin.txt";
+            if (File.Exists(filePath))
+            {
+                using (StreamReader reader = new StreamReader(filePath))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        admins.Add(line);
+                    }
+                }
+            }
+
             downloadDir = a.ControlledApplication.CurrentUserAddinsLocation;
             CheckForUpdates();
             
@@ -195,7 +226,10 @@ namespace FerrumAddin
             {
                 a.RegisterDockablePane(id, "Менеджер семейств Железно",
                         dockableWindow as IDockablePaneProvider);
-                a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
+                if (admins.Count == 0 || !admins.Contains(name))
+                {
+                    a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
+                }
                 a.ControlledApplication.DocumentOpened += ControlledApplication_DocumentOpened;
                 a.ViewActivated += A_ViewActivated;
                 LoadEvent = ExternalEvent.Create(new LoadEvent());
