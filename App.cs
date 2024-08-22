@@ -129,6 +129,7 @@ namespace FerrumAddin
         public static UIControlledApplication application;
         public static UIApplication uiapp;
         public static string name;
+        public RibbonPanel panelMEP;
         public Result OnStartup(UIControlledApplication a)
         {
             application = a;
@@ -217,6 +218,15 @@ namespace FerrumAddin
             FamilyManager.LargeImage = Convert(Properties.Resources.FamilyManager);
 
             panelFerrum.AddItem(FamilyManager);
+
+            panelMEP = a.CreateRibbonPanel(tabName, "ВИС");
+            panelMEP.Visible = false;
+
+            PushButtonData MEPName = new PushButtonData("mepName", "Наименование труб|воздуховодов", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandMepName");
+            FamilyManager.Image = Convert(Properties.Resources.FamilyManager);
+            FamilyManager.LargeImage = Convert(Properties.Resources.FamilyManager);
+
+            panelMEP.AddItem(MEPName);
 
             FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;
@@ -324,6 +334,15 @@ namespace FerrumAddin
         private void Cb_CurrentChanged(object sender, Autodesk.Revit.UI.Events.ComboBoxCurrentChangedEventArgs e)
         {
             string vkl = e.NewValue.ItemText;
+            switch (vkl)
+            {
+                case "ВИС":
+                    panelMEP.Visible = true;
+                    break;
+                default:
+                    panelMEP.Visible=false;
+                    break;
+            }
         }
 
         public Result OnShutdown(UIControlledApplication a)

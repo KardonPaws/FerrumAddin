@@ -60,6 +60,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App.cs" />
+    <Compile Include="CommandMepName.cs" />
     <Compile Include="ConfiguratorShow.cs" />
     <Compile Include="FamilyManagerShow.cs" />
     <Compile Include="FamilyManager.xaml.cs">
