@@ -80,7 +80,7 @@ namespace FerrumAddin
                     //Element lin = doc.GetElement(((List<ElementId>)InsulationLiningBase.GetLiningIds(doc, duct.Id))[0]);
                     string mat = duct_type.LookupParameter("ADSK_Материал обозначение").AsString();
                     string b = "";
-                    if (duct_type.LookupParameter("Огнезащита").AsInteger() == 1 || (ins != null && ins.Name.ToLower().Contains("огнезащ")))
+                    if ((duct_type.LookupParameter("Огнезащита") != null && duct_type.LookupParameter("Огнезащита").AsInteger() == 1) || (ins != null && ins.Name.ToLower().Contains("огнезащ")))
                         ognez = true;
                     if (!circle)
                     {
