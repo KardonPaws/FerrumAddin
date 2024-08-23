@@ -223,8 +223,6 @@ namespace FerrumAddin
             panelMEP.Visible = false;
 
             PushButtonData MEPName = new PushButtonData("mepName", "Наименование труб|воздуховодов", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandMepName");
-            FamilyManager.Image = Convert(Properties.Resources.FamilyManager);
-            FamilyManager.LargeImage = Convert(Properties.Resources.FamilyManager);
 
             panelMEP.AddItem(MEPName);
 
@@ -336,7 +334,7 @@ namespace FerrumAddin
             string vkl = e.NewValue.ItemText;
             switch (vkl)
             {
-                case "ВИС":
+                case "MEP":
                     panelMEP.Visible = true;
                     break;
                 default:
