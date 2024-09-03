@@ -87,26 +87,31 @@
             <TabControl.ContentTemplate>
                 <DataTemplate>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <ItemsControl ItemsSource="{Binding MenuItems}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button BorderThickness="1" BorderBrush="LightGray" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Padding="5" Click="ElementClick">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Image Width="50" Height="50" Source="{Binding ImagePath}"/>
-                                                <StackPanel Margin="10,0,0,0">
-                                                    <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                                                    <TextBlock Text="{Binding Category}" Foreground="Gray"/>
-                                                </StackPanel>
+                        <ItemsControl ItemsSource="{Binding MenuItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button BorderThickness="1" BorderBrush="LightGray" HorizontalContentAlignment="Left" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Click="ElementClick">
+                                        <Grid Margin="1,0,0,0" HorizontalAlignment="Left">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <Image Grid.Column="0" Width="50" Height="50" Source="{Binding ImagePath}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                                            <StackPanel Margin="10,0,0,0" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                                <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                                                <TextBlock Text="{Binding Category}" Foreground="Gray"/>
                                             </StackPanel>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </ScrollViewer>
                 </DataTemplate>
             </TabControl.ContentTemplate>
+
         </TabControl>
         <DockPanel Grid.Row="2">
             <Image Source="{StaticResource name}" Margin="5,5,5,5"/>

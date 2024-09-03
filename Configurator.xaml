@@ -89,49 +89,49 @@
                             <Label Content="Путь к файлу стен" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_pathWalls" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="pathWalls"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                                <TextBlock x:Name="pathWallsText"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <DockPanel>
                             <Label Content="Путь к файлу перекрытий" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_pathFloor" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="pathFloor"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                                <TextBlock x:Name="pathFloorText"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <DockPanel>
                             <Label Content="Путь к файлу потолков" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_pathCeil" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="pathCeil"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                                <TextBlock x:Name="pathCeilText"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <DockPanel>
                             <Label Content="Путь к файлу витражей" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_pathWind" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="pathWind"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                                <TextBlock x:Name="pathWindText"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <DockPanel>
                             <Label Content="Путь к файлу крыш" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_pathRoof" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="pathRoof"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                                <TextBlock x:Name="pathRoofText"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <DockPanel>
                             <Label Content="Путь к файлу ограждений" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_PathFence" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="pathFence"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                                <TextBlock x:Name="pathFenceText"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <DockPanel>
                             <Label Content="Путь к файлу пандусов" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_pathRamp" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="pathRamp"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                                <TextBlock x:Name="pathRampText"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <Label Content="Видимость вкладок"/>

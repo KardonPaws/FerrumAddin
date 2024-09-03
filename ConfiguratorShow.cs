@@ -16,9 +16,23 @@ namespace FerrumAddin
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+            CloseEv = ExternalEvent.Create(new CloseDoc());
             Configurator cfg = new Configurator();
             cfg.ShowDialog();
             return Result.Succeeded;
+        }
+        public static ExternalEvent CloseEv;
+    }
+    public class CloseDoc : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+           
+        }
+
+        public string GetName()
+        {
+            return "xxx";
         }
     }
 }

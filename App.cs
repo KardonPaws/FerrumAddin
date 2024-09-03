@@ -23,6 +23,8 @@ using TaskDialog = Autodesk.Revit.UI.TaskDialog;
 using System.Xml.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
+using Autodesk.Revit.ApplicationServices;
+using Transform = Autodesk.Revit.DB.Transform;
 #endregion
 
 namespace FerrumAddin
@@ -159,10 +161,13 @@ namespace FerrumAddin
                         admins.Add(line);
                     }
                 }
-                AllowLoad = false;
+                
             }
-
-
+            else
+            {
+                AlwaysLoad = true;
+            }
+            AllowLoad = false;
             downloadDir = a.ControlledApplication.CurrentUserAddinsLocation;
             CheckForUpdates();
             
@@ -236,7 +241,10 @@ namespace FerrumAddin
             {
                 a.RegisterDockablePane(id, "Менеджер семейств Железно",
                         dockableWindow as IDockablePaneProvider);
-                if (admins.Count == 0 || !admins.Contains(name) || AllowLoad!=)
+                if ((admins.Count != 0 && admins.Contains(name)) || AlwaysLoad == true)
+                {
+                }
+                else
                 {
                     a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
                 }
@@ -256,6 +264,13 @@ namespace FerrumAddin
         public static string xmlFilePath;
         public static string TabPath;
         public static string FamilyFolder;
+        public static string WallsFolder;
+        public static string FloorFolder;
+        public static string CeilFolder;
+        public static string WindFolder;
+        public static string RoofFolder;
+        public static string FenceFolder;
+        public static string RampFolder;
         public static Dictionary<string, bool> GetElementStates(XElement root)
         {
             var elementStates = new Dictionary<string, bool>();
@@ -300,21 +315,28 @@ namespace FerrumAddin
 
         private void A_ViewActivated(object sender, ViewActivatedEventArgs e)
         {
-            Document d = e.Document;
-            dockableWindow.CustomInitiator(d);
+            if (AllowLoad == false)
+            {
+                Document d = e.Document;
+                dockableWindow.CustomInitiator(d);
+            }
         }
 
         private void ControlledApplication_DocumentOpened(object sender, Autodesk.Revit.DB.Events.DocumentOpenedEventArgs e)
         {
-            Document d = e.Document;
-            dockableWindow.CustomInitiator(d);
+            if (AllowLoad == false)
+            {
+                Document d = e.Document;
+                dockableWindow.CustomInitiator(d);
+            }
         }
 
         public static ExternalEvent LoadEvent;
         public static bool AllowLoad;
+        public static bool AlwaysLoad = false;
         private void ControlledApplication_FamilyLoadingIntoDocument(object sender, Autodesk.Revit.DB.Events.FamilyLoadingIntoDocumentEventArgs e)
         {
-            if (AllowLoad != null && AllowLoad)
+            if (AllowLoad == null || AllowLoad == true || AlwaysLoad == true)
             {
               
             }
@@ -356,25 +378,49 @@ namespace FerrumAddin
     {
         public void Execute(UIApplication app)
         {
-
+            var nameAndCat = new Dictionary<string, BuiltInCategory>
+{
+    { "Стены", BuiltInCategory.OST_Walls },
+    { "Перекрытия", BuiltInCategory.OST_Floors },
+    { "Потолки", BuiltInCategory.OST_Ceilings },
+    { "Витражи", BuiltInCategory.OST_Walls },
+    { "Крыши" , BuiltInCategory.OST_Roofs},
+    { "Ограждения" , BuiltInCategory.OST_StairsRailing},
+    { "Пандусы", BuiltInCategory.OST_Ramps }
+};
+            Document docToCopy = FamilyManagerWindow.doc;
             List<MenuItem> list = new List<MenuItem>();
             foreach (TabItemViewModel tab in FamilyManagerWindow.mvm.TabItems)
             {
                 list.AddRange(tab.MenuItems.Where(x => x.IsSelected).ToList());
             }
-            if (App.AllowLoad != null)
-                App.AllowLoad = true;
-            using (Transaction tx = new Transaction(FamilyManagerWindow.doc))
+            App.AllowLoad = true;
+
+            foreach (MenuItem tab in list)
             {
-                tx.Start("Загрузка семейств");
-                foreach (MenuItem tab in list)
+                if (tab.Path.EndsWith("rfa"))
                 {
-                    FamilyManagerWindow.doc.LoadFamily(tab.Path);
+                    using (Transaction tx = new Transaction(FamilyManagerWindow.doc))
+                    {
+                        tx.Start("Загрузка семейств");
+                        docToCopy.LoadFamily(tab.Path);
+                        tx.Commit();
+                    }
                 }
-                tx.Commit();
+                else
+                {
+                    Document document = App.uiapp.Application.OpenDocumentFile(tab.Path);
+                    List<ElementId> el = new FilteredElementCollector(document).OfCategory(nameAndCat[tab.Category]).WhereElementIsElementType().ToElements().Where(x => x.Name == tab.Name).Select(x => x.Id).ToList();
+                    using (Transaction tx = new Transaction(docToCopy))
+                    {
+                        tx.Start("Загрузка семейств");
+                        ElementTransformUtils.CopyElements(document, el, docToCopy, null, null);
+                        tx.Commit();
+                    }
+                    document.Close();
+                }
             }
-            if (App.AllowLoad != null)
-                App.AllowLoad = false;
+            App.AllowLoad = false;
             FamilyManagerWindow.Reload();
         }
 
