@@ -159,7 +159,9 @@ namespace FerrumAddin
                         admins.Add(line);
                     }
                 }
+                AllowLoad = false;
             }
+
 
             downloadDir = a.ControlledApplication.CurrentUserAddinsLocation;
             CheckForUpdates();
@@ -234,7 +236,7 @@ namespace FerrumAddin
             {
                 a.RegisterDockablePane(id, "Менеджер семейств Железно",
                         dockableWindow as IDockablePaneProvider);
-                if (admins.Count == 0 || !admins.Contains(name))
+                if (admins.Count == 0 || !admins.Contains(name) || AllowLoad!=)
                 {
                     a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
                 }
@@ -246,7 +248,6 @@ namespace FerrumAddin
             {
 
             }
-            AllowLoad = false;
 
             ButtonConf(root);
 
@@ -313,7 +314,7 @@ namespace FerrumAddin
         public static bool AllowLoad;
         private void ControlledApplication_FamilyLoadingIntoDocument(object sender, Autodesk.Revit.DB.Events.FamilyLoadingIntoDocumentEventArgs e)
         {
-            if (AllowLoad)
+            if (AllowLoad != null && AllowLoad)
             {
               
             }
@@ -361,7 +362,8 @@ namespace FerrumAddin
             {
                 list.AddRange(tab.MenuItems.Where(x => x.IsSelected).ToList());
             }
-            App.AllowLoad = true;
+            if (App.AllowLoad != null)
+                App.AllowLoad = true;
             using (Transaction tx = new Transaction(FamilyManagerWindow.doc))
             {
                 tx.Start("Загрузка семейств");
@@ -371,7 +373,8 @@ namespace FerrumAddin
                 }
                 tx.Commit();
             }
-            App.AllowLoad = false;
+            if (App.AllowLoad != null)
+                App.AllowLoad = false;
             FamilyManagerWindow.Reload();
         }
 
