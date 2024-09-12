@@ -15,12 +15,16 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
+using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Xml.Linq;
+using Button = System.Windows.Controls.Button;
+using Point = System.Windows.Point;
+using TabControl = System.Windows.Controls.TabControl;
 using TextBox = System.Windows.Controls.TextBox;
 
 namespace FerrumAddin
@@ -207,6 +211,15 @@ namespace FerrumAddin
             tc.SelectedIndex = -1;
             tc.SelectedIndex = index;
             
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            Button btnSender = (Button)sender;
+            Point ptLowerLeft = new Point(0, btnSender.Height);
+            ptLowerLeft = btnSender.PointToScreen(ptLowerLeft);
+            ctMenuStrip.StaysOpen = true;
+            ctMenuStrip.IsOpen = true;
         }
     }
 

@@ -84,7 +84,6 @@ namespace FerrumAddin
             SaveToggleButtonState(root);
             root.Save(xmlFilePath);
             App.ButtonConf(root);
-            RecreateXmlFile();
             CreateCheckboxesFromXml();
             SaveCheckboxesToXml();
             App.dockableWindow.Newpath();
@@ -95,17 +94,6 @@ namespace FerrumAddin
         {
             string tabPath = App.TabPath;
                 XElement root = new XElement("Settings");
-            var pathsAndSections = new Dictionary<string, string>();
-
-            if (pathFam != null) pathsAndSections.Add(pathFam, "Семейства");
-            if (pathWalls != null) pathsAndSections.Add(pathWalls, "Стены");
-            if (pathFloor != null) pathsAndSections.Add(pathFloor, "Перекрытия" );
-            if (pathCeil != null) pathsAndSections.Add(pathCeil, "Потолки");
-            if (pathWind != null) pathsAndSections.Add(pathWind, "Витражи");
-            if (pathRoof != null) pathsAndSections.Add(pathRoof, "Крыши");
-            if (pathFence != null) pathsAndSections.Add(pathFence, "Ограждения");
-            if (pathRamp != null) pathsAndSections.Add(pathRamp, "Пандусы");
-
             var nameAndCat = new Dictionary<string, BuiltInCategory>
 {
     { "Стены", BuiltInCategory.OST_Walls },
@@ -116,75 +104,63 @@ namespace FerrumAddin
     { "Ограждения" , BuiltInCategory.OST_StairsRailing},
     { "Пандусы", BuiltInCategory.OST_Ramps }
 };
-            foreach (var folderPath in pathsAndSections.Keys)
-            { 
-                if (folderPath == null || folderPath == "")
-                {
-                    continue;
-                }
-            
-                foreach (var dir in System.IO.Directory.GetDirectories(folderPath))
-                {
-                    XElement tabElement = new XElement("TabItem");
-                    tabElement.Add(new XElement("Header", System.IO.Path.GetFileName(dir)));
-                    tabElement.Add(new XElement("Visibility", true));
 
-                    foreach (var categoryDir in System.IO.Directory.GetDirectories(dir))
+
+            foreach (var dir in System.IO.Directory.GetDirectories(pathFam))
+            {
+                XElement tabElement = new XElement("TabItem");
+                tabElement.Add(new XElement("Header", System.IO.Path.GetFileName(dir)));
+                tabElement.Add(new XElement("Visibility", true));
+
+                foreach (var categoryDir in System.IO.Directory.GetDirectories(dir))
+                {
+
+                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rfa"))
                     {
-                        if (pathsAndSections[folderPath] == "Семейства")
+                        string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(file);
+                        string imagePath = System.IO.Path.Combine(categoryDir, fileNameWithoutExtension + ".png");
+
+
+                        XElement menuItemElement = new XElement("MenuItem");
+                        menuItemElement.Add(new XElement("Name", fileNameWithoutExtension));
+                        menuItemElement.Add(new XElement("Category", System.IO.Path.GetFileName(categoryDir)));
+                        menuItemElement.Add(new XElement("Path", file));
+                        menuItemElement.Add(new XElement("ImagePath", imagePath));
+
+                        tabElement.Add(menuItemElement);
+
+                    }
+                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rvt"))
+                    {
+                        UIDocument uidoc = App.uiapp.OpenAndActivateDocument(file);
+                        doc = uidoc.Document;
+                        List<Element> elements = new List<Element>();
+                        if (categoryDir.Contains("Витражи"))
                         {
-                            foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rfa"))
-                            {
-                                string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(file);
-                                string imagePath = System.IO.Path.Combine(categoryDir, fileNameWithoutExtension + ".png");
-
-
-                                XElement menuItemElement = new XElement("MenuItem");
-                                menuItemElement.Add(new XElement("Name", fileNameWithoutExtension));
-                                menuItemElement.Add(new XElement("Category", System.IO.Path.GetFileName(categoryDir)));
-                                menuItemElement.Add(new XElement("Path", file));
-                                menuItemElement.Add(new XElement("ImagePath", imagePath));
-
-                                tabElement.Add(menuItemElement);
-
-                            }
+                            elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[System.IO.Path.GetDirectoryName(categoryDir)]).WhereElementIsElementType().ToElements().Where(x => (x as WallType).Kind == WallKind.Curtain).ToList();
+                        }
+                        else if (categoryDir.Contains("Стены"))
+                        {
+                            elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[System.IO.Path.GetDirectoryName(categoryDir)]).WhereElementIsElementType().ToElements().Where(x => (x as WallType).Kind == WallKind.Basic).ToList();
                         }
                         else
                         {
-                            foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rvt"))
-                            {
-                                UIDocument uidoc = App.uiapp.OpenAndActivateDocument(file);
-                                doc = uidoc.Document;
-                                List<Element> elements = new List<Element>();
-                                if (pathsAndSections[folderPath] == "Витражи")
-                                {     
-                                    elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[pathsAndSections[folderPath]]).WhereElementIsElementType().ToElements().Where(x =>( x as WallType).Kind == WallKind.Curtain).ToList();
-                                }
-                                else if (pathsAndSections[folderPath] == "Стены")
-                                {
-                                    elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[pathsAndSections[folderPath]]).WhereElementIsElementType().ToElements().Where(x => (x as WallType).Kind == WallKind.Basic).ToList();
-                                }
-                                else
-                                {
-                                    elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[pathsAndSections[folderPath]]).WhereElementIsElementType().ToElements().ToList();
+                            elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[System.IO.Path.GetDirectoryName(categoryDir)]).WhereElementIsElementType().ToElements().ToList();
 
-                                }
-                                foreach (Element element in elements)
-                                {
-                                    XElement menuItemElement = new XElement("MenuItem");
-                                    menuItemElement.Add(new XElement("Name", element.Name));
-                                    menuItemElement.Add(new XElement("Category", pathsAndSections[folderPath]));
-                                    menuItemElement.Add(new XElement("Path", file));
-                                    menuItemElement.Add(new XElement("ImagePath", ""));
-                                    tabElement.Add(menuItemElement);
-                                }
-                                ConfiguratorShow.CloseEv.Raise();
-                            }
                         }
-
-                        root.Add(tabElement);
+                        foreach (Element element in elements)
+                        {
+                            XElement menuItemElement = new XElement("MenuItem");
+                            menuItemElement.Add(new XElement("Name", element.Name));
+                            menuItemElement.Add(new XElement("Category", System.IO.Path.GetDirectoryName(categoryDir)));
+                            menuItemElement.Add(new XElement("Path", file));
+                            menuItemElement.Add(new XElement("ImagePath", System.IO.Path.Combine(categoryDir, element.Name + ".png")));
+                            tabElement.Add(menuItemElement);
+                        }
+                        ConfiguratorShow.CloseEv.Raise();
                     }
                 }
+                root.Add(tabElement);
             }
             root.Save(tabPath);
         }
@@ -236,13 +212,6 @@ namespace FerrumAddin
             }
         }
         public static string pathFam;
-        public static string pathWalls;
-        public static string pathFloor;
-        public static string pathCeil;
-        public static string pathWind;
-        public static string pathRoof;
-        public static string pathFence;
-        public static string pathRamp;
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
@@ -256,41 +225,10 @@ namespace FerrumAddin
                 {
                     pathFam = selectedPath;
                     path.Text = selectedPath; // Обновляем текстовый блок для отображения выбранного пути
-                }
-                else if ((sender as Button).Name == "_pathWalls")
-                {
-                    pathWalls = selectedPath;
-                    pathWallsText.Text = selectedPath; // Обновляем текстовый блок
-                }
-                else if ((sender as Button).Name == "_pathFloor")
-                {
-                    pathFloor = selectedPath;
-                    pathFloorText.Text = selectedPath; // Обновляем текстовый блок
-                }
-                else if ((sender as Button).Name == "_pathCeil")
-                {
-                    pathCeil = selectedPath;
-                    pathCeilText.Text = selectedPath; // Обновляем текстовый блок
-                }
-                else if ((sender as Button).Name == "_pathWind")
-                {
-                    pathWind = selectedPath;
-                    pathWindText.Text = selectedPath; // Обновляем текстовый блок
-                }
-                else if ((sender as Button).Name == "_pathRoof")
-                {
-                    pathRoof = selectedPath;
-                    pathRoofText.Text = selectedPath; // Обновляем текстовый блок
-                }
-                else if ((sender as Button).Name == "_PathFence")
-                {
-                    pathFence = selectedPath;
-                    pathFenceText.Text = selectedPath; // Обновляем текстовый блок
-                }
-                else if ((sender as Button).Name == "_pathRamp")
-                {
-                    pathRamp = selectedPath;
-                    pathRampText.Text = selectedPath; // Обновляем текстовый блок
+                    RecreateXmlFile();
+                    CreateCheckboxesFromXml();
+                    SaveCheckboxesToXml();
+                    App.dockableWindow.Newpath();
                 }
             }
         }

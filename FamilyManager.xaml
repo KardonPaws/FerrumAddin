@@ -16,6 +16,7 @@
     <Grid Background="White">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="50"/>
@@ -47,7 +48,22 @@
                 </Style>
             </TextBlock.Style>
         </TextBlock>
-        <TabControl x:Name="Tabs" Grid.Column="0" Grid.Row="1" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
+        <Button Content="⚙"
+        VerticalAlignment="Center"
+        Height="30"
+        Width="30"
+        Margin="5,5,5,5"
+        Grid.Column="1"
+        Click="SettingsButton_Click">
+            <Button.ContextMenu>
+                <ContextMenu x:Name="ctMenuStrip">
+                    <TextBlock Text="При совпадении имен" IsHitTestVisible="False"/>
+                    <MenuItem Header="Заменять существующее" IsCheckable="True"/>
+                    <MenuItem Header="Добавлять цифру к имени" IsCheckable="True"/>
+                </ContextMenu>
+            </Button.ContextMenu>
+        </Button>
+        <TabControl x:Name="Tabs" Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -113,7 +129,7 @@
             </TabControl.ContentTemplate>
 
         </TabControl>
-        <DockPanel Grid.Row="2">
+        <DockPanel Grid.Row="2" Grid.ColumnSpan="2">
             <Image Source="{StaticResource name}" Margin="5,5,5,5"/>
             <Button Content="Загрузить" Margin="10,10,10,10" Click="LoadFamilies"/>
         </DockPanel>
