@@ -379,15 +379,16 @@ namespace FerrumAddin
         public void Execute(UIApplication app)
         {
             var nameAndCat = new Dictionary<string, BuiltInCategory>
-{
-    { "Стены", BuiltInCategory.OST_Walls },
-    { "Перекрытия", BuiltInCategory.OST_Floors },
-    { "Потолки", BuiltInCategory.OST_Ceilings },
-    { "Витражи", BuiltInCategory.OST_Walls },
-    { "Крыши" , BuiltInCategory.OST_Roofs},
-    { "Ограждения" , BuiltInCategory.OST_StairsRailing},
-    { "Пандусы", BuiltInCategory.OST_Ramps }
-};
+        {
+            { "Стены", BuiltInCategory.OST_Walls },
+            { "Перекрытия", BuiltInCategory.OST_Floors },
+            { "Потолки", BuiltInCategory.OST_Ceilings },
+            { "Витражи", BuiltInCategory.OST_Walls },
+            { "Крыши" , BuiltInCategory.OST_Roofs},
+            { "Ограждения" , BuiltInCategory.OST_StairsRailing},
+            { "Пандусы", BuiltInCategory.OST_Ramps }
+        };
+
             Document docToCopy = FamilyManagerWindow.doc;
             List<MenuItem> list = new List<MenuItem>();
             foreach (TabItemViewModel tab in FamilyManagerWindow.mvm.TabItems)
@@ -395,41 +396,299 @@ namespace FerrumAddin
                 list.AddRange(tab.MenuItems.Where(x => x.IsSelected).ToList());
             }
             App.AllowLoad = true;
-
+            List<Document> documents = new List<Document>();
+            
             foreach (MenuItem tab in list)
             {
+                bool isFirstOptionChecked = FamilyManagerWindow.IsFirstOptionChecked();
                 if (tab.Path.EndsWith("rfa"))
                 {
-                    using (Transaction tx = new Transaction(FamilyManagerWindow.doc))
+                    string familyName = System.IO.Path.GetFileNameWithoutExtension(tab.Path);
+                    Family existingFamily = new FilteredElementCollector(docToCopy)
+                        .OfClass(typeof(Family))
+                        .Cast<Family>()
+                        .FirstOrDefault(fam => fam.Name == familyName);
+
+                    if (existingFamily != null)
                     {
-                        tx.Start("Загрузка семейств");
-                        docToCopy.LoadFamily(tab.Path);
-                        tx.Commit();
+                        // Замена существующего семейства
+                        using (Transaction tx = new Transaction(docToCopy))
+                        {
+                            tx.Start("Загрузка семейств");
+                            FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                            failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                            failureOptions.SetClearAfterRollback(true); // Опционально
+                            tx.SetFailureHandlingOptions(failureOptions);
+                            MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
+                            docToCopy.LoadFamily(tab.Path, loadOptions, out Family load);
+                            tx.Commit();
+                        }
+                    }
+                    else
+                    {
+                        // Загрузка без конфликтов
+                        using (Transaction tx = new Transaction(docToCopy))
+                        {
+                            tx.Start("Загрузка семейств");
+                            FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                            failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                            failureOptions.SetClearAfterRollback(true); // Опционально
+                            tx.SetFailureHandlingOptions(failureOptions);
+                            docToCopy.LoadFamily(tab.Path);
+                            tx.Commit();
+                        }
                     }
                 }
                 else
                 {
-                    Document document = App.uiapp.Application.OpenDocumentFile(tab.Path);
-                    List<ElementId> el = new FilteredElementCollector(document).OfCategory(nameAndCat[tab.Category]).WhereElementIsElementType().ToElements().Where(x => x.Name == tab.Name).Select(x => x.Id).ToList();
-                    using (Transaction tx = new Transaction(docToCopy))
+                    Document document = app.Application.OpenDocumentFile(tab.Path);
+                    documents.Add(document);
+                    List<ElementId> el = new FilteredElementCollector(document)
+                        .OfCategory(nameAndCat[tab.Category])
+                        .WhereElementIsElementType()
+                        .Where(x => x.Name == tab.Name)
+                        .Select(x => x.Id)
+                        .ToList();
+
+                    bool elementExists = ElementExists(docToCopy, nameAndCat[tab.Category], tab.Name);
+
+                    if (!elementExists)
                     {
-                        tx.Start("Загрузка семейств");
-                        ElementTransformUtils.CopyElements(document, el, docToCopy, null, null);
-                        tx.Commit();
+                        // Копирование без конфликтов
+                        using (Transaction tx = new Transaction(docToCopy))
+                        {
+                            tx.Start("Загрузка семейств");
+                            FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                            failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                            failureOptions.SetClearAfterRollback(true); // Опционально
+                            tx.SetFailureHandlingOptions(failureOptions);
+                            ElementTransformUtils.CopyElements(document, el, docToCopy, null, null);
+                            tx.Commit();
+                        }
                     }
-                    document.Close();
+                    else
+                    {
+                        if (isFirstOptionChecked)
+                        {
+                            // Замена существующего элемента
+                            using (Transaction tx = new Transaction(docToCopy))
+                            {
+                                tx.Start("Загрузка семейств");
+                                FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                                failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                                failureOptions.SetClearAfterRollback(true); // Опционально
+                                tx.SetFailureHandlingOptions(failureOptions);
+
+                                // Получаем элементы из исходного документа
+                                List<Element> elementsToCopy = new List<Element>();
+                                foreach (ElementId id in el)
+                                {
+                                    Element elem = document.GetElement(id);
+                                    elementsToCopy.Add(elem);
+                                }
+
+                                // Проходим по каждому элементу для обработки
+                                foreach (Element sourceElement in elementsToCopy)
+                                {
+                                    if (sourceElement is ElementType sourceType)
+                                    {
+                                        // Копируем тип в целевой документ
+                                        ICollection<ElementId> copiedIds = ElementTransformUtils.CopyElements(
+                                            document,
+                                            new List<ElementId> { sourceType.Id },
+                                            docToCopy,
+                                            Transform.Identity,
+                                            new CopyPasteOptions());
+
+                                        ElementId copiedTypeId = copiedIds.First();
+                                        ElementType copiedType = docToCopy.GetElement(copiedTypeId) as ElementType;
+
+                                        // Ищем существующий тип с таким же именем в целевом документе
+                                        ElementType existingType = FindTypeByNameAndClass(docToCopy, sourceType.Name, sourceType.GetType());
+
+                                        if (existingType != null && existingType.Id != copiedType.Id)
+                                        {
+                                            // Заменяем все элементы, использующие старый тип, на новый тип
+                                            ReplaceElementsType(docToCopy, existingType.Id, copiedType.Id);
+
+                                            // Удаляем старый тип
+                                            docToCopy.Delete(existingType.Id);
+                                        }
+                                        // Если типа не было, ничего дополнительно делать не нужно
+                                    }
+                                }
+
+                                tx.Commit();
+                            }
+                        }
+
+                        else
+                        {
+                            // Переименование копируемого элемента
+                            using (Transaction tx = new Transaction(docToCopy))
+                            {
+                                tx.Start("Загрузка семейств");
+                                FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                                failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                                failureOptions.SetClearAfterRollback(true); // Опционально
+                                tx.SetFailureHandlingOptions(failureOptions);
+                                ICollection<ElementId> copiedIds = ElementTransformUtils.CopyElements(document, el, docToCopy, null, null);
+                                ElementId copiedId = copiedIds.First();
+                                Element copiedElement = docToCopy.GetElement(copiedId);
+
+                                string newName = GetUniqueElementName(docToCopy, nameAndCat[tab.Category], tab.Name);
+                                copiedElement.Name = newName;
+
+                                tx.Commit();
+                            }
+                        }
+                    }
+                    
                 }
             }
             App.AllowLoad = false;
             FamilyManagerWindow.Reload();
+            foreach (Document doc in documents)
+            {
+                doc.Close(false);
+            }
         }
-
 
         public string GetName()
         {
-            return "xxx";
+            return "LoadEventHandler";
+        }
+
+        // Метод для поиска типа по имени и классу в целевом документе
+        private ElementType FindTypeByNameAndClass(Document doc, string typeName, Type typeClass)
+        {
+            return new FilteredElementCollector(doc)
+                .OfClass(typeClass)
+                .Cast<ElementType>()
+                .FirstOrDefault(e => e.Name.Equals(typeName, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        // Метод для замены типа у всех элементов
+        private void ReplaceElementsType(Document doc, ElementId oldTypeId, ElementId newTypeId)
+        {
+            // Находим все элементы, использующие старый тип
+            List<Element> collector = new FilteredElementCollector(doc)
+                .WhereElementIsNotElementType()
+                .Where(e => e.GetTypeId() == oldTypeId).ToList();
+
+            foreach (Element elem in collector)
+            {
+                // Устанавливаем новый тип
+                elem.ChangeTypeId(newTypeId);
+            }
+        }
+
+
+        private bool ElementExists(Document doc, BuiltInCategory category, string elementName)
+        {
+            return new FilteredElementCollector(doc)
+                .OfCategory(category)
+                .WhereElementIsElementType()
+                .Any(x => x.Name == elementName);
+        }
+
+        private string GetUniqueFamilyName(Document doc, string baseName)
+        {
+            string newName = baseName;
+            int i = 1;
+            while (new FilteredElementCollector(doc)
+                .OfClass(typeof(Family))
+                .Cast<Family>()
+                .Any(fam => fam.Name == newName))
+            {
+                newName = $"{baseName}_{i}";
+                i++;
+            }
+            return newName;
+        }
+
+        private string GetUniqueElementName(Document doc, BuiltInCategory category, string baseName)
+        {
+            string newName = baseName;
+            int i = 1;
+            while (new FilteredElementCollector(doc)
+                .OfCategory(category)
+                .WhereElementIsElementType()
+                .Any(e => e.Name == newName))
+            {
+                newName = $"{baseName}_{i}";
+                i++;
+            }
+            return newName;
         }
     }
+
+    public class MyFamilyLoadOptions : IFamilyLoadOptions
+    {
+        private bool overwriteFamily;
+
+        public MyFamilyLoadOptions(bool overwriteFamily)
+        {
+            this.overwriteFamily = overwriteFamily;
+        }
+
+        public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
+        {
+            overwriteParameterValues = overwriteFamily;
+            return overwriteFamily;
+        }
+
+        public bool OnSharedFamilyFound(Family sharedFamily, bool familyInUse, out FamilySource source, out bool overwriteParameterValues)
+        {
+            source = FamilySource.Family;
+            overwriteParameterValues = overwriteFamily;
+            return overwriteFamily;
+        }
+    }
+
+    public class MyFailuresPreprocessor : IFailuresPreprocessor
+    {
+        public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
+        {
+            IList<FailureMessageAccessor> failures = failuresAccessor.GetFailureMessages();
+
+            foreach (FailureMessageAccessor failure in failures)
+            {
+                // Определяем степень серьезности ошибки
+                FailureSeverity severity = failure.GetSeverity();
+
+                // Обрабатываем в зависимости от степени серьезности
+                if (severity == FailureSeverity.Warning)
+                {
+                    // Удаляем предупреждения
+                    failuresAccessor.DeleteWarning(failure);
+                }
+                else if (severity == FailureSeverity.Error)
+                {
+                    // Проверяем, можно ли автоматически решить ошибку
+                    if (failure.HasResolutions())
+                    {
+                        // Применяем первое доступное решение
+                        failuresAccessor.ResolveFailure(failure);
+                    }
+                    else
+                    {
+                        // Если решений нет, удаляем ошибку или логируем
+                        failuresAccessor.DeleteWarning(failure);
+                    }
+                }
+                else if (severity == FailureSeverity.DocumentCorruption)
+                {
+                    // Для критических ошибок откатываем транзакцию
+                    return FailureProcessingResult.ProceedWithRollBack;
+                }
+            }
+
+            // Продолжаем транзакцию без отображения диалоговых окон
+            return FailureProcessingResult.Continue;
+        }
+    }
+
 
     public class CommandAvailability : IExternalCommandAvailability
     {

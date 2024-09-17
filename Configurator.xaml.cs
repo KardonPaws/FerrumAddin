@@ -105,7 +105,7 @@ namespace FerrumAddin
     { "Пандусы", BuiltInCategory.OST_Ramps }
 };
 
-
+            List<Document> documents = new List<Document>();
             foreach (var dir in System.IO.Directory.GetDirectories(pathFam))
             {
                 XElement tabElement = new XElement("TabItem");
@@ -134,25 +134,42 @@ namespace FerrumAddin
                     {
                         UIDocument uidoc = App.uiapp.OpenAndActivateDocument(file);
                         doc = uidoc.Document;
+                        documents.Add(doc);
                         List<Element> elements = new List<Element>();
+                        string directory = categoryDir.Split('\\').Last();
                         if (categoryDir.Contains("Витражи"))
                         {
-                            elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[System.IO.Path.GetDirectoryName(categoryDir)]).WhereElementIsElementType().ToElements().Where(x => (x as WallType).Kind == WallKind.Curtain).ToList();
+                            elements = (List<Element>)new FilteredElementCollector(doc)
+                            .OfCategory(nameAndCat[directory])
+                            .WhereElementIsNotElementType()
+                            .Cast<Wall>()
+                            .Select(x => x.WallType)
+                            .Distinct()
+                            .Where(x => x.Kind == WallKind.Curtain).Select(x => x as Element).ToList();
                         }
                         else if (categoryDir.Contains("Стены"))
                         {
-                            elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[System.IO.Path.GetDirectoryName(categoryDir)]).WhereElementIsElementType().ToElements().Where(x => (x as WallType).Kind == WallKind.Basic).ToList();
+                            elements = (List<Element>)new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .WhereElementIsNotElementType()
+                                .Cast<Wall>()
+                                .Select(x => x.WallType)
+                                .Distinct()
+                                .Where(x => x.Kind == WallKind.Basic).Select(x => x as Element).ToList();
                         }
                         else
                         {
-                            elements = new FilteredElementCollector(doc).OfCategory(nameAndCat[System.IO.Path.GetDirectoryName(categoryDir)]).WhereElementIsElementType().ToElements().ToList();
-
+                            elements = (List<Element>)new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .WhereElementIsNotElementType()
+                                .Cast<Element>().Select(x => x.GetTypeId()).Select(x => doc.GetElement(x))
+                                .ToList().Select(x => x as Element);
                         }
                         foreach (Element element in elements)
                         {
                             XElement menuItemElement = new XElement("MenuItem");
                             menuItemElement.Add(new XElement("Name", element.Name));
-                            menuItemElement.Add(new XElement("Category", System.IO.Path.GetDirectoryName(categoryDir)));
+                            menuItemElement.Add(new XElement("Category", directory));
                             menuItemElement.Add(new XElement("Path", file));
                             menuItemElement.Add(new XElement("ImagePath", System.IO.Path.Combine(categoryDir, element.Name + ".png")));
                             tabElement.Add(menuItemElement);
@@ -163,6 +180,10 @@ namespace FerrumAddin
                 root.Add(tabElement);
             }
             root.Save(tabPath);
+            foreach(Document doc in documents)
+            {
+                doc.Close(false);
+            }
         }
         public static Document doc;
         private void SaveCheckboxesToXml()

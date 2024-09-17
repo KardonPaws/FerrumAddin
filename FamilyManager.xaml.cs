@@ -23,6 +23,8 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Xml.Linq;
 using Button = System.Windows.Controls.Button;
+using CheckBox = System.Windows.Controls.CheckBox;
+using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using Point = System.Windows.Point;
 using TabControl = System.Windows.Controls.TabControl;
 using TextBox = System.Windows.Controls.TextBox;
@@ -169,6 +171,56 @@ namespace FerrumAddin
             Tabs.ItemsSource = mvm.TabItems;
 
         }
+
+        private void OptionsButton_MouseEnter(object sender, MouseEventArgs e)
+        {
+            OptionsPopup.IsOpen = true;
+        }
+
+        private void OptionsButton_MouseLeave(object sender, MouseEventArgs e)
+        {
+            // Откладываем закрытие, чтобы пользователь мог переместить курсор на Popup
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!OptionsPopup.IsMouseOver)
+                {
+                    OptionsPopup.IsOpen = false;
+                }
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        private void OptionsPopup_MouseEnter(object sender, MouseEventArgs e)
+        {
+            OptionsPopup.IsOpen = true;
+        }
+
+        private void OptionsPopup_MouseLeave(object sender, MouseEventArgs e)
+        {
+            // Закрываем Popup, если курсор не находится на кнопке
+            if (!OptionsButton.IsMouseOver)
+            {
+                OptionsPopup.IsOpen = false;
+            }
+        }
+
+        private static bool isFirstOptionChecked = true;
+        public static bool IsFirstOptionChecked()
+        {
+            return isFirstOptionChecked;
+        }
+
+        private void RadioButton_Checked(object sender, RoutedEventArgs e)
+        {
+            if (sender == FirstRadioButton)
+            {
+                isFirstOptionChecked = true;
+            }
+            else if (sender == SecondRadioButton)
+            {
+                isFirstOptionChecked = false;
+            }
+        }
+
         public static MainViewModel mvm;
         private void ElementClick(object sender, RoutedEventArgs e)
         {
@@ -211,15 +263,6 @@ namespace FerrumAddin
             tc.SelectedIndex = -1;
             tc.SelectedIndex = index;
             
-        }
-
-        private void SettingsButton_Click(object sender, RoutedEventArgs e)
-        {
-            Button btnSender = (Button)sender;
-            Point ptLowerLeft = new Point(0, btnSender.Height);
-            ptLowerLeft = btnSender.PointToScreen(ptLowerLeft);
-            ctMenuStrip.StaysOpen = true;
-            ctMenuStrip.IsOpen = true;
         }
     }
 
@@ -294,9 +337,7 @@ namespace FerrumAddin
         }
     }
 
-
-
-public class TabItemViewModel
+    public class TabItemViewModel
     {
         public string Header { get; set; }
         public ObservableCollection<MenuItem> MenuItems { get; set; }
