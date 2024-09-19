@@ -182,7 +182,14 @@ namespace FerrumAddin
             root.Save(tabPath);
             foreach(Document doc in documents)
             {
-                doc.Close(false);
+                try
+                {
+                    doc.Close(false);
+                }
+                catch
+                {
+                    continue;
+                }
             }
         }
         public static Document doc;

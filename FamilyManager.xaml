@@ -10,6 +10,7 @@
     <Page.Resources>
         <ResourceDictionary>
             <local:BooleanToBrushConverter x:Key="BooleanToBrushConverter" x:Name="BooleanToBrushConverter"/>
+            <local:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" x:Name="BooleanToVisibilityConverter"/>
             <BitmapImage x:Key="name" UriSource="Resources/Железно-верт-синий.png" />
         </ResourceDictionary>
     </Page.Resources>
@@ -20,8 +21,13 @@
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="50"/>
+            <!-- Search TextBox and Options Button -->
+            <RowDefinition Height="Auto"/>
+            <!-- Category Filter ComboBox -->
             <RowDefinition/>
+            <!-- TabControl -->
             <RowDefinition Height="50"/>
+            <!-- Bottom DockPanel -->
         </Grid.RowDefinitions>
         <TextBox Name="SearchTextBox"
                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
@@ -53,6 +59,7 @@
         <Popup x:Name="OptionsPopup" PlacementTarget="{Binding ElementName=OptionsButton}" Placement="Bottom"
                StaysOpen="False"
                MouseEnter="OptionsPopup_MouseEnter" MouseLeave="OptionsPopup_MouseLeave">
+            <Border BorderBrush="Black">
             <StackPanel Background="White">
                 <Label Content="При совпадении имен"/>
                 <RadioButton x:Name="FirstRadioButton" Content="Заменить существующее" Margin="5" IsChecked="True"
@@ -60,8 +67,37 @@
                 <RadioButton x:Name="SecondRadioButton" Content="Добавить цифру к имени" Margin="5"
                              GroupName="OptionsGroup" Checked="RadioButton_Checked"/>
             </StackPanel>
+            </Border>
         </Popup>
-        <TabControl x:Name="Tabs" Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="10,1,10,1">
+            <ToggleButton x:Name="CategoryFilterButton"
+                  Content="Фильтр по категориям ▽"
+                  Background="{x:Null}"
+                  BorderBrush="Gray"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center" />
+            <Popup PlacementTarget="{Binding ElementName=CategoryFilterButton}"
+           IsOpen="{Binding IsChecked, ElementName=CategoryFilterButton}"
+           StaysOpen="False"
+           Width="{Binding ActualWidth, ElementName=CategoryFilterButton}">
+                <Border BorderBrush="Gray"
+                BorderThickness="1"
+                Background="White"
+                Width="{Binding ActualWidth, ElementName=CategoryFilterButton}">
+                    <ItemsControl ItemsSource="{Binding CategoryFilters}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding CategoryName}"
+                                  IsChecked="{Binding IsChecked}"
+                                  Margin="5,5,5,5" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Popup>
+        </StackPanel>
+
+        <TabControl x:Name="Tabs" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -82,10 +118,12 @@
                                       Margin="2,2,2,0" 
                                       Background="Transparent" />
                         </ScrollViewer>
+                        <Border BorderBrush="Gray">
                         <ContentPresenter x:Name="PART_SelectedContentHost"
                                           Margin="2"
                                           Grid.Column="0"
                                           ContentSource="SelectedContent" />
+                        </Border>
                     </Grid>
                 </ControlTemplate>
             </TabControl.Template>
@@ -100,34 +138,39 @@
             </TabControl.ItemTemplate>
             <TabControl.ContentTemplate>
                 <DataTemplate>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding MenuItems}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button BorderThickness="1" BorderBrush="LightGray" HorizontalContentAlignment="Left" Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}" Margin="5" Click="ElementClick">
-                                        <Grid Margin="1,0,0,0" HorizontalAlignment="Left">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
+                    <Border BorderBrush="Gray" >
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding MenuItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button BorderThickness="1" BorderBrush="LightGray" HorizontalContentAlignment="Left"
+                            Background="{Binding IsSelected, Converter={StaticResource BooleanToBrushConverter}}"
+                            Margin="5" Click="ElementClick"
+                            Visibility="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <Grid Margin="1,0,0,0" HorizontalAlignment="Left">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
 
-                                            <Image Grid.Column="0" Width="50" Height="50" Source="{Binding ImagePath}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Image Grid.Column="0" Width="50" Height="50" Source="{Binding ImagePath}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
-                                            <StackPanel Margin="10,0,0,0" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
-                                                <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                                                <TextBlock Text="{Binding Category}" Foreground="Gray"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                                                <StackPanel Margin="10,0,0,0" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding Category}" Foreground="Gray"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
                 </DataTemplate>
             </TabControl.ContentTemplate>
 
         </TabControl>
-        <DockPanel Grid.Row="2" Grid.ColumnSpan="2">
+        <DockPanel Grid.Row="3" Grid.ColumnSpan="2">
             <Image Source="{StaticResource name}" Margin="5,5,5,5"/>
             <Button Content="Загрузить" Margin="10,10,10,10" Click="LoadFamilies"/>
         </DockPanel>

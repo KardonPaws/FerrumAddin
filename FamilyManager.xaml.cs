@@ -23,9 +23,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Xml.Linq;
 using Button = System.Windows.Controls.Button;
-using CheckBox = System.Windows.Controls.CheckBox;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
-using Point = System.Windows.Point;
 using TabControl = System.Windows.Controls.TabControl;
 using TextBox = System.Windows.Controls.TextBox;
 
@@ -40,6 +38,13 @@ namespace FerrumAddin
         public ExternalCommandData eData = null;
         public static Document doc = null;
         public UIDocument uidoc = null;
+        public ObservableCollection<CategoryFilterItem> CategoryFilters { get; set; } = new ObservableCollection<CategoryFilterItem>();
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string name = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
 
         // IDockablePaneProvider abstrat method
         public void SetupDockablePane(DockablePaneProviderData data)
@@ -68,8 +73,9 @@ namespace FerrumAddin
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             SearchText = (sender as TextBox).Text;
-            FilterItems(SearchText);
+            ApplyFilters();
         }
+
         public ObservableCollection<TabItemViewModel> filteredTabItems;
 
         private void UpdateIsSelectedStates()
@@ -116,51 +122,41 @@ namespace FerrumAddin
         }
         private void FilterItems(string searchText)
         {
-            int index = Tabs.SelectedIndex;
-            if (SearchText == "" || SearchText == String.Empty)
-            {
-                Tabs.ItemsSource = mvm.TabItems;
-                Tabs.SelectedIndex = index;
-            }
-            else
-            {
-                filteredTabItems = new ObservableCollection<TabItemViewModel>();
-
-                foreach (var tab in mvm.TabItems)
-                {
-                    var filteredMenuItems = new ObservableCollection<MenuItem>();
-
-                    foreach (var item in tab.MenuItems)
-                    {
-                        if (item.Name.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            item.Category.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            filteredMenuItems.Add(item);
-                        }
-                    }
-
-                    if (filteredMenuItems.Count > 0)
-                    {
-                        filteredTabItems.Add(new TabItemViewModel
-                        {
-                            Header = tab.Header,
-                            MenuItems = filteredMenuItems
-                        });
-                    }
-                }
-
-                Tabs.ItemsSource = filteredTabItems;
-                if (filteredTabItems.Count < index || index == -1)
-                {
-                    Tabs.SelectedIndex = 0;
-                }
-                else
-                {
-                    Tabs.SelectedIndex = index;
-                }
-            }
-            
+            SearchText = searchText;
+            ApplyFilters();
         }
+
+        private void ApplyFilters()
+        {
+            var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
+            int ind = Tabs.SelectedIndex;
+            if (selectedTabItem != null)
+            {
+                var selectedCategories = CategoryFilters
+                    .Where(cf => cf.IsChecked)
+                    .Select(cf => cf.CategoryName)
+                    .ToHashSet();
+
+                foreach (var menuItem in selectedTabItem.MenuItems)
+                {
+                    bool matchesCategory = selectedCategories.Contains(menuItem.Category);
+                    bool matchesSearch = string.IsNullOrEmpty(SearchText) ||
+                                         menuItem.Name.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                         menuItem.Category.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    menuItem.IsVisible = matchesCategory && matchesSearch;
+                }
+            }
+            if (ind != -1)
+            {
+                Tabs.SelectionChanged -= Tabs_SelectionChanged;
+                mvm.TabItems[mvm.TabItems.IndexOf(selectedTabItem)] = selectedTabItem;
+                Tabs.ItemsSource = mvm.TabItems;
+                Tabs.SelectedIndex = ind;
+                Tabs.SelectionChanged += Tabs_SelectionChanged;
+            }
+        }
+
 
         public string SearchText;
         // constructor
@@ -169,7 +165,65 @@ namespace FerrumAddin
             InitializeComponent();
             mvm = new MainViewModel();
             Tabs.ItemsSource = mvm.TabItems;
+            this.DataContext = this;
+            Tabs.SelectionChanged += Tabs_SelectionChanged;
+        }
 
+        private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateCategoryFilters();
+        }
+
+        private void UpdateCategoryFilters()
+        {
+            // Clear the current category filters
+            CategoryFilters.Clear();
+
+            // Get the selected TabItemViewModel
+            var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
+            if (selectedTabItem != null)
+            {
+                // Get unique categories from MenuItems
+                var uniqueCategories = selectedTabItem.MenuItems.Select(mi => mi.Category).Distinct();
+
+                // For each category, create a CategoryFilterItem
+                foreach (var category in uniqueCategories)
+                {
+                    var filterItem = new CategoryFilterItem(ApplyFilters)
+                    {
+                        CategoryName = category,
+                        IsChecked = true // By default, all categories are visible
+                    };
+                    CategoryFilters.Add(filterItem);
+                }
+            }
+
+            // Apply the filters initially
+            ApplyFilters();
+        }
+
+
+        private void CategoryFilterItem_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(CategoryFilterItem.IsChecked))
+            {
+                ApplyCategoryFilter();
+            }
+        }
+        private void ApplyCategoryFilter()
+        {
+            // Get the selected TabItemViewModel
+            var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
+            if (selectedTabItem != null)
+            {
+                // For each MenuItem, set its IsVisible based on the category filter
+                foreach (var menuItem in selectedTabItem.MenuItems)
+                {
+                    var categoryFilter = CategoryFilters.FirstOrDefault(cf => cf.CategoryName == menuItem.Category);
+                    menuItem.IsVisible = categoryFilter?.IsChecked ?? true;
+                }
+                
+            }
         }
 
         private void OptionsButton_MouseEnter(object sender, MouseEventArgs e)
@@ -266,6 +320,22 @@ namespace FerrumAddin
         }
     }
 
+    public class BooleanToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool isVisible && isVisible)
+                return System.Windows.Visibility.Visible;
+            else
+                return System.Windows.Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public class BooleanToBrushConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -346,6 +416,7 @@ namespace FerrumAddin
     public class MenuItem
     {
         private bool _isSelected;
+        private bool _isVisible = true;
         public string Name { get; set; }
         public string Category { get; set; }
         public string ImagePath { get; set; }
@@ -359,6 +430,18 @@ namespace FerrumAddin
                 OnPropertyChanged();
             }
         }
+        public bool IsVisible
+        {
+            get => _isVisible;
+            set
+            {
+                if (_isVisible != value)
+                {
+                    _isVisible = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)
@@ -366,4 +449,39 @@ namespace FerrumAddin
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
     }
+
+    public class CategoryFilterItem : INotifyPropertyChanged
+    {
+        private bool _isChecked;
+        private readonly Action _applyFiltersAction;
+
+        public string CategoryName { get; set; }
+
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set
+            {
+                if (_isChecked != value)
+                {
+                    _isChecked = value;
+                    OnPropertyChanged();
+                    _applyFiltersAction?.Invoke();
+                }
+            }
+        }
+
+        public CategoryFilterItem(Action applyFiltersAction)
+        {
+            _applyFiltersAction = applyFiltersAction;
+            _isChecked = true; // Default to checked
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string name = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+    }
+
 }
