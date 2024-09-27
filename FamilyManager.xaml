@@ -111,7 +111,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" x:Name="scrollBar">
                             <TabPanel x:Name="HeaderPanel" 
                                       Panel.ZIndex="1" 
                                       IsItemsHost="True" 
@@ -129,7 +129,7 @@
             </TabControl.Template>
             <TabControl.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding Header}">
+                    <TextBlock Text="{Binding Header}" MinWidth="50" TextAlignment="Center">
                         <TextBlock.LayoutTransform>
                             <RotateTransform Angle="90"/>
                         </TextBlock.LayoutTransform>
@@ -139,7 +139,7 @@
             <TabControl.ContentTemplate>
                 <DataTemplate>
                     <Border BorderBrush="Gray" >
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" x:Name="Scroll">
                             <ItemsControl ItemsSource="{Binding MenuItems}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>

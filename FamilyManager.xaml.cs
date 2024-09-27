@@ -38,7 +38,7 @@ namespace FerrumAddin
         public ExternalCommandData eData = null;
         public static Document doc = null;
         public UIDocument uidoc = null;
-        public ObservableCollection<CategoryFilterItem> CategoryFilters { get; set; } = new ObservableCollection<CategoryFilterItem>();
+        public static ObservableCollection<CategoryFilterItem> CategoryFilters { get; set; } = new ObservableCollection<CategoryFilterItem>();
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)
@@ -284,14 +284,14 @@ namespace FerrumAddin
             if (menuItem != null)
             {
                 menuItem.IsSelected = !menuItem.IsSelected;              
-                if (menuItem.IsSelected)
-                {
-                    (frameworkElement as Button).Background = Brushes.LightBlue;
-                }
-                else
-                {
-                    (frameworkElement as Button).Background = Brushes.White;
-                }
+                //if (menuItem.IsSelected)
+                //{
+                //    (frameworkElement as Button).Background = Brushes.LightBlue;
+                //}
+                //else
+                //{
+                //    (frameworkElement as Button).Background = Brushes.White;
+                //}
                 UpdateIsSelectedStates();
             }
         }
@@ -299,10 +299,11 @@ namespace FerrumAddin
         private void LoadFamilies(object sender, RoutedEventArgs e)
         {
             App.LoadEvent.Raise();
-            tc = Tabs;
-            
+            tc = Tabs;            
         }
+
         static TabControl tc;
+        static ScrollViewer sv;
         public static void Reload()
         {
 
@@ -313,11 +314,37 @@ namespace FerrumAddin
                     menuItem.IsSelected = false;
                 }
             }
-            int index = tc.SelectedIndex;
-            tc.SelectedIndex = -1;
-            tc.SelectedIndex = index;
-            
+            //int index = tc.SelectedIndex;
+            //var selectedCategories = CategoryFilters.Where(cf => cf.IsChecked);
+            //tc.SelectedIndex = -1;
+            //tc.SelectedIndex = index;
+            //CategoryFilters = (ObservableCollection<CategoryFilterItem>)selectedCategories;
+
         }
+        public static FrameworkElement FindElementByDataContext(DependencyObject parent, object dataContext)
+        {
+            if (parent == null) return null;
+
+            // Проверяем, является ли текущий элемент FrameworkElement и совпадает ли его DataContext
+            if (parent is FrameworkElement frameworkElement && frameworkElement.DataContext == dataContext)
+            {
+                return frameworkElement;
+            }
+
+            // Проходим по дочерним элементам текущего объекта
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                var result = FindElementByDataContext(child, dataContext);
+                if (result != null)
+                {
+                    return result; // Если нашли элемент с нужным DataContext, возвращаем его
+                }
+            }
+
+            return null; // Если не нашли, возвращаем null
+        }
+
     }
 
     public class BooleanToVisibilityConverter : IValueConverter
@@ -413,7 +440,7 @@ namespace FerrumAddin
         public ObservableCollection<MenuItem> MenuItems { get; set; }
     }
 
-    public class MenuItem
+    public class MenuItem : INotifyPropertyChanged
     {
         private bool _isSelected;
         private bool _isVisible = true;
@@ -423,11 +450,14 @@ namespace FerrumAddin
         public string Path { get; set; }
         public bool IsSelected
         {
-            get => _isSelected; 
+            get => _isSelected;
             set
             {
-                _isSelected = value;
-                OnPropertyChanged();
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    OnPropertyChanged(nameof(IsSelected));
+                }
             }
         }
         public bool IsVisible
