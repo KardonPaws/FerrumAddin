@@ -66,7 +66,8 @@
                              GroupName="OptionsGroup" Checked="RadioButton_Checked"/>
                 <RadioButton x:Name="SecondRadioButton" Content="Добавить цифру к имени" Margin="5"
                              GroupName="OptionsGroup" Checked="RadioButton_Checked"/>
-            </StackPanel>
+                    <Button x:Name="checkButton" Margin="5" Click="CheckFamilyVersions" Content="Проверка версий"/>
+                </StackPanel>
             </Border>
         </Popup>
         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="10,1,10,1">

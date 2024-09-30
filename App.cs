@@ -553,7 +553,6 @@ namespace FerrumAddin
                 doc.Close(false);
             }
         }
-
         public string GetName()
         {
             return "LoadEventHandler";

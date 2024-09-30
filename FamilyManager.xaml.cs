@@ -298,15 +298,42 @@ namespace FerrumAddin
 
         private void LoadFamilies(object sender, RoutedEventArgs e)
         {
+            doc = App.uiapp.ActiveUIDocument.Document;
             App.LoadEvent.Raise();
-            tc = Tabs;            
+            tc = Tabs;
+            
+
         }
 
         static TabControl tc;
         static ScrollViewer sv;
         public static void Reload()
         {
+            var outdatedTab = FamilyManagerWindow.mvm.TabItems.FirstOrDefault(t => t.Header == "Устаревшее");
 
+            if (outdatedTab != null)
+            {
+                // Собираем элементы, которые отмечены как выбранные (IsSelected)
+                var selectedItems = outdatedTab.MenuItems.Where(mi => mi.IsSelected).ToList();
+
+                // Удаляем выбранные элементы из вкладки
+                foreach (var selectedItem in selectedItems)
+                {
+                    outdatedTab.MenuItems.Remove(selectedItem);
+                }
+
+                // Если во вкладке не осталось элементов, удаляем вкладку
+                if (outdatedTab.MenuItems.Count == 0)
+                {
+                    FamilyManagerWindow.mvm.TabItems.Remove(outdatedTab);
+                }
+                // Обновляем интерфейс вкладок
+                FamilyManagerWindow.tc.ItemsSource = null;
+                FamilyManagerWindow.tc.ItemsSource = FamilyManagerWindow.mvm.TabItems;
+                tc.SelectedIndex = 0;
+            }
+
+            
             foreach (TabItemViewModel tab in mvm.TabItems)
             {
                 foreach (MenuItem menuItem in tab.MenuItems.Where(x => x.IsSelected))
@@ -314,6 +341,7 @@ namespace FerrumAddin
                     menuItem.IsSelected = false;
                 }
             }
+
             //int index = tc.SelectedIndex;
             //var selectedCategories = CategoryFilters.Where(cf => cf.IsChecked);
             //tc.SelectedIndex = -1;
@@ -343,6 +371,105 @@ namespace FerrumAddin
             }
 
             return null; // Если не нашли, возвращаем null
+        }
+
+        private void CheckFamilyVersions(object sender, RoutedEventArgs e)
+        {
+            doc = App.uiapp.ActiveUIDocument.Document;
+            // Список устаревших элементов
+            ObservableCollection<MenuItem> outdatedItems = new ObservableCollection<MenuItem>();
+
+            // Получаем все семейства в проекте
+            var collector = new FilteredElementCollector(doc);
+            var familyInstances = collector.OfClass(typeof(FamilyInstance)).ToElements();
+
+            foreach (var familyInstance in familyInstances)
+            {
+                Family family = (familyInstance as FamilyInstance)?.Symbol?.Family;
+                if (family == null) continue;
+
+                // Ищем MenuItem по имени семейства
+                var matchingMenuItem = FamilyManagerWindow.mvm.TabItems
+                    .SelectMany(ti => ti.MenuItems)
+                    .FirstOrDefault(mi => mi.Name == family.Name);
+
+                if (matchingMenuItem != null)
+                {                
+                    // Сравниваем параметр ZH_Версия
+                    string projectVersion = GetFamilyVersionFromProject(family);
+                    // Загружаем семейство по пути
+                    Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
+                    if (loadedFamily == null) continue;
+                    string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily);
+                    loadedFamily.Close(false);
+                    if (!string.Equals(projectVersion, loadedFamilyVersion, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Добавляем в список устаревших
+                        outdatedItems.Add(matchingMenuItem);
+                    }
+                }
+            }
+
+            // Если есть устаревшие элементы, создаем новую вкладку "Устаревшее"
+            if (outdatedItems.Count > 0)
+            {
+                AddOutdatedTab(outdatedItems);
+            }
+        }
+
+        private string GetFamilyVersionFromProject(Family family)
+        {
+            // Получаем параметр ZH_Версия из семейства или экземпляра типа
+            FamilySymbol symbol = new FilteredElementCollector(doc)
+                .OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .FirstOrDefault(s => s.Family.Id == family.Id);
+
+            if (symbol != null)
+            {
+                Parameter versionParam = symbol.LookupParameter("ZH_Версия");
+                if (versionParam != null)
+                {
+                    return versionParam.AsString();
+                }
+            }
+
+            return string.Empty; // Если параметр не найден, возвращаем пустую строку
+        }
+
+        // Получение версии семейства через FamilyManager для загруженного семейства
+        private string GetFamilyVersionFromLoadedFamily(Document familyDoc)
+        {
+            // Используем FamilyManager для получения параметра ZH_Версия
+            FamilyManager familyManager = familyDoc.FamilyManager;
+            if (familyManager != null)
+            {
+                FamilyParameter versionParam = familyManager.get_Parameter("ZH_Версия");
+                if (versionParam != null)
+                {
+                    return familyManager.CurrentType.AsString(versionParam);
+                }
+            }
+
+            return string.Empty; // Если параметр не найден, возвращаем пустую строку
+        }
+
+        private void AddOutdatedTab(ObservableCollection<MenuItem> outdatedItems)
+        {
+            // Создаем новую вкладку
+            var outdatedTab = new TabItemViewModel
+            {
+                Header = "Устаревшее",
+                MenuItems = outdatedItems
+            };
+
+            // Добавляем ее на первое место в TabItems
+            FamilyManagerWindow.mvm.TabItems.Insert(0, outdatedTab);
+
+            // Обновляем интерфейс
+            Tabs.ItemsSource = null;
+            Tabs.ItemsSource = mvm.TabItems;
+            Tabs.SelectedIndex = 0;
         }
 
     }
