@@ -98,7 +98,7 @@
             </Popup>
         </StackPanel>
 
-        <TabControl x:Name="Tabs" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
+        <TabControl x:Name="Tabs" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -141,7 +141,7 @@
                 <DataTemplate>
                     <Border BorderBrush="Gray" >
                         <ScrollViewer VerticalScrollBarVisibility="Auto" x:Name="Scroll">
-                            <ItemsControl ItemsSource="{Binding MenuItems}">
+                            <ItemsControl ItemsSource="{Binding MenuItems}" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Button BorderThickness="1" BorderBrush="LightGray" HorizontalContentAlignment="Left"

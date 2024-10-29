@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -29,9 +30,6 @@ using TextBox = System.Windows.Controls.TextBox;
 
 namespace FerrumAddin
 {
-    /// <summary>
-    /// Логика взаимодействия для Page1.xaml
-    /// </summary>
     public partial class FamilyManagerWindow : Page, IDockablePaneProvider
     {
         // fields
@@ -46,35 +44,27 @@ namespace FerrumAddin
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
 
-        // IDockablePaneProvider abstrat method
         public void SetupDockablePane(DockablePaneProviderData data)
         {
-            // wpf object with pane's interface
             data.FrameworkElement = this as FrameworkElement;
-            // initial state position
             data.InitialState = new DockablePaneState
             {
                 DockPosition = DockPosition.Tabbed,
                 TabBehind = DockablePanes.BuiltInDockablePanes.ProjectBrowser
             };
-
         }
+
         public void CustomInitiator(Document d)
         {
-            // ExternalCommandData and Doc
             doc = d;
-
         }
+
         public void Newpath()
         {
             mvm = new MainViewModel();
             Tabs.ItemsSource = mvm.TabItems;
         }
-        private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            SearchText = (sender as TextBox).Text;
-            ApplyFilters();
-        }
+
 
         public ObservableCollection<TabItemViewModel> filteredTabItems;
 
@@ -82,7 +72,7 @@ namespace FerrumAddin
         {
             if (filteredTabItems != null)
             {
-                if (SearchText == "" || SearchText == String.Empty)
+                if (string.IsNullOrEmpty(SearchText))
                 {
                     foreach (var filteredTab in filteredTabItems)
                     {
@@ -120,46 +110,10 @@ namespace FerrumAddin
                 }
             }
         }
-        private void FilterItems(string searchText)
-        {
-            SearchText = searchText;
-            ApplyFilters();
-        }
-
-        private void ApplyFilters()
-        {
-            var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
-            int ind = Tabs.SelectedIndex;
-            if (selectedTabItem != null)
-            {
-                var selectedCategories = CategoryFilters
-                    .Where(cf => cf.IsChecked)
-                    .Select(cf => cf.CategoryName)
-                    .ToHashSet();
-
-                foreach (var menuItem in selectedTabItem.MenuItems)
-                {
-                    bool matchesCategory = selectedCategories.Contains(menuItem.Category);
-                    bool matchesSearch = string.IsNullOrEmpty(SearchText) ||
-                                         menuItem.Name.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                         menuItem.Category.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                    menuItem.IsVisible = matchesCategory && matchesSearch;
-                }
-            }
-            if (ind != -1)
-            {
-                Tabs.SelectionChanged -= Tabs_SelectionChanged;
-                mvm.TabItems[mvm.TabItems.IndexOf(selectedTabItem)] = selectedTabItem;
-                Tabs.ItemsSource = mvm.TabItems;
-                Tabs.SelectedIndex = ind;
-                Tabs.SelectionChanged += Tabs_SelectionChanged;
-            }
-        }
 
 
         public string SearchText;
-        // constructor
+
         public FamilyManagerWindow()
         {
             InitializeComponent();
@@ -171,36 +125,94 @@ namespace FerrumAddin
 
         private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            SearchText = string.Empty;
+            SearchTextBox.Text = string.Empty;
             UpdateCategoryFilters();
         }
 
+        private CancellationTokenSource _cancellationTokenSource;
+
+        // Обновленный метод для запуска фильтрации с учетом отмены предыдущих задач
+        private void StartDynamicFiltering()
+        {
+            // Отмена предыдущей задачи, если она существует
+            _cancellationTokenSource?.Cancel();
+            _cancellationTokenSource = new CancellationTokenSource();
+
+            // Запуск нового фильтра с токеном отмены
+            ApplyFiltersDynamicAsync(_cancellationTokenSource.Token).ConfigureAwait(false);
+        }
+
+        // Метод динамической фильтрации с учетом нового токена и копии оригинальных элементов
+        private async Task ApplyFiltersDynamicAsync(CancellationToken cancellationToken)
+        {
+            var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
+            if (selectedTabItem == null) return;
+
+            // Очистка отображаемого списка и подготовка к новому добавлению
+            selectedTabItem.MenuItems.Clear();
+
+            // Получение категорий для фильтрации
+            var selectedCategories = CategoryFilters
+                .Where(cf => cf.IsChecked)
+                .Select(cf => cf.CategoryName)
+                .ToHashSet();
+
+            // Копируем OriginalMenuItems для безопасного фильтра
+            var itemsToFilter = selectedTabItem.OriginalMenuItems.ToList();
+
+            // Начинаем динамическую фильтрацию
+            foreach (var menuItem in itemsToFilter)
+            {
+                // Проверка на запрос отмены
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
+                // Проверка на соответствие условиям фильтра
+                bool matchesCategory = selectedCategories.Contains(menuItem.Category);
+                bool matchesSearch = string.IsNullOrEmpty(SearchText) ||
+                                     menuItem.Name.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     menuItem.Category.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                // Добавляем элемент в фильтрованный список, если условия совпадают
+                if (matchesCategory && matchesSearch)
+                {
+                    selectedTabItem.MenuItems.Add(menuItem);
+
+                    // Небольшая задержка для обновления UI
+                    await Task.Delay(30, cancellationToken);
+                }
+            }
+        }
+
+        // Обновление вызова при изменении текста в поисковой строке
+        private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            SearchText = (sender as TextBox).Text;
+            StartDynamicFiltering();
+        }
+
+        // Обновление фильтра при изменении категории
         private void UpdateCategoryFilters()
         {
-            // Clear the current category filters
             CategoryFilters.Clear();
-
-            // Get the selected TabItemViewModel
             var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
             if (selectedTabItem != null)
             {
-                // Get unique categories from MenuItems
-                var uniqueCategories = selectedTabItem.MenuItems.Select(mi => mi.Category).Distinct();
-
-                // For each category, create a CategoryFilterItem
+                var uniqueCategories = selectedTabItem.OriginalMenuItems.Select(mi => mi.Category).Distinct();
                 foreach (var category in uniqueCategories)
                 {
-                    var filterItem = new CategoryFilterItem(ApplyFilters)
+                    var filterItem = new CategoryFilterItem(StartDynamicFiltering)
                     {
                         CategoryName = category,
-                        IsChecked = true // By default, all categories are visible
+                        IsChecked = true
                     };
                     CategoryFilters.Add(filterItem);
                 }
             }
-
-            // Apply the filters initially
-            ApplyFilters();
+            StartDynamicFiltering();
         }
+
 
 
         private void CategoryFilterItem_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -210,19 +222,17 @@ namespace FerrumAddin
                 ApplyCategoryFilter();
             }
         }
+
         private void ApplyCategoryFilter()
         {
-            // Get the selected TabItemViewModel
             var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
             if (selectedTabItem != null)
             {
-                // For each MenuItem, set its IsVisible based on the category filter
                 foreach (var menuItem in selectedTabItem.MenuItems)
                 {
                     var categoryFilter = CategoryFilters.FirstOrDefault(cf => cf.CategoryName == menuItem.Category);
                     menuItem.IsVisible = categoryFilter?.IsChecked ?? true;
                 }
-                
             }
         }
 
@@ -233,7 +243,6 @@ namespace FerrumAddin
 
         private void OptionsButton_MouseLeave(object sender, MouseEventArgs e)
         {
-            // Откладываем закрытие, чтобы пользователь мог переместить курсор на Popup
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (!OptionsPopup.IsMouseOver)
@@ -250,7 +259,6 @@ namespace FerrumAddin
 
         private void OptionsPopup_MouseLeave(object sender, MouseEventArgs e)
         {
-            // Закрываем Popup, если курсор не находится на кнопке
             if (!OptionsButton.IsMouseOver)
             {
                 OptionsPopup.IsOpen = false;
@@ -276,64 +284,51 @@ namespace FerrumAddin
         }
 
         public static MainViewModel mvm;
+
         private void ElementClick(object sender, RoutedEventArgs e)
         {
             var frameworkElement = sender as FrameworkElement;
-
             var menuItem = frameworkElement?.DataContext as MenuItem;
             if (menuItem != null)
             {
-                menuItem.IsSelected = !menuItem.IsSelected;              
-                //if (menuItem.IsSelected)
-                //{
-                //    (frameworkElement as Button).Background = Brushes.LightBlue;
-                //}
-                //else
-                //{
-                //    (frameworkElement as Button).Background = Brushes.White;
-                //}
+                menuItem.IsSelected = !menuItem.IsSelected;
                 UpdateIsSelectedStates();
             }
         }
 
-        private void LoadFamilies(object sender, RoutedEventArgs e)
+        private async void LoadFamilies(object sender, RoutedEventArgs e)
         {
             doc = App.uiapp.ActiveUIDocument.Document;
             App.LoadEvent.Raise();
             tc = Tabs;
-            
-
         }
 
         static TabControl tc;
         static ScrollViewer sv;
+
         public static void Reload()
         {
             var outdatedTab = FamilyManagerWindow.mvm.TabItems.FirstOrDefault(t => t.Header == "Устаревшее");
 
             if (outdatedTab != null)
             {
-                // Собираем элементы, которые отмечены как выбранные (IsSelected)
                 var selectedItems = outdatedTab.MenuItems.Where(mi => mi.IsSelected).ToList();
 
-                // Удаляем выбранные элементы из вкладки
                 foreach (var selectedItem in selectedItems)
                 {
                     outdatedTab.MenuItems.Remove(selectedItem);
                 }
 
-                // Если во вкладке не осталось элементов, удаляем вкладку
                 if (outdatedTab.MenuItems.Count == 0)
                 {
                     FamilyManagerWindow.mvm.TabItems.Remove(outdatedTab);
                 }
-                // Обновляем интерфейс вкладок
+
                 FamilyManagerWindow.tc.ItemsSource = null;
                 FamilyManagerWindow.tc.ItemsSource = FamilyManagerWindow.mvm.TabItems;
                 tc.SelectedIndex = 0;
             }
 
-            
             foreach (TabItemViewModel tab in mvm.TabItems)
             {
                 foreach (MenuItem menuItem in tab.MenuItems.Where(x => x.IsSelected))
@@ -341,45 +336,35 @@ namespace FerrumAddin
                     menuItem.IsSelected = false;
                 }
             }
-
-            //int index = tc.SelectedIndex;
-            //var selectedCategories = CategoryFilters.Where(cf => cf.IsChecked);
-            //tc.SelectedIndex = -1;
-            //tc.SelectedIndex = index;
-            //CategoryFilters = (ObservableCollection<CategoryFilterItem>)selectedCategories;
-
         }
+
         public static FrameworkElement FindElementByDataContext(DependencyObject parent, object dataContext)
         {
             if (parent == null) return null;
 
-            // Проверяем, является ли текущий элемент FrameworkElement и совпадает ли его DataContext
             if (parent is FrameworkElement frameworkElement && frameworkElement.DataContext == dataContext)
             {
                 return frameworkElement;
             }
 
-            // Проходим по дочерним элементам текущего объекта
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
             {
                 var child = VisualTreeHelper.GetChild(parent, i);
                 var result = FindElementByDataContext(child, dataContext);
                 if (result != null)
                 {
-                    return result; // Если нашли элемент с нужным DataContext, возвращаем его
+                    return result;
                 }
             }
 
-            return null; // Если не нашли, возвращаем null
+            return null;
         }
 
         private void CheckFamilyVersions(object sender, RoutedEventArgs e)
         {
             doc = App.uiapp.ActiveUIDocument.Document;
-            // Список устаревших элементов
             ObservableCollection<MenuItem> outdatedItems = new ObservableCollection<MenuItem>();
 
-            // Получаем все семейства в проекте
             var collector = new FilteredElementCollector(doc);
             var familyInstances = collector.OfClass(typeof(FamilyInstance)).ToElements();
 
@@ -388,29 +373,25 @@ namespace FerrumAddin
                 Family family = (familyInstance as FamilyInstance)?.Symbol?.Family;
                 if (family == null) continue;
 
-                // Ищем MenuItem по имени семейства
                 var matchingMenuItem = FamilyManagerWindow.mvm.TabItems
                     .SelectMany(ti => ti.MenuItems)
                     .FirstOrDefault(mi => mi.Name == family.Name);
 
                 if (matchingMenuItem != null)
-                {                
-                    // Сравниваем параметр ZH_Версия
+                {
                     string projectVersion = GetFamilyVersionFromProject(family);
-                    // Загружаем семейство по пути
+
                     Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
                     if (loadedFamily == null) continue;
                     string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily);
                     loadedFamily.Close(false);
                     if (!string.Equals(projectVersion, loadedFamilyVersion, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Добавляем в список устаревших
                         outdatedItems.Add(matchingMenuItem);
                     }
                 }
             }
 
-            // Если есть устаревшие элементы, создаем новую вкладку "Устаревшее"
             if (outdatedItems.Count > 0)
             {
                 AddOutdatedTab(outdatedItems);
@@ -419,7 +400,6 @@ namespace FerrumAddin
 
         private string GetFamilyVersionFromProject(Family family)
         {
-            // Получаем параметр ZH_Версия из семейства или экземпляра типа
             FamilySymbol symbol = new FilteredElementCollector(doc)
                 .OfClass(typeof(FamilySymbol))
                 .Cast<FamilySymbol>()
@@ -434,13 +414,11 @@ namespace FerrumAddin
                 }
             }
 
-            return string.Empty; // Если параметр не найден, возвращаем пустую строку
+            return string.Empty;
         }
 
-        // Получение версии семейства через FamilyManager для загруженного семейства
         private string GetFamilyVersionFromLoadedFamily(Document familyDoc)
         {
-            // Используем FamilyManager для получения параметра ZH_Версия
             FamilyManager familyManager = familyDoc.FamilyManager;
             if (familyManager != null)
             {
@@ -451,27 +429,23 @@ namespace FerrumAddin
                 }
             }
 
-            return string.Empty; // Если параметр не найден, возвращаем пустую строку
+            return string.Empty;
         }
 
         private void AddOutdatedTab(ObservableCollection<MenuItem> outdatedItems)
         {
-            // Создаем новую вкладку
             var outdatedTab = new TabItemViewModel
             {
                 Header = "Устаревшее",
                 MenuItems = outdatedItems
             };
 
-            // Добавляем ее на первое место в TabItems
             FamilyManagerWindow.mvm.TabItems.Insert(0, outdatedTab);
 
-            // Обновляем интерфейс
             Tabs.ItemsSource = null;
             Tabs.ItemsSource = mvm.TabItems;
             Tabs.SelectedIndex = 0;
         }
-
     }
 
     public class BooleanToVisibilityConverter : IValueConverter
@@ -507,9 +481,18 @@ namespace FerrumAddin
         }
     }
 
+    public class TabItemViewModel
+    {
+        public string Header { get; set; }
+        public ObservableCollection<MenuItem> MenuItems { get; set; }
+
+        // Оригинальные элементы, используемые для сброса фильтрации
+        public List<MenuItem> OriginalMenuItems { get; set; }
+    }
+
+    // Инициализируем OriginalMenuItems при загрузке вкладок
     public class MainViewModel : INotifyPropertyChanged
     {
-
         public ObservableCollection<TabItemViewModel> TabItems { get; set; }
 
         public MainViewModel()
@@ -517,6 +500,7 @@ namespace FerrumAddin
             TabItems = new ObservableCollection<TabItemViewModel>();
             LoadTabItemsFromXml(App.TabPath);
         }
+
         private void LoadTabItemsFromXml(string filePath)
         {
             if (!File.Exists(filePath))
@@ -531,12 +515,12 @@ namespace FerrumAddin
                     var tabItemViewModel = new TabItemViewModel
                     {
                         Header = tabItemElement.Element("Header")?.Value,
-                        MenuItems = new ObservableCollection<MenuItem>()
+                        MenuItems = new ObservableCollection<MenuItem>(),
+                        OriginalMenuItems = new List<MenuItem>() // Инициализация оригинальных элементов
                     };
 
                     foreach (var menuItemElement in tabItemElement.Descendants("MenuItem"))
                     {
-
                         var menuItem = new MenuItem
                         {
                             Name = menuItemElement.Element("Name")?.Value,
@@ -546,7 +530,7 @@ namespace FerrumAddin
                         };
 
                         tabItemViewModel.MenuItems.Add(menuItem);
-
+                        tabItemViewModel.OriginalMenuItems.Add(menuItem); // Добавляем элемент в OriginalMenuItems
                     }
 
                     TabItems.Add(tabItemViewModel);
@@ -559,12 +543,6 @@ namespace FerrumAddin
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
-    }
-
-    public class TabItemViewModel
-    {
-        public string Header { get; set; }
-        public ObservableCollection<MenuItem> MenuItems { get; set; }
     }
 
     public class MenuItem : INotifyPropertyChanged
@@ -631,7 +609,7 @@ namespace FerrumAddin
         public CategoryFilterItem(Action applyFiltersAction)
         {
             _applyFiltersAction = applyFiltersAction;
-            _isChecked = true; // Default to checked
+            _isChecked = true;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -640,5 +618,4 @@ namespace FerrumAddin
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
     }
-
 }
