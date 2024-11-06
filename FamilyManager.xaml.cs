@@ -407,7 +407,7 @@ namespace FerrumAddin
 
             if (symbol != null)
             {
-                Parameter versionParam = symbol.LookupParameter("ZH_Версия");
+                Parameter versionParam = symbol.LookupParameter("ZH_Версия_Семейства");
                 if (versionParam != null)
                 {
                     return versionParam.AsString();
@@ -422,7 +422,7 @@ namespace FerrumAddin
             FamilyManager familyManager = familyDoc.FamilyManager;
             if (familyManager != null)
             {
-                FamilyParameter versionParam = familyManager.get_Parameter("ZH_Версия");
+                FamilyParameter versionParam = familyManager.get_Parameter("ZH_Версия_Семейства");
                 if (versionParam != null)
                 {
                     return familyManager.CurrentType.AsString(versionParam);
