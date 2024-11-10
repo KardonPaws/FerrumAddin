@@ -411,17 +411,37 @@ namespace FerrumAddin
 
                     if (existingFamily != null)
                     {
-                        // Замена существующего семейства
-                        using (Transaction tx = new Transaction(docToCopy))
+                        if (isFirstOptionChecked)
                         {
-                            tx.Start("Загрузка семейств");
-                            FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
-                            failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
-                            failureOptions.SetClearAfterRollback(true); // Опционально
-                            tx.SetFailureHandlingOptions(failureOptions);
-                            MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
-                            docToCopy.LoadFamily(tab.Path, loadOptions, out Family load);
-                            tx.Commit();
+                            // Замена существующего семейства
+                            using (Transaction tx = new Transaction(docToCopy))
+                            {
+                                tx.Start("Загрузка семейств");
+                                FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                                failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                                failureOptions.SetClearAfterRollback(true); // Опционально
+                                tx.SetFailureHandlingOptions(failureOptions);
+                                MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
+                                docToCopy.LoadFamily(tab.Path, loadOptions, out Family load);
+                                tx.Commit();
+                            }
+                        }
+                        else
+                        {
+                            using (Transaction tx = new Transaction(docToCopy))
+                            {
+                                tx.Start("Загрузка семейств");
+                                FailureHandlingOptions failureOptions = tx.GetFailureHandlingOptions();
+                                failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                                failureOptions.SetClearAfterRollback(true); // Опционально
+                                tx.SetFailureHandlingOptions(failureOptions);
+                                MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
+                                string famPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Path.GetFileNameWithoutExtension(tab.Path )+ "_1.rfa");
+                                File.Copy(tab.Path, famPath, true);
+                                docToCopy.LoadFamily(famPath, loadOptions, out Family load);
+                                File.Delete(famPath);
+                                tx.Commit();
+                            }
                         }
                     }
                     else

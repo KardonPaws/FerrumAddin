@@ -197,6 +197,7 @@ namespace FerrumAddin
         {
             CategoryFilters.Clear();
             var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
+       
             if (selectedTabItem != null)
             {
                 var uniqueCategories = selectedTabItem.OriginalMenuItems.Select(mi => mi.Category).Distinct();
@@ -437,7 +438,8 @@ namespace FerrumAddin
             var outdatedTab = new TabItemViewModel
             {
                 Header = "Устаревшее",
-                MenuItems = outdatedItems
+                MenuItems = outdatedItems,
+                OriginalMenuItems = outdatedItems.ToList()
             };
 
             FamilyManagerWindow.mvm.TabItems.Insert(0, outdatedTab);
