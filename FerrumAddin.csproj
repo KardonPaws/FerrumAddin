@@ -60,9 +60,13 @@
   <ItemGroup>
     <Compile Include="App.cs" />
     <Compile Include="CommandMepName.cs" />
-    <Compile Include="ConfiguratorShow.cs" />
-    <Compile Include="FamilyManagerShow.cs" />
-    <Compile Include="FamilyManager.xaml.cs">
+    <Compile Include="Config\ConfiguratorShow.cs" />
+    <Compile Include="FM\ComparisonWindow.xaml.cs">
+      <DependentUpon>ComparisonWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="FM\ComparisonWindowShow.cs" />
+    <Compile Include="FM\FamilyManagerShow.cs" />
+    <Compile Include="FM\FamilyManager.xaml.cs">
       <DependentUpon>FamilyManager.xaml</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -71,7 +75,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <Compile Include="Configurator.xaml.cs">
+    <Compile Include="Config\Configurator.xaml.cs">
       <DependentUpon>Configurator.xaml</DependentUpon>
     </Compile>
     <Compile Include="Update.xaml.cs">
@@ -88,11 +92,15 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <Page Include="FamilyManager.xaml">
+    <Page Include="FM\ComparisonWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Configurator.xaml">
+    <Page Include="FM\FamilyManager.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Config\Configurator.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -109,6 +117,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\ferrum.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="FM\Железно-верт-синий.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

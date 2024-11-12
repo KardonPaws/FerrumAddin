@@ -226,6 +226,12 @@ namespace FerrumAddin
 
             panelFerrum.AddItem(FamilyManager);
 
+            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление семейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ComparisonWindowShow");
+            Comparison.Image = Convert(Properties.Resources.FamilyManager);
+            Comparison.LargeImage = Convert(Properties.Resources.FamilyManager);          
+
+            //panelFerrum.AddItem(Comparison);
+
             panelMEP = a.CreateRibbonPanel(tabName, "ВИС");
             panelMEP.Visible = false;
 
@@ -488,6 +494,8 @@ namespace FerrumAddin
                     }
                     else
                     {
+                        CopyPasteOptions options = new CopyPasteOptions();
+                        options.SetDuplicateTypeNamesHandler(new MyCopyHandler());
                         if (isFirstOptionChecked)
                         {
                             // Замена существующего элемента
@@ -518,7 +526,7 @@ namespace FerrumAddin
                                             new List<ElementId> { sourceType.Id },
                                             docToCopy,
                                             Transform.Identity,
-                                            new CopyPasteOptions());
+                                            options);
 
                                         ElementId copiedTypeId = copiedIds.First();
                                         ElementType copiedType = docToCopy.GetElement(copiedTypeId) as ElementType;
@@ -552,7 +560,7 @@ namespace FerrumAddin
                                 failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
                                 failureOptions.SetClearAfterRollback(true); // Опционально
                                 tx.SetFailureHandlingOptions(failureOptions);
-                                ICollection<ElementId> copiedIds = ElementTransformUtils.CopyElements(document, el, docToCopy, null, null);
+                                ICollection<ElementId> copiedIds = ElementTransformUtils.CopyElements(document, el, docToCopy, Transform.Identity, options);
                                 ElementId copiedId = copiedIds.First();
                                 Element copiedElement = docToCopy.GetElement(copiedId);
 
@@ -639,6 +647,16 @@ namespace FerrumAddin
                 i++;
             }
             return newName;
+        }
+    }
+
+    public class MyCopyHandler : IDuplicateTypeNamesHandler
+    {
+
+
+        public DuplicateTypeAction OnDuplicateTypeNamesFound(DuplicateTypeNamesHandlerArgs args)
+        {
+            return DuplicateTypeAction.UseDestinationTypes;
         }
     }
 

@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -285,16 +286,51 @@ namespace FerrumAddin
         }
 
         public static MainViewModel mvm;
+        private MenuItem lastClickedMenuItem;
 
         private void ElementClick(object sender, RoutedEventArgs e)
         {
-            var frameworkElement = sender as FrameworkElement;
-            var menuItem = frameworkElement?.DataContext as MenuItem;
-            if (menuItem != null)
+            if ((Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) && lastClickedMenuItem != null)
             {
-                menuItem.IsSelected = !menuItem.IsSelected;
-                UpdateIsSelectedStates();
+                var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
+                if (selectedTabItem != null)
+                {
+                    // Get the clicked element.
+                    var clickedButton = sender as Button;
+                    var clickedMenuItem = clickedButton?.DataContext as MenuItem;
+                    if (clickedMenuItem != null && lastClickedMenuItem != null && clickedMenuItem != lastClickedMenuItem)
+                    {
+                        // Find the indices of the last clicked and the current clicked MenuItem.
+                        int lastClickedIndex = selectedTabItem.MenuItems.IndexOf(lastClickedMenuItem);
+                        int clickedIndex = selectedTabItem.MenuItems.IndexOf(clickedMenuItem);
+
+                        if (lastClickedIndex != -1 && clickedIndex != -1)
+                        {
+                            // Find the range between the last clicked and current clicked index.
+                            int start = Math.Min(lastClickedIndex, clickedIndex);
+                            int end = Math.Max(lastClickedIndex, clickedIndex);
+
+                            // Select all MenuItems in the range.
+                            for (int i = start; i <= end; i++)
+                            {
+                                selectedTabItem.MenuItems[i].IsSelected = lastClickedMenuItem.IsSelected;
+                            }
+                        }
+                    }
+                }
             }
+            else
+            {
+                var frameworkElement = sender as FrameworkElement;
+                var menuItem = frameworkElement?.DataContext as MenuItem;
+                if (menuItem != null)
+                {
+                    menuItem.IsSelected = !menuItem.IsSelected;
+                    UpdateIsSelectedStates();
+                }
+            }
+            var button = sender as Button;
+            lastClickedMenuItem = button?.DataContext as MenuItem;
         }
 
         private async void LoadFamilies(object sender, RoutedEventArgs e)
@@ -388,7 +424,15 @@ namespace FerrumAddin
                     loadedFamily.Close(false);
                     if (!string.Equals(projectVersion, loadedFamilyVersion, StringComparison.OrdinalIgnoreCase))
                     {
-                        outdatedItems.Add(matchingMenuItem);
+                        outdatedItems.Add(new MenuItem()
+                        {
+                            Path = matchingMenuItem.Path,
+                            Category = matchingMenuItem.Category,
+                            Name = matchingMenuItem.Name,
+                            ImagePath = matchingMenuItem.ImagePath,
+                            IsVisible = true,
+                            IsSelected = false
+                        });
                     }
                 }
             }

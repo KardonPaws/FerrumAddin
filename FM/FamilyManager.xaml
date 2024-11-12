@@ -11,7 +11,7 @@
         <ResourceDictionary>
             <local:BooleanToBrushConverter x:Key="BooleanToBrushConverter" x:Name="BooleanToBrushConverter"/>
             <local:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" x:Name="BooleanToVisibilityConverter"/>
-            <BitmapImage x:Key="name" UriSource="Resources/Железно-верт-синий.png" />
+            <BitmapImage x:Key="name" UriSource="/FerrumAddin;component/FM/Железно-верт-синий.png"/>
         </ResourceDictionary>
     </Page.Resources>
     <Grid Background="White">
