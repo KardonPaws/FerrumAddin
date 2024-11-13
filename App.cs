@@ -220,13 +220,13 @@ namespace FerrumAddin
             cb.CurrentChanged += Cb_CurrentChanged;
 
 
-            PushButtonData FamilyManager = new PushButtonData("frmManager", "Менеджер семейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FamilyManagerShow");
+            PushButtonData FamilyManager = new PushButtonData("frmManager", "Менеджер\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FamilyManagerShow");
             FamilyManager.Image = Convert(Properties.Resources.FamilyManager);
             FamilyManager.LargeImage = Convert(Properties.Resources.FamilyManager);
 
             panelFerrum.AddItem(FamilyManager);
 
-            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление семейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ComparisonWindowShow");
+            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ComparisonWindowShow");
             Comparison.Image = Convert(Properties.Resources.FamilyManager);
             Comparison.LargeImage = Convert(Properties.Resources.FamilyManager);          
 

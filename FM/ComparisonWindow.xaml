@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FerrumAddin.FM"
         mc:Ignorable="d"
-        Title="ComparisonWindow" Height="450" Width="800">
+        Title="ComparisonWindow" Height="600" Width="800">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2*" />
@@ -16,13 +16,29 @@
 
         <!-- First Column: Menu Items -->
         <StackPanel Grid.Column="0" Margin="5">
-            <TextBox x:Name="MenuItemSearchBox" Margin="0,0,0,5" ToolTip="Search by Name..." />
-            <ComboBox x:Name="MenuCategoryFilter" Margin="0,0,0,5" ToolTip="Filter by Category..." />
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="300">
-                <ListView x:Name="MenuItemsList" ItemsSource="{Binding MenuItems}" Margin="0,0,0,5"
+            <TextBox x:Name="MenuItemSearchBox"
+                     Text="{Binding MenuSearchText, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,5" Padding="5"
+                     ToolTip="Search by Name..." Height="30" />
+            <ToggleButton x:Name="MenuCategoryFilterButton" Content="Фильтр по категории ▽" Margin="0,0,0,5" />
+            <Popup PlacementTarget="{Binding ElementName=MenuCategoryFilterButton}"
+                   IsOpen="{Binding IsChecked, ElementName=MenuCategoryFilterButton}"
+                   StaysOpen="False">
+                <Border BorderBrush="Gray" Background="White">
+                    <ItemsControl ItemsSource="{Binding MenuCategoryFilters}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding CategoryName}" IsChecked="{Binding IsChecked}" Margin="5" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Popup>
+            <ListView x:Name="MenuItemsList" ItemsSource="{Binding FilteredMenuItems}" Margin="0,0,0,5"
                           PreviewMouseLeftButtonDown="ListView_PreviewMouseLeftButtonDown">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Orientation="Horizontal">
                                 <Image Source="{Binding ImagePath}" Width="30" Height="30" Margin="0,0,5,0" />
                                 <StackPanel>
@@ -30,18 +46,34 @@
                                     <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" />
                                 </StackPanel>
                             </StackPanel>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-            </ScrollViewer>
+                        </ScrollViewer>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
         </StackPanel>
 
         <!-- Second Column: Revit Families -->
         <StackPanel Grid.Column="1" Margin="5">
-            <TextBox x:Name="FamilySearchBox" Margin="0,0,0,5" ToolTip="Search by Name..." />
-            <ComboBox x:Name="FamilyCategoryFilter" Margin="0,0,0,5" ToolTip="Filter by Category..." />
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="300">
-                <ListView x:Name="FamiliesList" ItemsSource="{Binding RevitFamilies}" Margin="0,0,0,5"
+            <TextBox x:Name="FamilySearchBox"
+                     Text="{Binding FamilySearchText, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,5" Padding="5"
+                     ToolTip="Search by Name..." Height="30" />
+            <ToggleButton x:Name="FamilyCategoryFilterButton" Content="Фмльтр по категории ▽" Margin="0,0,0,5" />
+            <Popup PlacementTarget="{Binding ElementName=FamilyCategoryFilterButton}"
+                   IsOpen="{Binding IsChecked, ElementName=FamilyCategoryFilterButton}"
+                   StaysOpen="False">
+                <Border BorderBrush="Gray" Background="White">
+                    <ItemsControl ItemsSource="{Binding FamilyCategoryFilters}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding CategoryName}" IsChecked="{Binding IsChecked}" Margin="5" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Popup>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ListView x:Name="FamiliesList" ItemsSource="{Binding FilteredRevitFamilies}" Margin="0,0,0,5"
                           PreviewMouseLeftButtonDown="ListView_PreviewMouseLeftButtonDown">
                     <ListView.ItemTemplate>
                         <DataTemplate>
@@ -62,13 +94,13 @@
             <TextBlock Text="Selected Families" FontWeight="Bold" Margin="0,0,0,5" />
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ListView x:Name="SelectedFamiliesList" AllowDrop="True" Margin="0,0,0,5"
-                          Drop="ListView_Drop" DragOver="ListView_DragOver" PreviewMouseLeftButtonDown="ListView_PreviewMouseLeftButtonDown">
+                          Drop="ListView_Drop" DragOver="ListView_DragOver" PreviewMouseLeftButtonDown="ListView_PreviewMouseLeftButtonDown" ItemsSource="{Binding SelectedFamilies}">
                     <ListView.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
+                            <StackPanel Orientation="Horizontal" Height="30">
                                 <TextBlock Text="{Binding Name}" />
                                 <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" Margin="5,0,0,0" />
-                                <Button Content="Remove" Click="RemoveSelectedFamily_Click" Margin="10,0,0,0" />
+                                <Button Content="Remove" Click="RemoveSelectedFamily_Click" Margin="10,0,0,0" HorizontalAlignment="Right" />
                             </StackPanel>
                         </DataTemplate>
                     </ListView.ItemTemplate>
@@ -81,13 +113,14 @@
             <TextBlock Text="Selected Menu Items" FontWeight="Bold" Margin="0,0,0,5" />
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ListView x:Name="SelectedMenuItemsList" AllowDrop="True" Margin="0,0,0,5"
-                          Drop="ListView_Drop" DragOver="ListView_DragOver" PreviewMouseLeftButtonDown="ListView_PreviewMouseLeftButtonDown">
+                          Drop="ListView_Drop" DragOver="ListView_DragOver" ItemsSource="{Binding SelectedMenuItems}">
                     <ListView.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
+                            <StackPanel Orientation="Horizontal" Height="30">
                                 <Image Source="{Binding ImagePath}" Width="30" Height="30" Margin="0,0,5,0" />
                                 <TextBlock Text="{Binding Name}" />
-                                <Button Content="Remove" Click="RemoveSelectedMenuItem_Click" Margin="10,0,0,0" />
+                                <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" Margin="5,0,0,0" />
+                                <Button Content="Remove" Click="RemoveSelectedMenuItem_Click" Margin="10,0,0,0" HorizontalAlignment="Right" />
                             </StackPanel>
                         </DataTemplate>
                     </ListView.ItemTemplate>

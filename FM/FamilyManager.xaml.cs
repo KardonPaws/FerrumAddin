@@ -401,6 +401,7 @@ namespace FerrumAddin
         {
             doc = App.uiapp.ActiveUIDocument.Document;
             ObservableCollection<MenuItem> outdatedItems = new ObservableCollection<MenuItem>();
+            ObservableCollection<MenuItem> newerItems = new ObservableCollection<MenuItem>();
 
             var collector = new FilteredElementCollector(doc);
             var familyInstances = collector.OfClass(typeof(FamilyInstance)).ToElements();
@@ -416,13 +417,17 @@ namespace FerrumAddin
 
                 if (matchingMenuItem != null)
                 {
-                    string projectVersion = GetFamilyVersionFromProject(family);
+                    string projectVersion = GetFamilyVersionFromProject(family).Substring(1); ;
 
                     Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
                     if (loadedFamily == null) continue;
-                    string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily);
+                    string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily).Substring(1); ;
                     loadedFamily.Close(false);
-                    if (!string.Equals(projectVersion, loadedFamilyVersion, StringComparison.OrdinalIgnoreCase))
+                    int v1 = Convert.ToInt32(projectVersion.Split('.')[0]);
+                    int v2 = Convert.ToInt32(loadedFamilyVersion.Split('.')[0]);
+                    int v11 = Convert.ToInt32(projectVersion.Split('.')[1]);
+                    int v22 = Convert.ToInt32(loadedFamilyVersion.Split('.')[1]);
+                    if (v1 > v2)
                     {
                         outdatedItems.Add(new MenuItem()
                         {
@@ -434,12 +439,51 @@ namespace FerrumAddin
                             IsSelected = false
                         });
                     }
+                    else if (v1 < v22)
+                    {
+                        newerItems.Add(new MenuItem()
+                        {
+                            Path = matchingMenuItem.Path,
+                            Category = matchingMenuItem.Category,
+                            Name = matchingMenuItem.Name,
+                            ImagePath = matchingMenuItem.ImagePath,
+                            IsVisible = true,
+                            IsSelected = false
+                        });
+                    }
+                    else
+                    {
+                        if (v11 > v22)
+                        {
+                            outdatedItems.Add(new MenuItem()
+                            {
+                                Path = matchingMenuItem.Path,
+                                Category = matchingMenuItem.Category,
+                                Name = matchingMenuItem.Name,
+                                ImagePath = matchingMenuItem.ImagePath,
+                                IsVisible = true,
+                                IsSelected = false
+                            });
+                        }
+                        else if (v11 < v22)
+                        {
+                            newerItems.Add(new MenuItem()
+                            {
+                                Path = matchingMenuItem.Path,
+                                Category = matchingMenuItem.Category,
+                                Name = matchingMenuItem.Name,
+                                ImagePath = matchingMenuItem.ImagePath,
+                                IsVisible = true,
+                                IsSelected = false
+                            });
+                        }
+                    }
                 }
             }
 
             if (outdatedItems.Count > 0)
             {
-                AddOutdatedTab(outdatedItems);
+                AddOutdatedTab(outdatedItems, newerItems);
             }
         }
 
@@ -477,7 +521,7 @@ namespace FerrumAddin
             return string.Empty;
         }
 
-        private void AddOutdatedTab(ObservableCollection<MenuItem> outdatedItems)
+        private void AddOutdatedTab(ObservableCollection<MenuItem> outdatedItems, ObservableCollection<MenuItem> newerItems)
         {
             var outdatedTab = new TabItemViewModel
             {
@@ -485,8 +529,15 @@ namespace FerrumAddin
                 MenuItems = outdatedItems,
                 OriginalMenuItems = outdatedItems.ToList()
             };
+            var newerTab = new TabItemViewModel
+            {
+                Header = "Новее",
+                MenuItems = newerItems,
+                OriginalMenuItems = newerItems.ToList()
+            };
 
             FamilyManagerWindow.mvm.TabItems.Insert(0, outdatedTab);
+            FamilyManagerWindow.mvm.TabItems.Insert(0, newerTab);
 
             Tabs.ItemsSource = null;
             Tabs.ItemsSource = mvm.TabItems;
