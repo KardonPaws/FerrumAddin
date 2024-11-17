@@ -126,39 +126,42 @@ namespace FerrumAddin.FM
 
         private async Task UpdateFilteredMenuItemsAsync(CancellationToken cancellationToken)
         {
-            await Task.Run(() =>
-            {
-                var selectedCategories = MenuCategoryFilters.Where(c => c.IsChecked).Select(c => c.CategoryName).ToList();
-                var filtered = MenuItems.Where(item => (string.IsNullOrEmpty(MenuSearchText) || item.Name.ToLower().Contains(MenuSearchText.ToLower())) &&
-                                                       (selectedCategories.Contains(item.Category))).ToList();
 
+                var selectedCategories = MenuCategoryFilters.Where(c => c.IsChecked).Select(c => c.CategoryName).ToList();
 
                 FilteredMenuItems.Clear();
-                foreach (var item in filtered)
+                foreach (var item in MenuItems)
                 {
                     if (cancellationToken.IsCancellationRequested)
                         break;
+                if ((string.IsNullOrEmpty(MenuSearchText) || item.Name.IndexOf(MenuSearchText, StringComparison.OrdinalIgnoreCase) >= 0) &&
+                selectedCategories.Contains(item.Category))
+                {
                     FilteredMenuItems.Add(item);
+                    await Task.Delay(30, cancellationToken);
+
                 }
-            });
+            }
         }
 
         private async Task UpdateFilteredRevitFamiliesAsync(CancellationToken cancellationToken)
         {
-            await Task.Run(() =>
-            {
+            
                 var selectedCategories = FamilyCategoryFilters.Where(c => c.IsChecked).Select(c => c.CategoryName).ToList();
-                var filtered = RevitFamilies.Where(item => (string.IsNullOrEmpty(FamilySearchText) || item.Name.ToLower().Contains(FamilySearchText.ToLower())) &&
-                                                           (selectedCategories.Contains(item.Category))).ToList();
 
                 FilteredRevitFamilies.Clear();
-                foreach (var item in filtered)
+                foreach (var item in RevitFamilies)
                 {
                     if (cancellationToken.IsCancellationRequested)
                         break;
+                if ((string.IsNullOrEmpty(FamilySearchText) || item.Name.IndexOf(FamilySearchText, StringComparison.OrdinalIgnoreCase) >= 0) &&
+                                    selectedCategories.Contains(item.Category))
+                {
                     FilteredRevitFamilies.Add(item);
+                    await Task.Delay(30, cancellationToken);
+
                 }
-            });
+            }
         }
 
         private void ListView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
