@@ -261,6 +261,26 @@ namespace FerrumAddin.FM
             e.Effects = DragDropEffects.Move;
             e.Handled = true;
         }
+
+        private void CheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+            if ((sender as CheckBox).Name == "MenuCat")
+            {
+                _cancellationTokenSource1?.Cancel();
+                _cancellationTokenSource1 = new CancellationTokenSource();
+
+                // Запуск нового фильтра с токеном отмены
+                UpdateFilteredMenuItemsAsync(_cancellationTokenSource1.Token).ConfigureAwait(false);
+            }
+            else
+            {
+                _cancellationTokenSource2?.Cancel();
+                _cancellationTokenSource2 = new CancellationTokenSource();
+
+                // Запуск нового фильтра с токеном отмены
+                UpdateFilteredRevitFamiliesAsync(_cancellationTokenSource2.Token).ConfigureAwait(false);
+            }
+        }
     }
 
     public class MenuItem

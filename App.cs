@@ -230,7 +230,7 @@ namespace FerrumAddin
             Comparison.Image = Convert(Properties.Resources.FamilyManager);
             Comparison.LargeImage = Convert(Properties.Resources.FamilyManager);          
 
-            //panelFerrum.AddItem(Comparison);
+            panelFerrum.AddItem(Comparison);
 
             panelMEP = a.CreateRibbonPanel(tabName, "ВИС");
             panelMEP.Visible = false;
