@@ -16,7 +16,7 @@
             <RowDefinition Height="50"/>
         </Grid.RowDefinitions>
         <TextBlock Grid.ColumnSpan="2" FontSize="21" FontWeight="Normal" HorizontalAlignment="Center" TextAlignment="Center" VerticalAlignment="Center">
-            Вышла новая версия плагина.<LineBreak/>
+            Вышла новая версия плагина Железно.<LineBreak/>
             Плагин будет обновлен после закрытия окна Revit.
         </TextBlock>
         <Button Grid.Row="1" Margin="10px" Content="Закрою Revit сам" FontSize="18" Click="Button_Click"/>

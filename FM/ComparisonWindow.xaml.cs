@@ -1,8 +1,13 @@
-﻿using System;
+﻿using Autodesk.Revit.Creation;
+using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Security.AccessControl;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -10,6 +15,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml.Linq;
+using Document = Autodesk.Revit.DB.Document;
+using Transform = Autodesk.Revit.DB.Transform;
 
 namespace FerrumAddin.FM
 {
@@ -60,10 +67,13 @@ namespace FerrumAddin.FM
             }
         }
 
-        public ComparisonWindow()
+        Document doc;
+
+        public ComparisonWindow(ExternalCommandData commandData)
         {
             InitializeComponent();
             DataContext = this;
+            doc = commandData.Application.ActiveUIDocument.Document;
             LoadData();
         }
 
@@ -95,9 +105,56 @@ namespace FerrumAddin.FM
             }
         }
 
+        private void LoadRevitFamilies()
+        {
+            // Collect all family instances in the model
+            var familyInstances = new FilteredElementCollector(doc)
+                .OfClass(typeof(FamilyInstance))
+                .WhereElementIsNotElementType()
+                .ToElements()
+                .Cast<FamilyInstance>();
+
+            // Collect all system families like walls, floors, roofs, etc., and their types
+            var systemFamilyTypes = new FilteredElementCollector(doc)
+                .OfClass(typeof(ElementType))
+                .WhereElementIsElementType()
+                .ToElements()
+                .Cast<ElementType>()
+                .Where(type => type.Category != null && type.Category.HasMaterialQuantities);
+
+            foreach (var instance in familyInstances)
+            {
+                Family family = instance.Symbol.Family;
+                if (family != null && family.FamilyCategory != null)
+                {
+                    RevitFamilies.Add(new MenuItem()
+                    {
+                        Category = family.FamilyCategory.Name,
+                        Name = family.Name
+                    });
+                }
+            }
+
+            foreach (var systemType in systemFamilyTypes)
+            {
+                if (systemType.Category != null)
+                {
+                    RevitFamilies.Add(new MenuItem()
+                    {
+                        Category = systemType.Category.Name,
+                        Name = systemType.Name,
+                        RevitCategory = systemType.Category.BuiltInCategory
+                    });
+                }
+            }
+        }
+
+
+
         private void LoadData()
         {
             LoadTabItemsFromXml(App.TabPath);
+            LoadRevitFamilies();
 
             var allCategories = MenuItems.Select(m => m.Category).Distinct().ToList();
             foreach (var category in allCategories)
@@ -190,22 +247,6 @@ namespace FerrumAddin.FM
             }
         }
 
-        private void FamiliesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            if (FamiliesList.SelectedItem is MenuItem selectedItem)
-            {
-                SelectedFamilies.Add(selectedItem);
-            }
-        }
-
-        private void MenuItemsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            if (MenuItemsList.SelectedItem is MenuItem selectedItem)
-            {
-                SelectedMenuItems.Add(selectedItem);
-            }
-        }
-
         private static T GetVisualParent<T>(DependencyObject child) where T : DependencyObject
         {
             DependencyObject parentObject = VisualTreeHelper.GetParent(child);
@@ -256,11 +297,6 @@ namespace FerrumAddin.FM
             }
         }
 
-        private void ListView_DragOver(object sender, DragEventArgs e)
-        {
-            e.Effects = DragDropEffects.Move;
-            e.Handled = true;
-        }
 
         private void CheckBox_Checked(object sender, RoutedEventArgs e)
         {
@@ -281,6 +317,135 @@ namespace FerrumAddin.FM
                 UpdateFilteredRevitFamiliesAsync(_cancellationTokenSource2.Token).ConfigureAwait(false);
             }
         }
+
+        private void MenuItemsList_MouseDoubleClick_1(object sender, MouseButtonEventArgs e)
+        {
+            if (MenuItemsList.SelectedItem != null)
+            {
+                SelectedMenuItems.Add((MenuItem)MenuItemsList.SelectedItem);
+            }
+        }
+
+        private void FamiliesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (FamiliesList.SelectedItem != null && !!SelectedFamilies.Contains((MenuItem)FamiliesList.SelectedItem))
+            {
+                SelectedFamilies.Add((MenuItem)FamiliesList.SelectedItem);
+            }
+        }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedFamilies.Count() != SelectedMenuItems.Count())
+            {
+                TaskDialog.Show("Внимание", "Количество выбранных элементов не совпадает");
+            }
+            else
+            {
+                using (Transaction trans = new Transaction(doc, "Сопоставление семейств"))
+                {
+                    trans.Start();
+                    FailureHandlingOptions failureOptions = trans.GetFailureHandlingOptions();
+                    failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                    failureOptions.SetClearAfterRollback(true); // Опционально
+
+                    for (int i = 0; i < SelectedFamilies.Count && i < SelectedMenuItems.Count; i++)
+                    {
+                        var selectedFamily = SelectedFamilies[i];
+                        var menuItem = SelectedMenuItems[i];
+
+                        if (Path.GetExtension(menuItem.Path).ToLower() == ".rvt")
+                        {
+                            ModelPath modelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(menuItem.Path);
+                            OpenOptions openOptions = new OpenOptions();
+                            using (Document tempDoc = doc.Application.OpenDocumentFile(modelPath, openOptions))
+                            {
+                                ElementId sourceFamily = new FilteredElementCollector(tempDoc)
+                            .OfCategory(selectedFamily.RevitCategory)
+                            .WhereElementIsElementType()
+                            .Where(x => x.Name == menuItem.Name)
+                            .Select(x => x.Id).First();
+                                if (sourceFamily != null)
+                                {
+                                    CopyPasteOptions options = new CopyPasteOptions();
+                                    options.SetDuplicateTypeNamesHandler(new MyCopyHandler());
+                                    ICollection<ElementId> copiedElements = ElementTransformUtils.CopyElements(
+                                        tempDoc,
+                                        new List<ElementId> { sourceFamily },
+                                        doc,
+                                        Transform.Identity,
+                                        options
+                                    );
+
+                                    tempDoc.Close(false);
+
+                                    ElementId copiedTypeId = copiedElements.First();
+                                    ElementType copiedType = doc.GetElement(copiedTypeId) as ElementType;
+
+                                    // Ищем существующий тип с таким же именем в целевом документе
+                                    ElementType existingType = FindTypeByNameAndClass(doc, selectedFamily.Name, copiedType.GetType());
+
+                                    if (existingType != null && existingType.Id != copiedType.Id)
+                                    {
+                                        // Заменяем все элементы, использующие старый тип, на новый тип
+                                        ReplaceElementsType(doc, existingType.Id, copiedType.Id);
+
+                                    }
+                                }
+                            }
+                        }
+                        else if (Path.GetExtension(menuItem.Path).ToLower() == ".rfa")
+                        {
+                            Family family;
+                            if (doc.LoadFamily(menuItem.Path, out family))
+                            {
+                                foreach (var instance in new FilteredElementCollector(doc).OfClass(typeof(FamilyInstance)).WhereElementIsNotElementType().Cast<FamilyInstance>())
+                                {
+                                    if (instance.Symbol.FamilyName == selectedFamily.Name)
+                                    {
+                                        var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+                                        if (familySymbol != null && !familySymbol.IsActive)
+                                        {
+                                            familySymbol.Activate();
+                                            doc.Regenerate();
+                                        }
+
+                                        instance.Symbol = familySymbol;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    trans.Commit();
+                }
+            }
+            this.Close();
+        }
+
+        // Метод для поиска типа по имени и классу в целевом документе
+        private ElementType FindTypeByNameAndClass(Document doc, string typeName, Type typeClass)
+        {
+            return new FilteredElementCollector(doc)
+                .OfClass(typeClass)
+                .Cast<ElementType>()
+                .FirstOrDefault(e => e.Name.Equals(typeName, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        // Метод для замены типа у всех элементов
+        private void ReplaceElementsType(Document doc, ElementId oldTypeId, ElementId newTypeId)
+        {
+            // Находим все элементы, использующие старый тип
+            List<Element> collector = new FilteredElementCollector(doc)
+                .WhereElementIsNotElementType()
+                .Where(e => e.GetTypeId() == oldTypeId).ToList();
+
+            foreach (Element elem in collector)
+            {
+                // Устанавливаем новый тип
+                elem.ChangeTypeId(newTypeId);
+            }
+        }
     }
 
     public class MenuItem
@@ -289,6 +454,7 @@ namespace FerrumAddin.FM
         public string Category { get; set; }
         public string ImagePath { get; set; }
         public string Path { get; set; }
+        public BuiltInCategory RevitCategory { get; set; }
     }
 
     public class CategoryFilter : INotifyPropertyChanged

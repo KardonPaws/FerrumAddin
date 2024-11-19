@@ -19,7 +19,7 @@ namespace FerrumAddin
         {
             try
             {
-                ComparisonWindow cw = new ComparisonWindow();
+                ComparisonWindow cw = new ComparisonWindow(commandData);
                 cw.ShowDialog();
             }
             catch (Exception ex)
