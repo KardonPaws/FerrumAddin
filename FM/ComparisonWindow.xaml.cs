@@ -107,45 +107,49 @@ namespace FerrumAddin.FM
 
         private void LoadRevitFamilies()
         {
-            // Collect all family instances in the model
-            var familyInstances = new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilyInstance))
-                .WhereElementIsNotElementType()
-                .ToElements()
-                .Cast<FamilyInstance>();
+            List<Element> collector = (List<Element>)new FilteredElementCollector(doc)
+            .WhereElementIsNotElementType().ToElements()
+            .Where(e => e.Category != null && e.Category.HasMaterialQuantities).ToList(); 
 
-            // Collect all system families like walls, floors, roofs, etc., and their types
-            var systemFamilyTypes = new FilteredElementCollector(doc)
-                .OfClass(typeof(ElementType))
-                .WhereElementIsElementType()
-                .ToElements()
-                .Cast<ElementType>()
-                .Where(type => type.Category != null && type.Category.HasMaterialQuantities);
+            // Создаем список для хранения данных
+            List<(Category category, string familyName, string typeName)> elementData = new List<(Category, string, string)>();
 
-            foreach (var instance in familyInstances)
+            foreach (Element elem in collector)
             {
-                Family family = instance.Symbol.Family;
-                if (family != null && family.FamilyCategory != null)
+                // Получаем тип элемента
+                ElementId typeId = elem.GetTypeId();
+                ElementType elementType = doc.GetElement(typeId) as ElementType;
+
+                if (elementType != null)
                 {
-                    RevitFamilies.Add(new MenuItem()
-                    {
-                        Category = family.FamilyCategory.Name,
-                        Name = family.Name
-                    });
+                    // Получаем категорию, имя семейства и тип
+                    Category category = elem.Category;
+                    string familyName = elementType.FamilyName;
+                    string typeName = elementType.Name;
+
+                    // Добавляем в список
+                    elementData.Add((category, familyName, typeName));
                 }
             }
 
-            foreach (var systemType in systemFamilyTypes)
+            // Сортируем список по категории, имени семейства и типу
+            var sortedData = elementData
+            .GroupBy(data => data.typeName) // Группируем по имени типа
+            .Select(group => group.First()) // Берем первый элемент из каждой группы
+            .OrderBy(data => data.category.Name) // Сортировка по категории
+            .ThenBy(data => data.typeName) // Затем по типу
+            .ToList();
+
+            // Вывод данных в окно
+            string result = "Список элементов (сортировано по категории, семейству и типу):\n";
+            foreach (var data in sortedData)
             {
-                if (systemType.Category != null)
+                RevitFamilies.Add(new MenuItem()
                 {
-                    RevitFamilies.Add(new MenuItem()
-                    {
-                        Category = systemType.Category.Name,
-                        Name = systemType.Name,
-                        RevitCategory = systemType.Category.BuiltInCategory
-                    });
-                }
+                    Category = data.category.Name,
+                    Name = data.typeName,
+                    RevitCategory = data.category.BuiltInCategory
+                });
             }
         }
 
@@ -328,7 +332,7 @@ namespace FerrumAddin.FM
 
         private void FamiliesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (FamiliesList.SelectedItem != null && !!SelectedFamilies.Contains((MenuItem)FamiliesList.SelectedItem))
+            if (FamiliesList.SelectedItem != null && !SelectedFamilies.Contains((MenuItem)FamiliesList.SelectedItem))
             {
                 SelectedFamilies.Add((MenuItem)FamiliesList.SelectedItem);
             }
@@ -401,7 +405,7 @@ namespace FerrumAddin.FM
                             {
                                 foreach (var instance in new FilteredElementCollector(doc).OfClass(typeof(FamilyInstance)).WhereElementIsNotElementType().Cast<FamilyInstance>())
                                 {
-                                    if (instance.Symbol.FamilyName == selectedFamily.Name)
+                                    if (instance.Symbol.Name == selectedFamily.Name)
                                     {
                                         var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
                                         if (familySymbol != null && !familySymbol.IsActive)
