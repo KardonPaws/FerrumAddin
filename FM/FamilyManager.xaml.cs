@@ -601,7 +601,10 @@ namespace FerrumAddin
         private void LoadTabItemsFromXml(string filePath)
         {
             if (!File.Exists(filePath))
-                return;
+            {
+                TaskDialog.Show("Ошибка", "Не найден файл менеджера семейств");
+                return; 
+            }
 
             var xdoc = XDocument.Load(filePath);
 

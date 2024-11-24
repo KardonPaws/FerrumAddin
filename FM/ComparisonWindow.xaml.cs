@@ -340,6 +340,7 @@ namespace FerrumAddin.FM
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
+            string output = "";
             if (SelectedFamilies.Count() != SelectedMenuItems.Count())
             {
                 TaskDialog.Show("Внимание", "Количество выбранных элементов не совпадает");
@@ -371,6 +372,7 @@ namespace FerrumAddin.FM
                             .Select(x => x.Id).First();
                                 if (sourceFamily != null)
                                 {
+                                    
                                     CopyPasteOptions options = new CopyPasteOptions();
                                     options.SetDuplicateTypeNamesHandler(new MyCopyHandler());
                                     ICollection<ElementId> copiedElements = ElementTransformUtils.CopyElements(
@@ -388,26 +390,40 @@ namespace FerrumAddin.FM
 
                                     // Ищем существующий тип с таким же именем в целевом документе
                                     ElementType existingType = FindTypeByNameAndClass(doc, selectedFamily.Name, copiedType.GetType());
+                                    ElementType existingOriginalType = FindTypeByNameAndClass(doc, menuItem.Name, copiedType.GetType());
 
-                                    if (existingType != null && existingType.Id != copiedType.Id)
+                                    if (existingType != null)
                                     {
                                         // Заменяем все элементы, использующие старый тип, на новый тип
                                         ReplaceElementsType(doc, existingType.Id, copiedType.Id);
-
                                     }
+                                    if (existingOriginalType != null)
+                                    {
+                                        ReplaceElementsType(doc, existingOriginalType.Id, copiedType.Id);
+                                    }
+                                    string exName = doc.GetElement(existingOriginalType.Id).Name;
+
+                                    doc.Delete(existingOriginalType.Id);
+                                    doc.GetElement(copiedTypeId).Name = exName;
+                                }
+                                else
+                                {
+                                    output += ("Не найден тип " + menuItem.Name + "\n");
                                 }
                             }
                         }
                         else if (Path.GetExtension(menuItem.Path).ToLower() == ".rfa")
                         {
                             Family family;
-                            if (doc.LoadFamily(menuItem.Path, out family))
+                            MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
+                            if (doc.LoadFamily(menuItem.Path, loadOptions, out family))
                             {
+                                var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+
                                 foreach (var instance in new FilteredElementCollector(doc).OfClass(typeof(FamilyInstance)).WhereElementIsNotElementType().Cast<FamilyInstance>())
                                 {
-                                    if (instance.Symbol.Name == selectedFamily.Name)
+                                    if (instance.Symbol.Name == selectedFamily.Name || instance.Symbol.Name == menuItem.Name)
                                     {
-                                        var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
                                         if (familySymbol != null && !familySymbol.IsActive)
                                         {
                                             familySymbol.Activate();
@@ -418,12 +434,37 @@ namespace FerrumAddin.FM
                                     }
                                 }
                             }
+                            else
+                            {
+                                Family fam = new FilteredElementCollector(doc).OfClass(typeof(Family)).Where(x => x.Name == menuItem.Name).Cast<Family>().FirstOrDefault();
+                                if (fam == null)
+                                {
+                                    output+=("Не найден тип " + menuItem.Name + "\n");
+                                    break;
+                                }
+                                var type = fam.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+
+                                foreach (var instance in new FilteredElementCollector(doc).OfClass(typeof(FamilyInstance)).WhereElementIsNotElementType().Cast<FamilyInstance>())
+                                {
+                                    if (instance.Symbol.Name == selectedFamily.Name || instance.Symbol.Name == menuItem.Name)
+                                    {
+                                        if (type != null && !type.IsActive)
+                                        {
+                                            type.Activate();
+                                            doc.Regenerate();
+                                        }
+
+                                        instance.Symbol = type;
+                                    }
+                                }
+                            }
                         }
                     }
 
                     trans.Commit();
                 }
             }
+            TaskDialog.Show("Отчет", output);
             this.Close();
         }
 

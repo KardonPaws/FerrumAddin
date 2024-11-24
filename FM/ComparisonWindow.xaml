@@ -121,7 +121,7 @@
                                 <WrapPanel Orientation="Horizontal">
                                     <TextBlock Text="{Binding Name}" />
                                     <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" Margin="5,0,0,0" />
-                                    <Button Content="Remove" Click="RemoveSelectedFamily_Click" Margin="10,0,0,0" />
+                                    <Button Content="Удалить" Click="RemoveSelectedFamily_Click" Margin="10,0,0,0" />
                                 </WrapPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -144,7 +144,7 @@
                                     <Image Source="{Binding ImagePath}" Width="30" Height="30" Margin="0,0,5,0" />
                                     <TextBlock Text="{Binding Name}" />
                                     <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" Margin="5,0,0,0" />
-                                    <Button Content="Remove" Click="RemoveSelectedMenuItem_Click" Margin="10,0,0,0" />
+                                    <Button Content="Удалить" Click="RemoveSelectedMenuItem_Click" Margin="10,0,0,0" />
                                 </WrapPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
