@@ -25,6 +25,7 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using Autodesk.Revit.ApplicationServices;
 using Transform = Autodesk.Revit.DB.Transform;
+using System.Runtime.InteropServices;
 #endregion
 
 namespace FerrumAddin
@@ -372,6 +373,14 @@ namespace FerrumAddin
             }
         }
 
+        public static void a_DialogBoxShowing(
+  object sender,
+  DialogBoxShowingEventArgs e)
+        {
+            if (e.DialogId == "Dialog_Revit_DocWarnDialog")
+                e.OverrideResult((int)System.Windows.Forms.DialogResult.Yes);
+        }
+
         public Result OnShutdown(UIControlledApplication a)
         {
             Process process = Process.GetCurrentProcess();
@@ -687,13 +696,31 @@ namespace FerrumAddin
     {
         public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
         {
-            IList<FailureMessageAccessor> failures = failuresAccessor.GetFailureMessages();
+            IList<FailureMessageAccessor> failures
+    = failuresAccessor.GetFailureMessages();
+
+            foreach (FailureMessageAccessor f in failures)
+            {
+                FailureSeverity fseverity = failuresAccessor.GetSeverity();
+
+                if (fseverity == FailureSeverity.Warning)
+                {
+                    failuresAccessor.DeleteWarning(f);
+                }
+                else
+                {
+                    failuresAccessor.ResolveFailure(f);
+                    return FailureProcessingResult.ProceedWithCommit;
+                }
+            }
+            return FailureProcessingResult.Continue;
+            /*IList<FailureMessageAccessor> failures = failuresAccessor.GetFailureMessages();
 
             foreach (FailureMessageAccessor failure in failures)
             {
                 // Определяем степень серьезности ошибки
                 FailureSeverity severity = failure.GetSeverity();
-
+               
                 // Обрабатываем в зависимости от степени серьезности
                 if (severity == FailureSeverity.Warning)
                 {
@@ -707,6 +734,7 @@ namespace FerrumAddin
                     {
                         // Применяем первое доступное решение
                         failuresAccessor.ResolveFailure(failure);
+                        return FailureProcessingResult.ProceedWithCommit;
                     }
                     else
                     {
@@ -722,7 +750,7 @@ namespace FerrumAddin
             }
 
             // Продолжаем транзакцию без отображения диалоговых окон
-            return FailureProcessingResult.Continue;
+            return FailureProcessingResult.Continue;*/
         }
     }
 
@@ -742,4 +770,6 @@ namespace FerrumAddin
             return false;
         }
     }
+
+
 }

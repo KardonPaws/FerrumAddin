@@ -1,12 +1,15 @@
 ﻿using Autodesk.Revit.Creation;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Autodesk.Revit.UI.Events;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Threading;
 using System.Threading.Tasks;
@@ -349,9 +352,11 @@ namespace FerrumAddin.FM
             {
                 using (Transaction trans = new Transaction(doc, "Сопоставление семейств"))
                 {
+
                     trans.Start();
                     FailureHandlingOptions failureOptions = trans.GetFailureHandlingOptions();
                     failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
+                    trans.SetFailureHandlingOptions(failureOptions);
                     failureOptions.SetClearAfterRollback(true); // Опционально
 
                     for (int i = 0; i < SelectedFamilies.Count && i < SelectedMenuItems.Count; i++)
@@ -419,19 +424,23 @@ namespace FerrumAddin.FM
                             if (doc.LoadFamily(menuItem.Path, loadOptions, out family))
                             {
                                 var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+                                if (familySymbol != null && !familySymbol.IsActive)
+                                {
+                                    familySymbol.Activate();
+                                    doc.Regenerate();
+                                }
+                                List<FamilyInstance> instances = new List<FamilyInstance>();
 
                                 foreach (var instance in new FilteredElementCollector(doc).OfClass(typeof(FamilyInstance)).WhereElementIsNotElementType().Cast<FamilyInstance>())
                                 {
                                     if (instance.Symbol.Name == selectedFamily.Name || instance.Symbol.Name == menuItem.Name)
                                     {
-                                        if (familySymbol != null && !familySymbol.IsActive)
-                                        {
-                                            familySymbol.Activate();
-                                            doc.Regenerate();
-                                        }
-
-                                        instance.Symbol = familySymbol;
+                                        instances.Add(instance);
                                     }
+                                }
+                                foreach (FamilyInstance instance in instances)
+                                {
+                                    instance.Symbol = familySymbol;
                                 }
                             }
                             else
@@ -458,12 +467,21 @@ namespace FerrumAddin.FM
                                     }
                                 }
                             }
+                            
                         }
                     }
 
+                    //App.application.DialogBoxShowing += new EventHandler<DialogBoxShowingEventArgs>(App.a_DialogBoxShowing);
+
                     trans.Commit();
+                    
                 }
             }
+            if (output == "")
+            {
+                output = "Выполнено";
+            }
+            //App.application.DialogBoxShowing -= new EventHandler<DialogBoxShowingEventArgs>(App.a_DialogBoxShowing);
             TaskDialog.Show("Отчет", output);
             this.Close();
         }
