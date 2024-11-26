@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -396,96 +397,233 @@ namespace FerrumAddin
 
             return null;
         }
-
-        private void CheckFamilyVersions(object sender, RoutedEventArgs e)
+        IList<Element> GetAllModelElements(Document doc)
         {
-            doc = App.uiapp.ActiveUIDocument.Document;
-            ObservableCollection<MenuItem> outdatedItems = new ObservableCollection<MenuItem>();
-            ObservableCollection<MenuItem> newerItems = new ObservableCollection<MenuItem>();
+            Dictionary<string, Element> uniqueElements = new Dictionary<string, Element>();
 
-            var collector = new FilteredElementCollector(doc);
-            var familyInstances = collector.OfClass(typeof(FamilyInstance)).ToElements();
+            // Собираем все элементы модели
+            FilteredElementCollector collector = new FilteredElementCollector(doc)
+                .WhereElementIsNotElementType();
 
-            foreach (var familyInstance in familyInstances)
+            foreach (Element e in collector)
             {
-                Family family = (familyInstance as FamilyInstance)?.Symbol?.Family;
-                if (family == null) continue;
-
-                var matchingMenuItem = FamilyManagerWindow.mvm.TabItems
-                    .SelectMany(ti => ti.MenuItems)
-                    .FirstOrDefault(mi => mi.Name == family.Name);
-
-                if (matchingMenuItem != null)
+                if (e.Category != null && e.Category.HasMaterialQuantities)
                 {
-                    string projectVersion = GetFamilyVersionFromProject(family).Substring(1); ;
+                    string uniqueKey = null;
 
-                    Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
-                    if (loadedFamily == null) continue;
-                    string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily).Substring(1); ;
-                    loadedFamily.Close(false);
-                    int v1 = Convert.ToInt32(projectVersion.Split('.')[0]);
-                    int v2 = Convert.ToInt32(loadedFamilyVersion.Split('.')[0]);
-                    int v11 = Convert.ToInt32(projectVersion.Split('.')[1]);
-                    int v22 = Convert.ToInt32(loadedFamilyVersion.Split('.')[1]);
-                    if (v1 > v2)
+                    // Проверяем, является ли элемент экземпляром семейства
+                    if (e is FamilyInstance familyInstance)
                     {
-                        outdatedItems.Add(new MenuItem()
+                        // Пользовательское семейство: уникальность по имени семейства
+                        Family family = familyInstance.Symbol?.Family;
+                        if (family != null)
                         {
-                            Path = matchingMenuItem.Path,
-                            Category = matchingMenuItem.Category,
-                            Name = matchingMenuItem.Name,
-                            ImagePath = matchingMenuItem.ImagePath,
-                            IsVisible = true,
-                            IsSelected = false
-                        });
-                    }
-                    else if (v1 < v22)
-                    {
-                        newerItems.Add(new MenuItem()
-                        {
-                            Path = matchingMenuItem.Path,
-                            Category = matchingMenuItem.Category,
-                            Name = matchingMenuItem.Name,
-                            ImagePath = matchingMenuItem.ImagePath,
-                            IsVisible = true,
-                            IsSelected = false
-                        });
+                            uniqueKey = family.Name;
+                        }
                     }
                     else
                     {
-                        if (v11 > v22)
-                        {
-                            outdatedItems.Add(new MenuItem()
-                            {
-                                Path = matchingMenuItem.Path,
-                                Category = matchingMenuItem.Category,
-                                Name = matchingMenuItem.Name,
-                                ImagePath = matchingMenuItem.ImagePath,
-                                IsVisible = true,
-                                IsSelected = false
-                            });
-                        }
-                        else if (v11 < v22)
-                        {
-                            newerItems.Add(new MenuItem()
-                            {
-                                Path = matchingMenuItem.Path,
-                                Category = matchingMenuItem.Category,
-                                Name = matchingMenuItem.Name,
-                                ImagePath = matchingMenuItem.ImagePath,
-                                IsVisible = true,
-                                IsSelected = false
-                            });
-                        }
+                        // Системное семейство: уникальность по имени типа
+                        uniqueKey = e.Name;
+                    }
+
+                    // Если уникальный ключ определен и элемента с таким ключом еще нет, добавляем в список
+                    if (!string.IsNullOrEmpty(uniqueKey) && !uniqueElements.ContainsKey(uniqueKey))
+                    {
+                        uniqueElements.Add(uniqueKey, e);
                     }
                 }
             }
 
-            if (outdatedItems.Count > 0)
+            return uniqueElements.Values.ToList();
+        }
+
+        private void CheckFamilyVersions(object sender, RoutedEventArgs e)
+        {
+            App.AllowLoad = true;
+            doc = App.uiapp.ActiveUIDocument.Document;
+            ObservableCollection<MenuItem> outdatedItems = new ObservableCollection<MenuItem>();
+            ObservableCollection<MenuItem> newerItems = new ObservableCollection<MenuItem>();
+
+            List<Element> elements = (List<Element>)GetAllModelElements(doc);
+
+            foreach (var element in elements)
+            {
+                if (element is FamilyInstance familyInstance)
+                {
+                    // Работа с обычными семействами
+                    Family family = familyInstance.Symbol?.Family;
+                    if (family == null) continue;
+
+                    var matchingMenuItem = FamilyManagerWindow.mvm.TabItems
+                        .SelectMany(ti => ti.MenuItems)
+                        .FirstOrDefault(mi => mi.Name == family.Name);
+
+                    if (matchingMenuItem != null)
+                    {
+                        string projectVersion = "";
+                        Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
+                        if (loadedFamily == null) continue;
+
+                        try
+                        {
+                            projectVersion = GetFamilyVersionFromProject(family).Substring(1);
+                        }
+                        catch
+                        {
+                            string ver2 = GetFamilyVersionFromLoadedFamily(loadedFamily);
+                            if (string.IsNullOrEmpty(ver2))
+                            {
+                                continue;
+                            }
+                            else
+                            {
+                                newerItems.Add(new MenuItem()
+                                {
+                                    Path = matchingMenuItem.Path,
+                                    Category = matchingMenuItem.Category,
+                                    Name = matchingMenuItem.Name,
+                                    ImagePath = matchingMenuItem.ImagePath,
+                                    IsVisible = true,
+                                    IsSelected = false
+                                });
+                            }
+                        }
+
+                        string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily).Substring(1);
+                        loadedFamily.Close(false);
+                        CompareVersions(projectVersion, loadedFamilyVersion, matchingMenuItem, outdatedItems, newerItems);
+                    }
+                }
+                else
+                {
+                    // Работа с системными семействами
+                    var nameAndCat = new Dictionary<string, BuiltInCategory>
+            {
+                { "Стены", BuiltInCategory.OST_Walls },
+                { "Перекрытия", BuiltInCategory.OST_Floors },
+                { "Потолки", BuiltInCategory.OST_Ceilings },
+                { "Витражи", BuiltInCategory.OST_Walls },
+                { "Крыши", BuiltInCategory.OST_Roofs },
+                { "Ограждения", BuiltInCategory.OST_StairsRailing },
+                { "Пандусы", BuiltInCategory.OST_Ramps }
+            };
+
+                    foreach (var pair in nameAndCat)
+                    {
+                        if (element.Category.Id.IntegerValue == (int)pair.Value)
+                        {
+                            string projectVersion = doc.GetElement(element.GetTypeId()).LookupParameter("ZH_Версия_Семейства")?.AsString();
+
+                            
+
+                            var matchingMenuItem = FamilyManagerWindow.mvm.TabItems
+                                .SelectMany(ti => ti.MenuItems)
+                                .FirstOrDefault(mi => mi.Name == element.Name);
+
+                            if (matchingMenuItem != null)
+                            {
+                                Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
+                                if (loadedFamily == null) continue;
+
+                                var loadedElement = new FilteredElementCollector(loadedFamily)
+                                    .OfCategory(pair.Value)
+                                    .WhereElementIsElementType()
+                                    .FirstOrDefault(el => el.Name == element.Name);
+
+                                if (loadedElement != null)
+                                {
+                                    string loadedFamilyVersion = loadedElement.LookupParameter("ZH_Версия_Семейства")?.AsString();
+                                    loadedFamily.Close(false);
+                                    if (string.IsNullOrEmpty(projectVersion) && !string.IsNullOrEmpty(loadedFamilyVersion))
+                                    {
+                                        newerItems.Add(new MenuItem()
+                                        {
+                                            Path = matchingMenuItem.Path,
+                                            Category = matchingMenuItem.Category,
+                                            Name = matchingMenuItem.Name,
+                                            ImagePath = matchingMenuItem.ImagePath,
+                                            IsVisible = true,
+                                            IsSelected = false
+                                        });
+                                        continue;
+                                    }   
+                                    if (!string.IsNullOrEmpty(loadedFamilyVersion))
+                                    {
+                                        CompareVersions(projectVersion, loadedFamilyVersion, matchingMenuItem, outdatedItems, newerItems);
+                                    }
+                                }
+                                else
+                                {
+                                    loadedFamily.Close(false);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (newerItems.Count > 0 || outdatedItems.Count > 0)
             {
                 AddOutdatedTab(outdatedItems, newerItems);
             }
+            App.AllowLoad = false;
         }
+
+        private void CompareVersions(
+    string projectVersion,
+    string loadedFamilyVersion,
+    MenuItem matchingMenuItem,
+    ObservableCollection<MenuItem> outdatedItems,
+    ObservableCollection<MenuItem> newerItems)
+        {
+            try
+            {
+                // Разделение версии на основные и дополнительные номера
+                var projectParts = projectVersion.Split('.');
+                var loadedParts = loadedFamilyVersion.Split('.');
+
+                // Преобразование в числа для сравнения
+                int projectMajor = int.Parse(projectParts[0]);
+                int projectMinor = projectParts.Length > 1 ? int.Parse(projectParts[1]) : 0;
+                int loadedMajor = int.Parse(loadedParts[0]);
+                int loadedMinor = loadedParts.Length > 1 ? int.Parse(loadedParts[1]) : 0;
+
+                // Сравнение версии
+                if (projectMajor > loadedMajor || (projectMajor == loadedMajor && projectMinor > loadedMinor))
+                {
+                    // Проектная версия новее
+                    outdatedItems.Add(new MenuItem
+                    {
+                        Path = matchingMenuItem.Path,
+                        Category = matchingMenuItem.Category,
+                        Name = matchingMenuItem.Name,
+                        ImagePath = matchingMenuItem.ImagePath,
+                        IsVisible = true,
+                        IsSelected = false
+                    });
+                }
+                else if (projectMajor < loadedMajor || (projectMajor == loadedMajor && projectMinor < loadedMinor))
+                {
+                    // Загруженная версия новее
+                    newerItems.Add(new MenuItem
+                    {
+                        Path = matchingMenuItem.Path,
+                        Category = matchingMenuItem.Category,
+                        Name = matchingMenuItem.Name,
+                        ImagePath = matchingMenuItem.ImagePath,
+                        IsVisible = true,
+                        IsSelected = false
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                // Логирование или обработка ошибок
+                Debug.WriteLine($"Ошибка при сравнении версий: {ex.Message}");
+            }
+        }
+
+
 
         private string GetFamilyVersionFromProject(Family family)
         {
@@ -523,21 +661,29 @@ namespace FerrumAddin
 
         private void AddOutdatedTab(ObservableCollection<MenuItem> outdatedItems, ObservableCollection<MenuItem> newerItems)
         {
-            var outdatedTab = new TabItemViewModel
+            if (outdatedItems.Count > 0)
             {
-                Header = "Устаревшее",
-                MenuItems = outdatedItems,
-                OriginalMenuItems = outdatedItems.ToList()
-            };
-            var newerTab = new TabItemViewModel
-            {
-                Header = "Новее",
-                MenuItems = newerItems,
-                OriginalMenuItems = newerItems.ToList()
-            };
+                var outdatedTab = new TabItemViewModel
+                {
+                    Header = "Устаревшее",
+                    MenuItems = outdatedItems,
+                    OriginalMenuItems = outdatedItems.ToList()
+                };
+                FamilyManagerWindow.mvm.TabItems.Insert(0, outdatedTab);
 
-            FamilyManagerWindow.mvm.TabItems.Insert(0, outdatedTab);
-            FamilyManagerWindow.mvm.TabItems.Insert(0, newerTab);
+            }
+            if (newerItems.Count > 0)
+            {
+                var newerTab = new TabItemViewModel
+                {
+                    Header = "Новее",
+                    MenuItems = newerItems,
+                    OriginalMenuItems = newerItems.ToList()
+                };
+                FamilyManagerWindow.mvm.TabItems.Insert(0, newerTab);
+
+            }
+
 
             Tabs.ItemsSource = null;
             Tabs.ItemsSource = mvm.TabItems;

@@ -339,11 +339,11 @@ namespace FerrumAddin
         }
 
         public static ExternalEvent LoadEvent;
-        public static bool AllowLoad;
+        public static bool AllowLoad = false;
         public static bool AlwaysLoad = false;
         private void ControlledApplication_FamilyLoadingIntoDocument(object sender, Autodesk.Revit.DB.Events.FamilyLoadingIntoDocumentEventArgs e)
         {
-            if (AllowLoad == null || AllowLoad == true || AlwaysLoad == true)
+            if (AllowLoad == true || AlwaysLoad == true)
             {
               
             }
@@ -436,7 +436,7 @@ namespace FerrumAddin
                                 failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
                                 failureOptions.SetClearAfterRollback(true); // Опционально
                                 tx.SetFailureHandlingOptions(failureOptions);
-                                MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
+                                MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions();
                                 docToCopy.LoadFamily(tab.Path, loadOptions, out Family load);
                                 tx.Commit();
                             }
@@ -450,7 +450,7 @@ namespace FerrumAddin
                                 failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
                                 failureOptions.SetClearAfterRollback(true); // Опционально
                                 tx.SetFailureHandlingOptions(failureOptions);
-                                MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
+                                MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions();
                                 string famPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Path.GetFileNameWithoutExtension(tab.Path )+ "_1.rfa");
                                 File.Copy(tab.Path, famPath, true);
                                 docToCopy.LoadFamily(famPath, loadOptions, out Family load);
@@ -469,7 +469,8 @@ namespace FerrumAddin
                             failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
                             failureOptions.SetClearAfterRollback(true); // Опционально
                             tx.SetFailureHandlingOptions(failureOptions);
-                            docToCopy.LoadFamily(tab.Path);
+                            MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions();
+                            docToCopy.LoadFamily(tab.Path, loadOptions, out Family load);
                             tx.Commit();
                         }
                     }
@@ -671,24 +672,23 @@ namespace FerrumAddin
 
     public class MyFamilyLoadOptions : IFamilyLoadOptions
     {
-        private bool overwriteFamily;
-
-        public MyFamilyLoadOptions(bool overwriteFamily)
+        public bool OnFamilyFound(
+       bool familyInUse,
+       out bool overwriteParameterValues)
         {
-            this.overwriteFamily = overwriteFamily;
+            overwriteParameterValues = true;
+            return true;
         }
 
-        public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
-        {
-            overwriteParameterValues = overwriteFamily;
-            return overwriteFamily;
-        }
-
-        public bool OnSharedFamilyFound(Family sharedFamily, bool familyInUse, out FamilySource source, out bool overwriteParameterValues)
+        public bool OnSharedFamilyFound(
+          Family sharedFamily,
+          bool familyInUse,
+          out FamilySource source,
+          out bool overwriteParameterValues)
         {
             source = FamilySource.Family;
-            overwriteParameterValues = overwriteFamily;
-            return overwriteFamily;
+            overwriteParameterValues = true;
+            return true;
         }
     }
 
@@ -696,7 +696,7 @@ namespace FerrumAddin
     {
         public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
         {
-            IList<FailureMessageAccessor> failures
+            /*IList<FailureMessageAccessor> failures
     = failuresAccessor.GetFailureMessages();
 
             foreach (FailureMessageAccessor f in failures)
@@ -713,21 +713,21 @@ namespace FerrumAddin
                     return FailureProcessingResult.ProceedWithCommit;
                 }
             }
-            return FailureProcessingResult.Continue;
-            /*IList<FailureMessageAccessor> failures = failuresAccessor.GetFailureMessages();
+            return FailureProcessingResult.Continue;*/
+            IList<FailureMessageAccessor> failures = failuresAccessor.GetFailureMessages();
 
             foreach (FailureMessageAccessor failure in failures)
             {
                 // Определяем степень серьезности ошибки
                 FailureSeverity severity = failure.GetSeverity();
-               
+
                 // Обрабатываем в зависимости от степени серьезности
                 if (severity == FailureSeverity.Warning)
                 {
                     // Удаляем предупреждения
                     failuresAccessor.DeleteWarning(failure);
                 }
-                else if (severity == FailureSeverity.Error)
+                else
                 {
                     // Проверяем, можно ли автоматически решить ошибку
                     if (failure.HasResolutions())
@@ -742,15 +742,10 @@ namespace FerrumAddin
                         failuresAccessor.DeleteWarning(failure);
                     }
                 }
-                else if (severity == FailureSeverity.DocumentCorruption)
-                {
-                    // Для критических ошибок откатываем транзакцию
-                    return FailureProcessingResult.ProceedWithRollBack;
-                }
             }
 
             // Продолжаем транзакцию без отображения диалоговых окон
-            return FailureProcessingResult.Continue;*/
+            return FailureProcessingResult.Continue;
         }
     }
 

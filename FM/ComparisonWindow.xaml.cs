@@ -344,6 +344,7 @@ namespace FerrumAddin.FM
         private void Button_Click(object sender, RoutedEventArgs e)
         {
             string output = "";
+            App.AllowLoad = true;
             if (SelectedFamilies.Count() != SelectedMenuItems.Count())
             {
                 TaskDialog.Show("Внимание", "Количество выбранных элементов не совпадает");
@@ -420,7 +421,7 @@ namespace FerrumAddin.FM
                         else if (Path.GetExtension(menuItem.Path).ToLower() == ".rfa")
                         {
                             Family family;
-                            MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions(true);
+                            MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions();
                             if (doc.LoadFamily(menuItem.Path, loadOptions, out family))
                             {
                                 var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
@@ -481,6 +482,7 @@ namespace FerrumAddin.FM
             {
                 output = "Выполнено";
             }
+            App.AllowLoad = false;
             //App.application.DialogBoxShowing -= new EventHandler<DialogBoxShowingEventArgs>(App.a_DialogBoxShowing);
             TaskDialog.Show("Отчет", output);
             this.Close();
