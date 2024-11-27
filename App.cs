@@ -687,7 +687,7 @@ namespace FerrumAddin
           out bool overwriteParameterValues)
         {
             source = FamilySource.Family;
-            overwriteParameterValues = true;
+            overwriteParameterValues = false;
             return true;
         }
     }
