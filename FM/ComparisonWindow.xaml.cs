@@ -351,6 +351,11 @@ namespace FerrumAddin.FM
             }
             else
             {
+                var sortedMenuItems = SelectedMenuItems.Select((item, index) => new { Item = item, Index = index })
+                                           .OrderBy(x => x.Item.Path)
+                                           .ToList();
+                List<MenuItem> SelectedMenuItems1 = sortedMenuItems.Select(x => x.Item).ToList();
+                List<MenuItem> SelectedFamilies1 = sortedMenuItems.Select(x => SelectedFamilies[x.Index]).ToList();
                 using (Transaction trans = new Transaction(doc, "Сопоставление семейств"))
                 {
 
@@ -359,64 +364,65 @@ namespace FerrumAddin.FM
                     failureOptions.SetFailuresPreprocessor(new MyFailuresPreprocessor());
                     trans.SetFailureHandlingOptions(failureOptions);
                     failureOptions.SetClearAfterRollback(true); // Опционально
-
+                    Document tempDoc = null;
                     for (int i = 0; i < SelectedFamilies.Count && i < SelectedMenuItems.Count; i++)
                     {
-                        var selectedFamily = SelectedFamilies[i];
-                        var menuItem = SelectedMenuItems[i];
+                        var selectedFamily = SelectedFamilies1[i];
+                        var menuItem = SelectedMenuItems1[i];
 
                         if (Path.GetExtension(menuItem.Path).ToLower() == ".rvt")
                         {
                             ModelPath modelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(menuItem.Path);
                             OpenOptions openOptions = new OpenOptions();
-                            using (Document tempDoc = doc.Application.OpenDocumentFile(modelPath, openOptions))
-                            {
-                                ElementId sourceFamily = new FilteredElementCollector(tempDoc)
-                            .OfCategory(selectedFamily.RevitCategory)
-                            .WhereElementIsElementType()
-                            .Where(x => x.Name == menuItem.Name)
-                            .Select(x => x.Id).First();
-                                if (sourceFamily != null)
-                                {
-                                    
-                                    CopyPasteOptions options = new CopyPasteOptions();
-                                    options.SetDuplicateTypeNamesHandler(new MyCopyHandler());
-                                    ICollection<ElementId> copiedElements = ElementTransformUtils.CopyElements(
-                                        tempDoc,
-                                        new List<ElementId> { sourceFamily },
-                                        doc,
-                                        Transform.Identity,
-                                        options
-                                    );
+                            if (tempDoc == null)
+                                tempDoc = doc.Application.OpenDocumentFile(modelPath, openOptions);
 
+                            ElementId sourceFamily = new FilteredElementCollector(tempDoc)
+                        .OfCategory(selectedFamily.RevitCategory)
+                        .WhereElementIsElementType()
+                        .Where(x => x.Name == menuItem.Name)
+                        .Select(x => x.Id).First();
+                            if (sourceFamily != null)
+                            {
+
+                                CopyPasteOptions options = new CopyPasteOptions();
+                                options.SetDuplicateTypeNamesHandler(new MyCopyHandler());
+                                ICollection<ElementId> copiedElements = ElementTransformUtils.CopyElements(
+                                    tempDoc,
+                                    new List<ElementId> { sourceFamily },
+                                    doc,
+                                    Transform.Identity,
+                                    options
+                                );
+                                if (i + 1 == SelectedMenuItems1.Count() || SelectedMenuItems1[i+1].Path != SelectedMenuItems1[i].Path)
                                     tempDoc.Close(false);
 
-                                    ElementId copiedTypeId = copiedElements.First();
-                                    ElementType copiedType = doc.GetElement(copiedTypeId) as ElementType;
+                                ElementId copiedTypeId = copiedElements.First();
+                                ElementType copiedType = doc.GetElement(copiedTypeId) as ElementType;
 
-                                    // Ищем существующий тип с таким же именем в целевом документе
-                                    ElementType existingType = FindTypeByNameAndClass(doc, selectedFamily.Name, copiedType.GetType());
-                                    ElementType existingOriginalType = FindTypeByNameAndClass(doc, menuItem.Name, copiedType.GetType());
+                                // Ищем существующий тип с таким же именем в целевом документе
+                                ElementType existingType = FindTypeByNameAndClass(doc, selectedFamily.Name, copiedType.GetType());
+                                ElementType existingOriginalType = FindTypeByNameAndClass(doc, menuItem.Name, copiedType.GetType());
 
-                                    if (existingType != null)
-                                    {
-                                        // Заменяем все элементы, использующие старый тип, на новый тип
-                                        ReplaceElementsType(doc, existingType.Id, copiedType.Id);
-                                    }
-                                    if (existingOriginalType != null)
-                                    {
-                                        ReplaceElementsType(doc, existingOriginalType.Id, copiedType.Id);
-                                    }
-                                    string exName = doc.GetElement(existingOriginalType.Id).Name;
-
-                                    doc.Delete(existingOriginalType.Id);
-                                    doc.GetElement(copiedTypeId).Name = exName;
-                                }
-                                else
+                                if (existingType != null)
                                 {
-                                    output += ("Не найден тип " + menuItem.Name + "\n");
+                                    // Заменяем все элементы, использующие старый тип, на новый тип
+                                    ReplaceElementsType(doc, existingType.Id, copiedType.Id);
                                 }
+                                if (existingOriginalType != null)
+                                {
+                                    ReplaceElementsType(doc, existingOriginalType.Id, copiedType.Id);
+                                    string exName = doc.GetElement(existingOriginalType.Id).Name;
+                                    //doc.Delete(existingOriginalType.Id);
+                                    doc.GetElement(copiedTypeId).Name = exName;                                  
+                                }                               
+
                             }
+                            else
+                            {
+                                output += ("Не найден тип " + menuItem.Name + "\n");
+                            }
+
                         }
                         else if (Path.GetExtension(menuItem.Path).ToLower() == ".rfa")
                         {
@@ -441,7 +447,23 @@ namespace FerrumAddin.FM
                                 }
                                 foreach (FamilyInstance instance in instances)
                                 {
+                                    var parameters = instance.Parameters.Cast<Parameter>()
+                                    .Where(p => !p.IsReadOnly)
+                                    .ToDictionary(p => p.Definition.Name, p => new { p.StorageType, Value = GetParameterValue(p) });
+
                                     instance.Symbol = familySymbol;
+
+                                    foreach (var param in parameters)
+                                    {
+                                        if (param.Key != "Семейство и типоразмер" && param.Key != "Семейство" && param.Key != "Код типа" && param.Key != "Тип")
+                                        {
+                                            var newParam = instance.LookupParameter(param.Key);
+                                            if (newParam != null && newParam.StorageType == param.Value.StorageType)
+                                            {
+                                                SetParameterValue(newParam, param.Value.Value);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             else
@@ -449,26 +471,47 @@ namespace FerrumAddin.FM
                                 Family fam = new FilteredElementCollector(doc).OfClass(typeof(Family)).Where(x => x.Name == menuItem.Name).Cast<Family>().FirstOrDefault();
                                 if (fam == null)
                                 {
-                                    output+=("Не найден тип " + menuItem.Name + "\n");
+                                    output += ("Не найден тип " + menuItem.Name + "\n");
                                     break;
                                 }
                                 var type = fam.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+                                if (type != null && !type.IsActive)
+                                {
+                                    type.Activate();
+                                    doc.Regenerate();
+                                }
+                                List<FamilyInstance> instances = new List<FamilyInstance>();
 
                                 foreach (var instance in new FilteredElementCollector(doc).OfClass(typeof(FamilyInstance)).WhereElementIsNotElementType().Cast<FamilyInstance>())
                                 {
                                     if (instance.Symbol.Name == selectedFamily.Name || instance.Symbol.Name == menuItem.Name)
                                     {
-                                        if (type != null && !type.IsActive)
-                                        {
-                                            type.Activate();
-                                            doc.Regenerate();
-                                        }
 
-                                        instance.Symbol = type;
+                                        instances.Add(instance);
+                                    }
+                                }
+                                foreach (FamilyInstance instance in instances)
+                                {
+                                    var parameters = instance.Parameters.Cast<Parameter>()
+                                    .Where(p => !p.IsReadOnly)
+                                    .ToDictionary(p => p.Definition.Name, p => new { p.StorageType, Value = GetParameterValue(p) });
+
+                                    instance.Symbol = type;
+
+                                    foreach (var param in parameters)
+                                    {
+                                        if (param.Key != "Семейство и типоразмер" && param.Key != "Семейство" && param.Key != "Код типа" && param.Key != "Тип")
+                                        {
+                                            var newParam = instance.LookupParameter(param.Key);
+                                            if (newParam != null && newParam.StorageType == param.Value.StorageType)
+                                            {
+                                                SetParameterValue(newParam, param.Value.Value);
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            
+
                         }
                     }
 
@@ -486,6 +529,44 @@ namespace FerrumAddin.FM
             //App.application.DialogBoxShowing -= new EventHandler<DialogBoxShowingEventArgs>(App.a_DialogBoxShowing);
             TaskDialog.Show("Отчет", output);
             this.Close();
+        }
+
+        private object GetParameterValue(Parameter param)
+        {
+            switch (param.StorageType)
+            {
+                case StorageType.String:
+                    return param.AsString();
+                case StorageType.Double:
+                    return param.AsDouble();
+                case StorageType.Integer:
+                    return param.AsInteger();
+                case StorageType.ElementId:
+                    return param.AsElementId();
+                default:
+                    return null;
+            }
+        }
+
+        // Метод для установки значения параметра
+        private void SetParameterValue(Parameter param, object value)
+        {
+            if (!param.IsReadOnly)
+            switch (param.StorageType)
+            {
+                case StorageType.String:
+                    param.Set(value as string);
+                    break;
+                case StorageType.Double:
+                    param.Set((double)value);
+                    break;
+                case StorageType.Integer:
+                    param.Set((int)value);
+                    break;
+                case StorageType.ElementId:
+                    param.Set((ElementId)value);
+                    break;
+            }
         }
 
         // Метод для поиска типа по имени и классу в целевом документе
@@ -507,8 +588,24 @@ namespace FerrumAddin.FM
 
             foreach (Element elem in collector)
             {
+                var parameters = elem.Parameters.Cast<Parameter>()
+                                    .Where(p => !p.IsReadOnly)
+                                    .ToDictionary(p => p.Definition.Name, p => new { p.StorageType, Value = GetParameterValue(p) });
                 // Устанавливаем новый тип
                 elem.ChangeTypeId(newTypeId);
+
+                foreach (var param in parameters)
+                {
+                    if (param.Key != "Семейство и типоразмер" && param.Key != "Семейство" && param.Key != "Код типа" && param.Key != "Тип")
+                    {
+                        var newParam = elem.LookupParameter(param.Key);
+                        if (newParam != null && newParam.StorageType == param.Value.StorageType)
+                        {
+                            SetParameterValue(newParam, param.Value.Value);
+                        }
+                    }
+                }
+            
             }
         }
     }
