@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FerrumAddin.FM"
         mc:Ignorable="d"
-        Title="ComparisonWindow" WindowState="Maximized" Height="800">
+        Title="ComparisonWindow" WindowState="Maximized" Height="800" Closing="Window_Closing">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2*" />
@@ -97,8 +97,12 @@
                         <DataTemplate>
                                 <WrapPanel Orientation="Horizontal">
                                     <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding FamilyName}"/>
+                                        <TextBlock Text=" - "/>
                                         <TextBlock Text="{Binding Name}" />
-                                        <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" />
                                     </StackPanel>
                                 </WrapPanel>
                         </DataTemplate>
@@ -119,8 +123,12 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                                 <WrapPanel Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding FamilyName}"/>
+                                    <TextBlock Text=" - "/>
                                     <TextBlock Text="{Binding Name}" />
-                                    <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" Margin="5,0,0,0" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding Category}" FontStyle="Italic" FontSize="10" Margin="5,0,0,0" />
                                     <Button Content="Удалить" Click="RemoveSelectedFamily_Click" Margin="10,0,0,0" />
                                 </WrapPanel>
                         </DataTemplate>

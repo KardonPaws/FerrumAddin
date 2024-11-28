@@ -79,10 +79,17 @@
                 <Expander Header="Настройки менеджера семейств" IsExpanded="True" Margin="10px">
                     <StackPanel x:Name="FamilyManager">
                         <DockPanel>
-                            <Label Content="Путь к семействам" VerticalAlignment="Center" MinWidth="160"/>
+                            <Label Content="Создать файл менеджера" VerticalAlignment="Center" MinWidth="160"/>
                             <Button x:Name="_path" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
                             <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
                                 <TextBlock x:Name="path"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
+                            </Border>
+                        </DockPanel>
+                        <DockPanel>
+                            <Label Content="Обновить/добавить вкладку" VerticalAlignment="Center" MinWidth="160"/>
+                            <Button x:Name="_path2" Content="Указать" Click="_path2_Click" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
+                            <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
+                                <TextBlock x:Name="path2"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
                             </Border>
                         </DockPanel>
                         <Label Content="Видимость вкладок"/>

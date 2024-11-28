@@ -17,7 +17,7 @@ namespace FerrumAddin
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             CloseEv = ExternalEvent.Create(new CloseDoc());
-            Configurator cfg = new Configurator();
+            Configurator cfg = new Configurator(commandData);
             cfg.ShowDialog();
             return Result.Succeeded;
         }

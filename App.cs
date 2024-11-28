@@ -227,7 +227,7 @@ namespace FerrumAddin
 
             panelFerrum.AddItem(FamilyManager);
 
-            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ComparisonWindowShow");
+            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FM.ComparisonWindowShow");
             Comparison.Image = Convert(Properties.Resources.FamilyManager);
             Comparison.LargeImage = Convert(Properties.Resources.FamilyManager);          
 
@@ -271,13 +271,7 @@ namespace FerrumAddin
         public static string xmlFilePath;
         public static string TabPath;
         public static string FamilyFolder;
-        public static string WallsFolder;
-        public static string FloorFolder;
-        public static string CeilFolder;
-        public static string WindFolder;
-        public static string RoofFolder;
-        public static string FenceFolder;
-        public static string RampFolder;
+        
         public static Dictionary<string, bool> GetElementStates(XElement root)
         {
             var elementStates = new Dictionary<string, bool>();

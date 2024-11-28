@@ -752,6 +752,67 @@ namespace FerrumAddin
                 return; 
             }
 
+            string tabPath = App.TabPath;
+            XElement root = XElement.Load(tabPath);
+
+            // Получение pathFam из первого элемента MenuItem.Path на две папки выше
+            string firstMenuItemPath = root.Descendants("MenuItem").FirstOrDefault()?.Element("Path")?.Value;
+            if (firstMenuItemPath == null)
+            {
+                throw new InvalidOperationException("Не удалось найти первый элемент MenuItem.Path");
+            }
+            string pathFam = System.IO.Path.GetFullPath(System.IO.Path.Combine(firstMenuItemPath, "..", "..", ".."));
+
+            foreach (var dir in System.IO.Directory.GetDirectories(pathFam))
+            {
+                string tabHeader = System.IO.Path.GetFileName(dir);
+                XElement existingTabElement = root.Elements("TabItem").FirstOrDefault(tab => tab.Element("Header")?.Value == tabHeader);
+
+                XElement tabElement = existingTabElement ?? new XElement("TabItem",
+                    new XElement("Header", tabHeader),
+                    new XElement("Visibility", true));
+
+                foreach (var categoryDir in System.IO.Directory.GetDirectories(dir))
+                {
+                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rfa"))
+                    {
+                        string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(file);
+                        string imagePath = System.IO.Path.Combine(categoryDir, fileNameWithoutExtension + ".png");
+
+                        if (tabElement.Descendants("MenuItem").Any(menu => menu.Element("Path")?.Value == file))
+                        {
+                            continue; // Уже существует
+                        }
+
+                        XElement menuItemElement = new XElement("MenuItem",
+                            new XElement("Name", fileNameWithoutExtension),
+                            new XElement("Category", System.IO.Path.GetFileName(categoryDir)),
+                            new XElement("Path", file),
+                            new XElement("ImagePath", imagePath));
+
+                        XElement previousMenuItem = tabElement.Elements("MenuItem")
+                .LastOrDefault(menu => string.Compare(menu.Element("Path")?.Value, file) < 0);
+
+                        if (previousMenuItem != null)
+                        {
+                            previousMenuItem.AddAfterSelf(menuItemElement);
+                        }
+                        else
+                        {
+                            tabElement.AddFirst(menuItemElement);
+                        }
+                    }
+                }
+
+                if (existingTabElement == null)
+                {
+                    root.Add(tabElement);
+                }
+            }
+
+            root.Save(tabPath);
+
+
             var xdoc = XDocument.Load(filePath);
 
             foreach (var tabItemElement in xdoc.Descendants("TabItem"))

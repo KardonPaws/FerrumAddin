@@ -28,12 +28,14 @@ namespace FerrumAddin
     /// </summary>
     public partial class Configurator : Window
     {
-        public Configurator()
+        public Configurator(ExternalCommandData commandData)
         {
             InitializeComponent();
             CreateCheckboxesFromXml();
             LoadToggleButtonState();
+            this.commandData = commandData;
         }
+        private ExternalCommandData commandData;
         private void LoadToggleButtonState()
         {
             try
@@ -70,6 +72,7 @@ namespace FerrumAddin
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
+            Document origDoc = commandData.Application.ActiveUIDocument.Document;
             string xmlFilePath = App.xmlFilePath;
 
             XElement root;
@@ -261,5 +264,148 @@ namespace FerrumAddin
             }
         }
 
+        private void _path2_Click(object sender, RoutedEventArgs e)
+        {
+            FolderBrowserDialog fbd = new FolderBrowserDialog();
+            if (fbd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                string selectedPath = fbd.SelectedPath;
+                string tabPath = App.TabPath;
+                XElement root;
+
+                // Load existing XML or create a new root element
+                if (System.IO.File.Exists(tabPath))
+                {
+                    root = XElement.Load(tabPath);
+                }
+                else
+                {
+                    root = new XElement("Settings");
+                }
+
+                var nameAndCat = new Dictionary<string, BuiltInCategory>
+        {
+            { "Стены", BuiltInCategory.OST_Walls },
+            { "Перекрытия", BuiltInCategory.OST_Floors },
+            { "Потолки", BuiltInCategory.OST_Ceilings },
+            { "Витражи", BuiltInCategory.OST_Walls },
+            { "Крыши", BuiltInCategory.OST_Roofs },
+            { "Ограждения", BuiltInCategory.OST_StairsRailing },
+            { "Пандусы", BuiltInCategory.OST_Ramps }
+        };
+
+                List<Document> documents = new List<Document>();
+                string tabName = System.IO.Path.GetFileName(selectedPath);
+                XElement tabElement = root.Elements("TabItem").FirstOrDefault(el => el.Element("Header")?.Value == tabName);
+
+                // If tab doesn't exist, create a new one
+                if (tabElement == null)
+                {
+                    tabElement = new XElement("TabItem",
+                        new XElement("Header", tabName),
+                        new XElement("Visibility", true)
+                    );
+                    root.Add(tabElement);
+                }
+                else
+                {
+                    // Clear existing menu items if the tab already exists
+                    tabElement.Elements("MenuItem").Remove();
+                }
+
+                foreach (var categoryDir in System.IO.Directory.GetDirectories(selectedPath))
+                {
+                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rfa"))
+                    {
+                        string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(file);
+                        string imagePath = System.IO.Path.Combine(categoryDir, fileNameWithoutExtension + ".png");
+
+                        XElement menuItemElement = new XElement("MenuItem",
+                            new XElement("Name", fileNameWithoutExtension),
+                            new XElement("Category", System.IO.Path.GetFileName(categoryDir)),
+                            new XElement("Path", file),
+                            new XElement("ImagePath", imagePath)
+                        );
+
+                        tabElement.Add(menuItemElement);
+                    }
+
+                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rvt"))
+                    {
+                        UIDocument uidoc = App.uiapp.OpenAndActivateDocument(file);
+                        Document doc = uidoc.Document;
+                        documents.Add(doc);
+                        List<Element> elements = new List<Element>();
+                        string directory = categoryDir.Split('\\').Last();
+
+                        if (categoryDir.Contains("Витражи"))
+                        {
+                            elements = new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .WhereElementIsNotElementType()
+                                .Cast<Wall>()
+                                .Select(x => x.WallType)
+                                .Distinct()
+                                .Where(x => x.Kind == WallKind.Curtain)
+                                .Select(x => x as Element)
+                                .ToList();
+                        }
+                        else if (categoryDir.Contains("Стены"))
+                        {
+                            elements = new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .WhereElementIsNotElementType()
+                                .Cast<Wall>()
+                                .Select(x => x.WallType)
+                                .Distinct()
+                                .Where(x => x.Kind == WallKind.Basic)
+                                .Select(x => x as Element)
+                                .ToList();
+                        }
+                        else
+                        {
+                            elements = new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .WhereElementIsNotElementType()
+                                .Cast<Element>()
+                                .Select(x => x.GetTypeId())
+                                .Select(x => doc.GetElement(x))
+                                .ToList()
+                                .Select(x => x as Element)
+                                .ToList();
+                        }
+
+                        foreach (Element element in elements)
+                        {
+                            XElement menuItemElement = new XElement("MenuItem",
+                                new XElement("Name", element.Name),
+                                new XElement("Category", directory),
+                                new XElement("Path", file),
+                                new XElement("ImagePath", System.IO.Path.Combine(categoryDir, element.Name + ".png"))
+                            );
+                            tabElement.Add(menuItemElement);
+                        }
+
+                        //ConfiguratorShow.CloseEv.Raise();
+                    }
+                }
+
+                root.Save(tabPath);
+                App.dockableWindow.Newpath();
+
+                foreach (Document doc in documents)
+                {
+                    try
+                    {
+                        doc.Close(false);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+            }
+        }
     }
+
 }
