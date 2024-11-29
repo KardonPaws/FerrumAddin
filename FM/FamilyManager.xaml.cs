@@ -789,20 +789,9 @@ namespace FerrumAddin
                             new XElement("Category", System.IO.Path.GetFileName(categoryDir)),
                             new XElement("Path", file),
                             new XElement("ImagePath", imagePath));
-
-                        XElement previousMenuItem = tabElement.Elements("MenuItem")
-                .LastOrDefault(menu => string.Compare(menu.Element("Path")?.Value, file) < 0);
-
-                        if (previousMenuItem != null)
-                        {
-                            previousMenuItem.AddAfterSelf(menuItemElement);
-                        }
-                        else
-                        {
-                            tabElement.AddFirst(menuItemElement);
-                        }
+                        tabElement.Add(menuItemElement);
                     }
-                    var menuItemsToRemove = tabElement.Descendants("MenuItem")
+                    var menuItemsToRemove = tabElement.Descendants("MenuItem").Where(x=>x.Element("Path").Value.Contains(".rfa"))
                 .Where(menu => !File.Exists(menu.Element("Path")?.Value))
                 .ToList();
 
@@ -811,7 +800,17 @@ namespace FerrumAddin
                         menuItem.Remove();
                     }
                 }
-
+                var sortedMenuItems = tabElement.Elements("MenuItem")
+                .OrderBy(menu => menu.Element("Category")?.Value)
+                .ThenBy(menu => menu.Element("Name")?.Value)
+                .ToList();
+                string tabName = tabElement.Element("Header").Value;
+                string visibility = tabElement.Element("Visibility").Value;
+                tabElement.ReplaceNodes(new XElement[]
+                          {
+                            new XElement("Header", tabName),
+                            new XElement("Visibility", visibility)
+                          }.Concat(sortedMenuItems));
                 if (existingTabElement == null)
                 {
                     root.Add(tabElement);
@@ -823,7 +822,7 @@ namespace FerrumAddin
 
             var xdoc = XDocument.Load(filePath);
 
-            foreach (var tabItemElement in xdoc.Descendants("TabItem"))
+            foreach (var tabItemElement in root.Descendants("TabItem"))
             {
                 if (Convert.ToBoolean(tabItemElement.Element("Visibility")?.Value) == true)
                 {

@@ -80,17 +80,15 @@
                     <StackPanel x:Name="FamilyManager">
                         <DockPanel>
                             <Label Content="Создать файл менеджера" VerticalAlignment="Center" MinWidth="160"/>
-                            <Button x:Name="_path" Content="Указать" Click="Button_Click_1" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
-                            <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="path"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
-                            </Border>
+                            <Button x:Name="_path" Content="Указать папку семейств" Click="Button_Click_1"  HorizontalAlignment="Right" Margin="0,5,0,5" Width="135"/>
                         </DockPanel>
                         <DockPanel>
                             <Label Content="Обновить/добавить вкладку" VerticalAlignment="Center" MinWidth="160"/>
-                            <Button x:Name="_path2" Content="Указать" Click="_path2_Click" Width="60" HorizontalAlignment="Left" Margin="0,5,0,5"/>
-                            <Border Margin="10,5,10,5" BorderBrush="Black" Background="Black">
-                                <TextBlock x:Name="path2"  MinWidth="140" VerticalAlignment="Center" Margin="1,1,1,1" Background="White"/>
-                            </Border>
+                            <Button x:Name="_path2" Content="Указать папку вкладки" Click="_path2_Click"  HorizontalAlignment="Right" Margin="0,5,0,5" Width="135"/>
+                        </DockPanel>
+                        <DockPanel>
+                            <Label Content="Обновить все вкладки" VerticalAlignment="Center" MinWidth="160"/>
+                            <Button x:Name="_path3" Content="Обновить" Click="_path3_Click"  HorizontalAlignment="Right" Margin="0,5,0,5" Width="135"/>
                         </DockPanel>
                         <Label Content="Видимость вкладок"/>
                     </StackPanel>

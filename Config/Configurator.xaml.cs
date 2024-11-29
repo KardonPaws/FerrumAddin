@@ -20,6 +20,8 @@ using CheckBox = System.Windows.Controls.CheckBox;
 using MessageBox = System.Windows.MessageBox;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Autodesk.Revit.Creation;
+using Document = Autodesk.Revit.DB.Document;
 
 namespace FerrumAddin
 {
@@ -168,6 +170,8 @@ namespace FerrumAddin
                                 .Cast<Element>().Select(x => x.GetTypeId()).Select(x => doc.GetElement(x))
                                 .ToList().Select(x => x as Element);
                         }
+                        elements.OrderBy(x => x.Category.Name).ThenBy(x => x.Name);
+
                         foreach (Element element in elements)
                         {
                             XElement menuItemElement = new XElement("MenuItem");
@@ -255,7 +259,6 @@ namespace FerrumAddin
                 if ((sender as Button).Name == "_path")
                 {
                     pathFam = selectedPath;
-                    path.Text = selectedPath; // Обновляем текстовый блок для отображения выбранного пути
                     RecreateXmlFile();
                     CreateCheckboxesFromXml();
                     SaveCheckboxesToXml();
@@ -374,6 +377,7 @@ namespace FerrumAddin
                                 .Select(x => x as Element)
                                 .ToList();
                         }
+                        elements.OrderBy(x => x.Category.Name).ThenBy(x => x.Name);
 
                         foreach (Element element in elements)
                         {
@@ -403,6 +407,140 @@ namespace FerrumAddin
                     {
                         continue;
                     }
+                }
+            }
+        }
+
+        private void _path3_Click(object sender, RoutedEventArgs e)
+        {
+            string tabPath = App.TabPath;
+            XElement root = XElement.Load(tabPath);
+            List<Document> documents = new List<Document>();
+
+            var nameAndCat = new Dictionary<string, BuiltInCategory>
+        {
+            { "Стены", BuiltInCategory.OST_Walls },
+            { "Перекрытия", BuiltInCategory.OST_Floors },
+            { "Потолки", BuiltInCategory.OST_Ceilings },
+            { "Витражи", BuiltInCategory.OST_Walls },
+            { "Крыши", BuiltInCategory.OST_Roofs },
+            { "Ограждения", BuiltInCategory.OST_StairsRailing },
+            { "Пандусы", BuiltInCategory.OST_Ramps }
+        };
+
+            // Получение pathFam из первого элемента MenuItem.Path на две папки выше
+            string firstMenuItemPath = root.Descendants("MenuItem").FirstOrDefault()?.Element("Path")?.Value;
+            if (firstMenuItemPath == null)
+            {
+                throw new InvalidOperationException("Не удалось найти первый элемент MenuItem.Path");
+            }
+            string pathFam = System.IO.Path.GetFullPath(System.IO.Path.Combine(firstMenuItemPath, "..", "..", ".."));
+            foreach (var dir in System.IO.Directory.GetDirectories(pathFam))
+            {
+                string tabHeader = System.IO.Path.GetFileName(dir);
+                XElement existingTabElement = root.Elements("TabItem").FirstOrDefault(tab => tab.Element("Header")?.Value == tabHeader);
+
+                XElement tabElement = existingTabElement ?? new XElement("TabItem",
+                    new XElement("Header", tabHeader),
+                    new XElement("Visibility", true));
+
+                foreach (var categoryDir in System.IO.Directory.GetDirectories(dir))
+                {
+                    foreach (var file in System.IO.Directory.GetFiles(categoryDir, "*.rvt"))
+                    {
+                        UIDocument uidoc = App.uiapp.OpenAndActivateDocument(file);
+                        doc = uidoc.Document;
+                        documents.Add(doc);
+                        List<Element> elements = new List<Element>();
+                        string directory = categoryDir.Split('\\').Last();
+                        if (categoryDir.Contains("Витражи"))
+                        {
+                            elements = (List<Element>)new FilteredElementCollector(doc)
+                            .OfCategory(nameAndCat[directory])
+                            .WhereElementIsNotElementType()
+                            .Cast<Wall>()
+                            .Select(x => x.WallType)
+                            .Distinct()
+                            .Where(x => x.Kind == WallKind.Curtain).Select(x => x as Element).ToList();
+                        }
+                        else if (categoryDir.Contains("Стены"))
+                        {
+                            elements = (List<Element>)new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .WhereElementIsNotElementType()
+                                .Cast<Wall>()
+                                .Select(x => x.WallType)
+                                .Distinct()
+                                .Where(x => x.Kind == WallKind.Basic).Select(x => x as Element).ToList();
+                        }
+                        else
+                        {
+                            elements = (List<Element>)new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .WhereElementIsNotElementType()
+                                .Cast<Element>().Select(x => x.GetTypeId()).Select(x => doc.GetElement(x))
+                                .ToList().Select(x => x as Element);
+                        }
+
+                        
+                        elements.OrderBy(x => x.Category.Name).ThenBy(x => x.Name);
+                        List<string> names = new List<string>();
+                        foreach (Element element in elements)
+                        {
+                            if (tabElement.Descendants("MenuItem").Any(menu => menu.Element("Name")?.Value == element.Name))
+                            {
+                                names.Add(element.Name);
+                                continue; // Уже существует
+                            }
+                            XElement menuItemElement = new XElement("MenuItem",
+                                    new XElement("Name", element.Name),
+                                    new XElement("Category", directory),
+                                    new XElement("Path", file),
+                                    new XElement("ImagePath", System.IO.Path.Combine(categoryDir, element.Name + ".png"))
+                                );
+
+                            tabElement.Add(menuItemElement);
+                            names.Add(element.Name);
+                        }
+                        var menuItemsToRemove = tabElement.Descendants("MenuItem").Where(x => x.Element("Path").Value.Contains(".rvt"))
+                    .Where(menu => !names.Contains(menu.Element("Name")?.Value))
+                    .ToList();
+
+                        foreach (var menuItem in menuItemsToRemove)
+                        {
+                            menuItem.Remove();
+                        }
+                    }
+                }
+                var sortedMenuItems = tabElement.Elements("MenuItem")
+    .OrderBy(menu => menu.Element("Category")?.Value)
+    .ThenBy(menu => menu.Element("Name")?.Value)
+    .ToList();
+
+                string tabName = tabElement.Element("Header").Value;
+                string visibility = tabElement.Element("Visibility").Value;
+                tabElement.ReplaceNodes(new XElement[]
+                          {
+                            new XElement("Header", tabName),
+                            new XElement("Visibility", visibility)
+                          }.Concat(sortedMenuItems));
+                if (existingTabElement == null)
+                {
+                    root.Add(tabElement);
+                }
+            }
+            root.Save(tabPath);
+            App.dockableWindow.Newpath();
+
+            foreach (Document doc in documents)
+            {
+                try
+                {
+                    doc.Close(false);
+                }
+                catch
+                {
+                    continue;
                 }
             }
         }

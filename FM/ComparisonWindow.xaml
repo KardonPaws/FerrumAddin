@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FerrumAddin.FM"
         mc:Ignorable="d"
-        Title="ComparisonWindow" WindowState="Maximized" Height="800" Closing="Window_Closing" WindowStartupLocation="CenterOwner">
+        Title="ComparisonWindow" WindowState="Maximized" Height="800" Closing="Window_Closing" WindowStartupLocation="CenterOwner" MinHeight="200" MinWidth="200">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2*" />

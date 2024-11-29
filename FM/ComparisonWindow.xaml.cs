@@ -220,7 +220,7 @@ namespace FerrumAddin.FM
                 {
                     FamilyCategoryFilters.Add(new CategoryFilter { CategoryName = category, IsChecked = true });
                 }
-                this.WindowState = WindowState.Maximized;
+                this.WindowState = WindowState.Maximized;          
             }
             else
             { 
