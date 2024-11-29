@@ -84,7 +84,7 @@ namespace FerrumAddin.FM
         }
         private void Window_Closing(object sender, CancelEventArgs e)
         {
-            SaveCategoryFilterSettings(); // Сохраняем настройки фильтров категорий при закрытии окна
+            SaveSettings(); // Сохраняем настройки фильтров категорий при закрытии окна
         }
 
         private void LoadTabItemsFromXml(string filePath)
@@ -173,7 +173,7 @@ namespace FerrumAddin.FM
             LoadRevitFamilies();
 
             var allCategories = MenuItems.Select(m => m.Category).Distinct().ToList();
-            LoadCategoryFilterSettings(); // Загружаем настройки фильтров категорий
+            LoadSettings(); // Загружаем настройки фильтров категорий
 
             _cancellationTokenSource1?.Cancel();
             _cancellationTokenSource1 = new CancellationTokenSource();
@@ -188,19 +188,24 @@ namespace FerrumAddin.FM
             UpdateFilteredRevitFamiliesAsync(_cancellationTokenSource2.Token).ConfigureAwait(false);
         }
 
-        private void SaveCategoryFilterSettings()
+        private void SaveSettings()
         {
             var settings = new CategoryFilterSettings
             {
                 MenuCategoryFilters = MenuCategoryFilters.ToList(),
-                FamilyCategoryFilters = FamilyCategoryFilters.ToList()
+                FamilyCategoryFilters = FamilyCategoryFilters.ToList(),
+                Height = this.Height,
+                Width = this.Width,
+                WindowState = this.WindowState,
+                Top = this.Top,
+                Left = this.Left
             };
 
             var json = JsonSerializer.Serialize(settings);
             File.WriteAllText(SettingsFilePath, json);
         }
 
-        private void LoadCategoryFilterSettings()
+        private void LoadSettings()
         {
             if (!File.Exists(SettingsFilePath))
             {
@@ -215,6 +220,7 @@ namespace FerrumAddin.FM
                 {
                     FamilyCategoryFilters.Add(new CategoryFilter { CategoryName = category, IsChecked = true });
                 }
+                this.WindowState = WindowState.Maximized;
             }
             else
             { 
@@ -234,6 +240,11 @@ namespace FerrumAddin.FM
                     {
                         FamilyCategoryFilters.Add(filter);
                     }
+                    this.Height = settings.Height;
+                    this.Width = settings.Width;
+                    this.WindowState = settings.WindowState;
+                    this.Top = settings.Top;
+                    this.Left = settings.Left;
                 }
             }
         }
@@ -396,7 +407,7 @@ namespace FerrumAddin.FM
         {
             selFam = SelectedFamilies.ToList();
             selMen = SelectedMenuItems.ToList();
-            SaveCategoryFilterSettings();
+            SaveSettings();
             ComparisonWindowShow.changeTypesEv.Raise();
             this.Close();
         }
@@ -408,6 +419,11 @@ namespace FerrumAddin.FM
     {
         public List<CategoryFilter> MenuCategoryFilters { get; set; }
         public List<CategoryFilter> FamilyCategoryFilters { get; set; }
+        public double Height { get; set; }
+        public double Width { get; set; }
+        public WindowState WindowState { get; set; }
+        public double Top { get; set; }
+        public double Left { get; set; }
     }
 
     public class MenuItem

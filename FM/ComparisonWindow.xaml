@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FerrumAddin.FM"
         mc:Ignorable="d"
-        Title="ComparisonWindow" WindowState="Maximized" Height="800" Closing="Window_Closing">
+        Title="ComparisonWindow" WindowState="Maximized" Height="800" Closing="Window_Closing" WindowStartupLocation="CenterOwner">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2*" />
@@ -23,13 +23,15 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="30"/>
                 <RowDefinition Height="30"/>
+                <RowDefinition Height="30"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
+            <Label Content="Менеджер" FontWeight="Bold" FontSize="16"/>
             <TextBox x:Name="MenuItemSearchBox"
                      Text="{Binding MenuSearchText, UpdateSourceTrigger=PropertyChanged}"
                      Margin="0,0,0,5" Padding="5"
-                     ToolTip="Search by Name..." Height="30" Grid.Row="0"/>
-            <ToggleButton x:Name="MenuCategoryFilterButton" Content="Фильтр по категории ▽" Margin="0,0,0,5" Grid.Row="1" />
+                     ToolTip="Search by Name..." Height="30" Grid.Row="1"/>
+            <ToggleButton x:Name="MenuCategoryFilterButton" Content="Фильтр по категории ▽" Margin="0,0,0,5" Grid.Row="2" />
             <Popup PlacementTarget="{Binding ElementName=MenuCategoryFilterButton}"
                    IsOpen="{Binding IsChecked, ElementName=MenuCategoryFilterButton}"
                    StaysOpen="False" Width="{Binding ActualWidth, ElementName=MenuCategoryFilterButton}">
@@ -45,7 +47,7 @@
                     </ScrollViewer>
                 </Border>
             </Popup>
-            <Border x:Name="HeightHelperPanel" BorderBrush="Black" Grid.Row="2">
+            <Border x:Name="HeightHelperPanel" BorderBrush="Black" Grid.Row="3">
                 <ListBox x:Name="MenuItemsList" ItemsSource="{Binding FilteredMenuItems}"  Height="{Binding Path=ActualHeight, ElementName=HeightHelperPanel}" Margin="1,1,1,1" MouseDoubleClick="MenuItemsList_MouseDoubleClick_1">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -67,13 +69,15 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="30"/>
                 <RowDefinition Height="30"/>
+                <RowDefinition Height="30"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
+            <Label Content="Текущий проект" FontWeight="Bold" FontSize="16"/>
             <TextBox x:Name="FamilySearchBox"
                      Text="{Binding FamilySearchText, UpdateSourceTrigger=PropertyChanged}"
                      Margin="0,0,0,5" Padding="5"
-                     ToolTip="Search by Name..." Height="30" Grid.Row="0"/>
-            <ToggleButton x:Name="FamilyCategoryFilterButton" Content="Фильтр по категории ▽" Margin="0,0,0,5" Grid.Row="1" />
+                     ToolTip="Search by Name..." Height="30" Grid.Row="1"/>
+            <ToggleButton x:Name="FamilyCategoryFilterButton" Content="Фильтр по категории ▽" Margin="0,0,0,5" Grid.Row="2" />
             <Popup PlacementTarget="{Binding ElementName=FamilyCategoryFilterButton}"
                    IsOpen="{Binding IsChecked, ElementName=FamilyCategoryFilterButton}"
                    StaysOpen="False" Width="{Binding ActualWidth, ElementName=FamilyCategoryFilterButton}">
@@ -91,7 +95,7 @@
 
                 </Border>
             </Popup>
-            <Border x:Name="HeightHelperPanel2" BorderBrush="Black" Grid.Row="2">
+            <Border x:Name="HeightHelperPanel2" BorderBrush="Black" Grid.Row="3">
                 <ListBox x:Name="FamiliesList" ItemsSource="{Binding FilteredRevitFamilies}" Height="{Binding Path=ActualHeight, ElementName=HeightHelperPanel2}" Margin="1,1,1,1" MouseDoubleClick="FamiliesList_MouseDoubleClick">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -117,7 +121,7 @@
                 <RowDefinition Height="30"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <TextBlock Text="Семейство Revit" FontWeight="Bold" Margin="0,0,0,5" Grid.Row="0"/>
+            <TextBlock Text="Семейство Revit" FontWeight="Bold" Margin="0,0,0,5" Grid.Row="0" FontSize="16"/>
             <Border x:Name="HeightHelperPanel3" BorderBrush="Black" Grid.Row="1">
                 <ListBox x:Name="SelectedFamiliesList" ItemsSource="{Binding SelectedFamilies}" Height="{Binding Path=ActualHeight, ElementName=HeightHelperPanel3}" Margin="1,1,1,1">
                     <ListBox.ItemTemplate>
@@ -143,7 +147,7 @@
                 <RowDefinition Height="30"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <TextBlock Text="Заменить на элемент из менеджера" FontWeight="Bold" Margin="0,0,0,5" Grid.Row="0"/>
+            <TextBlock Text="Заменить на" FontWeight="Bold" Grid.Row="0" FontSize="16"/>
             <Border x:Name="HeightHelperPanel4" BorderBrush="Black" Grid.Row="2">
                 <ListBox x:Name="SelectedMenuItemsList" ItemsSource="{Binding SelectedMenuItems}" Height="{Binding Path=ActualHeight, ElementName=HeightHelperPanel4}" Margin="1,1,1,1">
                     <ListBox.ItemTemplate>

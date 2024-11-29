@@ -802,6 +802,14 @@ namespace FerrumAddin
                             tabElement.AddFirst(menuItemElement);
                         }
                     }
+                    var menuItemsToRemove = tabElement.Descendants("MenuItem")
+                .Where(menu => !File.Exists(menu.Element("Path")?.Value))
+                .ToList();
+
+                    foreach (var menuItem in menuItemsToRemove)
+                    {
+                        menuItem.Remove();
+                    }
                 }
 
                 if (existingTabElement == null)
