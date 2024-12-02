@@ -133,6 +133,7 @@ namespace FerrumAddin
         public static UIApplication uiapp;
         public static string name;
         public RibbonPanel panelMEP;
+        public RibbonPanel panelAR;
         public Result OnStartup(UIControlledApplication a)
         {
             application = a;
@@ -239,6 +240,13 @@ namespace FerrumAddin
             PushButtonData MEPName = new PushButtonData("mepName", "Наименование труб|воздуховодов", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandMepName");
 
             panelMEP.AddItem(MEPName);
+
+            panelAR = a.CreateRibbonPanel(tabName, "АР");
+            panelAR.Visible = false;
+
+            PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandLintelCreator");
+
+            panelAR.AddItem(LintelCreator);
 
             FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;
@@ -360,9 +368,15 @@ namespace FerrumAddin
             {
                 case "MEP":
                     panelMEP.Visible = true;
+                    panelAR.Visible = false;
+                    break;
+                case "АР":
+                    panelMEP.Visible = false;
+                    panelAR.Visible = true;
                     break;
                 default:
                     panelMEP.Visible=false;
+                    panelAR.Visible = false;
                     break;
             }
         }
