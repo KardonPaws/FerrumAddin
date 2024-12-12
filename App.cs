@@ -244,7 +244,7 @@ namespace FerrumAddin
             panelAR = a.CreateRibbonPanel(tabName, "АР");
             panelAR.Visible = false;
 
-            PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandLintelCreator");
+            PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandLintelCreator2");
 
             panelAR.AddItem(LintelCreator);
 

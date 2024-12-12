@@ -85,12 +85,15 @@ namespace FerrumAddin.FM
         private void Window_Closing(object sender, CancelEventArgs e)
         {
             SaveSettings(); // Сохраняем настройки фильтров категорий при закрытии окна
+            MenuItems.Clear();
+            RevitFamilies.Clear();
         }
 
         private void LoadTabItemsFromXml(string filePath)
         {
             if (!File.Exists(filePath))
                 return;
+            MenuItems.Clear();
 
             var xdoc = XDocument.Load(filePath);
 
@@ -119,7 +122,8 @@ namespace FerrumAddin.FM
         {
             List<Element> collector = (List<Element>)new FilteredElementCollector(doc)
             .WhereElementIsNotElementType().ToElements()
-            .Where(e => e.Category != null && e.Category.HasMaterialQuantities).ToList(); 
+            .Where(e => e.Category != null && e.Category.HasMaterialQuantities).ToList();
+            RevitFamilies.Clear();
 
             // Создаем список для хранения данных
             List<(Category category, string familyName, string typeName)> elementData = new List<(Category, string, string)>();
@@ -226,19 +230,23 @@ namespace FerrumAddin.FM
             { 
                 var json = File.ReadAllText(SettingsFilePath);
                 var settings = JsonSerializer.Deserialize<CategoryFilterSettings>(json);
+                var allCategoriesMenu = MenuItems.Select(m => m.Category).Distinct().ToList();
+                var allCategoriesRevit = RevitFamilies.Select(m => m.Category).Distinct().ToList();
 
                 if (settings != null)
                 {
                     MenuCategoryFilters.Clear();
                     foreach (var filter in settings.MenuCategoryFilters)
                     {
-                        MenuCategoryFilters.Add(filter);
+                        if (allCategoriesMenu.Contains(filter.CategoryName))
+                            MenuCategoryFilters.Add(filter);
                     }
 
                     FamilyCategoryFilters.Clear();
                     foreach (var filter in settings.FamilyCategoryFilters)
                     {
-                        FamilyCategoryFilters.Add(filter);
+                        if (allCategoriesRevit.Contains(filter.CategoryName))
+                            FamilyCategoryFilters.Add(filter);
                     }
                     this.Height = settings.Height;
                     this.Width = settings.Width;

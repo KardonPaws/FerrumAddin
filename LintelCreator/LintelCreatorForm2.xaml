@@ -1,0 +1,74 @@
+﻿<Window x:Class="FerrumAddin.LintelCreator.LintelCreatorForm2"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Простановка перемычек" MinHeight="350" MinWidth="600"
+        xmlns:local="clr-namespace:FerrumAddin.LintelCreator"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d" WindowStartupLocation="CenterOwner" SizeToContent="WidthAndHeight">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <!-- Первый столбец -->
+            <ColumnDefinition Width="200"/>
+            <!-- Второй столбец -->
+            <ColumnDefinition Width="*"/>
+            <!-- Третий столбец -->
+        </Grid.ColumnDefinitions>
+
+        <!-- Первый столбец -->
+        <TreeView x:Name="firstColumnt" Grid.Column="0" Margin="5" ItemsSource="{Binding ElementList}">
+            <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate DataType="{x:Type local:ParentElement}" ItemsSource="{Binding ChildElements}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Width}" FontStyle="Italic"/>
+                    </StackPanel>
+                    <HierarchicalDataTemplate.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:ChildElement}">
+                            <Button Content="{Binding WallType}"/>
+                        </DataTemplate>
+                    </HierarchicalDataTemplate.ItemTemplate>
+                </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+
+        <!-- Второй столбец -->
+        <Border BorderBrush="Black" Grid.Column="1" Background="Black" Margin="5">
+            <StackPanel Margin="1" Background="White">
+                <TextBlock Text="Фильтры" FontWeight="Bold" Margin="0,0,0,5"/>
+
+                <!-- Настройка толщины стены -->
+                <TextBlock Text="Толщина стены" FontWeight="Bold" Margin="0,0,0,5"/>
+                <RadioButton Content="Кирпич 65 мм" GroupName="WallType" IsChecked="{Binding IsBrick65Checked}" Margin="0,0,0,5"/>
+                <RadioButton Content="Кирпич 85 мм" GroupName="WallType" IsChecked="{Binding IsBrick85Checked}" Margin="0,0,0,5"/>
+                <RadioButton Content="Перегородки" GroupName="WallType" IsChecked="{Binding IsPartitionChecked}" Margin="0,0,0,15"/>
+
+                <!-- Тип перемычки -->
+                <TextBlock Text="Несущая перемычка" FontWeight="Bold" Margin="0,0,0,5"/>
+                <RadioButton Content="Без опирания" GroupName="SupportType" IsChecked="{Binding IsNoSupportChecked}"/>
+                <RadioButton Content="Опирание с 1 стороны" GroupName="SupportType" IsChecked="{Binding IsOneSideSupportChecked}"/>
+                <RadioButton Content="Опирание с 2 сторон" GroupName="SupportType" IsChecked="{Binding IsTwoSidesSupportChecked}"/>
+
+                <!-- Опорные подушки -->
+                <TextBlock Text="Опорные подушки" FontWeight="Bold" Margin="10,0,0,5"/>
+                <CheckBox Content="Есть опорные подушки" IsChecked="{Binding HasSupportPads}" Margin="0,0,0,15"/>
+
+                <!-- Материал перемычки -->
+                <TextBlock Text="Материал перемычки" FontWeight="Bold" Margin="0,0,0,5"/>
+                <RadioButton Content="Металлическая" GroupName="LintelMaterial" IsChecked="{Binding IsMetalChecked}"/>
+                <RadioButton Content="Железобетонная" GroupName="LintelMaterial" IsChecked="{Binding IsReinforcedConcreteChecked}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Третий столбец -->
+        <StackPanel Grid.Column="2" Margin="5">
+            <TextBlock Text="Семейства" FontWeight="Bold" Margin="0,0,0,5"/>
+            <ComboBox ItemsSource="{Binding FilteredFamilies}" DisplayMemberPath="FamilyName" SelectedItem="{Binding SelectedFamily}" Margin="0,0,0,5"/>
+            <TextBlock Text="Типы" FontWeight="Bold" Margin="0,0,0,5"/>
+            <ListBox ItemsSource="{Binding SelectedFamily.Types}" DisplayMemberPath="TypeName" SelectedItem="{Binding SelectedType}" 
+                     Margin="0,0,0,15" VerticalAlignment="Stretch"/>
+            <Button Content="Выполнить" Command="{Binding ExecuteCommand}" HorizontalAlignment="Right"/>
+        </StackPanel>
+    </Grid>
+</Window>

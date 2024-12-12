@@ -91,6 +91,9 @@
                             <Button x:Name="_path3" Content="Обновить" Click="_path3_Click"  HorizontalAlignment="Right" Margin="0,5,0,5" Width="135"/>
                         </DockPanel>
                         <Label Content="Видимость вкладок"/>
+                        <StackPanel x:Name="FMVisibility">
+                            
+                        </StackPanel>
                     </StackPanel>
                 </Expander>
             </StackPanel>

@@ -102,8 +102,12 @@
       <DependentUpon>FamilyManager.xaml</DependentUpon>
     </Compile>
     <Compile Include="LintelCreator\AlphanumComparatorFastString.cs" />
+    <Compile Include="LintelCreator\CommandLintelCreator2.cs" />
     <Compile Include="LintelCreator\CommandLintelCreator.cs" />
     <Compile Include="LintelCreator\DimensionParameters.cs" />
+    <Compile Include="LintelCreator\LintelCreatorForm2.xaml.cs">
+      <DependentUpon>LintelCreatorForm2.xaml</DependentUpon>
+    </Compile>
     <Compile Include="LintelCreator\LintelCreatorForm.xaml.cs">
       <DependentUpon>LintelCreatorForm.xaml</DependentUpon>
     </Compile>
@@ -145,6 +149,10 @@
     <Page Include="Config\Configurator.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="LintelCreator\LintelCreatorForm2.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
     </Page>
     <Page Include="LintelCreator\LintelCreatorForm.xaml">
       <Generator>MSBuild:Compile</Generator>

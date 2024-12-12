@@ -130,11 +130,22 @@ namespace FerrumAddin.FM
                             MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions();
                             if (doc.LoadFamily(menuItem.Path, loadOptions, out family))
                             {
-                                var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+                                var familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).Where(x=>x.Name == selectedFamily.Name).FirstOrDefault();
                                 if (familySymbol != null && !familySymbol.IsActive)
                                 {
                                     familySymbol.Activate();
                                     doc.Regenerate();
+                                }
+                                else
+                                {
+                                    familySymbol = family.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+                                    output += ("Не найден тип " + menuItem.Name + ". Была произведена замена на тип" + familySymbol.Name + ".\n");
+
+                                    if (familySymbol != null && !familySymbol.IsActive)
+                                    {
+                                        familySymbol.Activate();
+                                        doc.Regenerate();
+                                    }
                                 }
                                 List<FamilyInstance> instances = new List<FamilyInstance>();
 
@@ -174,11 +185,21 @@ namespace FerrumAddin.FM
                                     output += ("Не найден тип " + menuItem.Name + "\n");
                                     break;
                                 }
-                                var type = fam.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+                                var type = fam.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).Where(x => x.Name == selectedFamily.Name).FirstOrDefault();
                                 if (type != null && !type.IsActive)
                                 {
                                     type.Activate();
                                     doc.Regenerate();
+                                }
+                                else
+                                {
+                                    type = fam.GetFamilySymbolIds().Select(id => doc.GetElement(id) as FamilySymbol).FirstOrDefault();
+                                    output += ("Не найден тип " + menuItem.Name + ". Была произведена замена на тип" + type.Name + ".\n");
+                                    if (type != null && !type.IsActive)
+                                    {
+                                        type.Activate();
+                                        doc.Regenerate();
+                                    }
                                 }
                                 List<FamilyInstance> instances = new List<FamilyInstance>();
 

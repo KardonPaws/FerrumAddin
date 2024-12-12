@@ -207,7 +207,7 @@ namespace FerrumAddin
                 return;
 
             var xdoc = XDocument.Load(filePath);
-            var children = FamilyManager.Children;
+            var children = FMVisibility.Children;
             List<string> values = new List<string>();
             foreach (var child in children)
             {
@@ -226,10 +226,11 @@ namespace FerrumAddin
         }
         private void CreateCheckboxesFromXml()
         {
+            
             string filePath = App.TabPath;
             if (!System.IO.File.Exists(filePath))
                 return;
-
+            FMVisibility.Children.Clear();
             var xdoc = XDocument.Load(filePath);
             int i = 0;
             foreach (var tabItem in xdoc.Descendants("TabItem"))
@@ -243,7 +244,7 @@ namespace FerrumAddin
                     IsChecked = Convert.ToBoolean(tabItem.Element("Visibility")?.Value)
                 };
                 i++;
-                FamilyManager.Children.Add(checkBox);
+                FMVisibility.Children.Add(checkBox);
             }
         }
         public static string pathFam;
