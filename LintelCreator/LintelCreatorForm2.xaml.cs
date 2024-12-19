@@ -243,7 +243,7 @@ namespace FerrumAddin.LintelCreator
 
                         // 2. Проверка толщины стены
                         var wallThickness = (SelectedWallType?.Width * 304.8);
-                        if (Convert.ToDouble(parts[1]) > wallThickness) return false;
+                        if (Convert.ToDouble(parts[1]) != wallThickness) return false;
 
                         // 3. Размер пролёта
                         if (double.TryParse(parts[2], out double spanWidth))
