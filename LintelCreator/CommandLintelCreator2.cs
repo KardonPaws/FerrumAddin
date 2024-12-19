@@ -1,6 +1,7 @@
 ﻿using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
+using FerrumAddin.FM;
 using FerrumAddin.LintelCreator;
 using System;
 using System.Collections.Generic;
@@ -14,10 +15,13 @@ namespace FerrumAddin
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     class CommandLintelCreator2 : IExternalCommand
     {
+        public static ExternalEvent lintelCreateEvent;
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             Document doc = commandData.Application.ActiveUIDocument.Document;
             Selection sel = commandData.Application.ActiveUIDocument.Selection;
+
+            lintelCreateEvent = ExternalEvent.Create(new LintelCreate());
 
             List<ElementId> windowsAndDoorsSelectionIds = sel.GetElementIds().ToList();
             List<FamilyInstance> windowsAndDoorsList = new List<FamilyInstance>();
@@ -57,66 +61,45 @@ namespace FerrumAddin
                 return Result.Cancelled;
             }
 
-            LintelCreatorForm2 form = new LintelCreatorForm2(doc, list);
+            LintelCreatorForm2 form = new LintelCreatorForm2(doc, list, lintelFamilysList);
             form.Show();
            
             return Result.Succeeded;
         }
-
         private List<ParentElement> GroupWindowsAndDoors(List<FamilyInstance> windowsAndDoorsList, Document doc)
         {
-            // Группируем окна и двери по семействам
             var groupedElements = windowsAndDoorsList
-                .GroupBy(el => el.Symbol.FamilyName) // Группировка по имени семейства
+                .GroupBy(el => new
+                {
+                    el.Symbol.FamilyName, // Имя семейства
+                    el.Symbol.Name,       // Имя типа
+                    Width = el.LookupParameter("ADSK_Размер_Ширина")?.AsValueString()
+                })
                 .Select(group => new ParentElement
                 {
-                    Name = group.Key, // Имя семейства
-                    TypeName = group.First().Symbol.Name, // Имя типа семейства
-                    Width = group.First().get_Parameter(BuiltInParameter.WINDOW_WIDTH)?.AsValueString()
-                            ?? group.First().get_Parameter(BuiltInParameter.DOOR_WIDTH)?.AsValueString()
-                            ?? "Не указано", // Ширина окна/двери, если доступно
-                    ChildElements = new ObservableCollection<ChildElement>(
-                        group.Select(el =>
-                        {
-                            // Получаем информацию о стене-хозяине
-                            string wallType = "Неизвестный тип стены";
-                            if (el.Host is Wall hostWall)
-                            {
-                                // Получаем имя типа стены
-                                var wallTypeElement = doc.GetElement(hostWall.GetTypeId()) as ElementType;
-                                if (wallTypeElement != null)
-                                {
-                                    wallType = wallTypeElement.Name;
-                                }
-                            }
-
-                            return new ChildElement
-                            {
-                                WallType = wallType
-                            };
-                        }).ToList()
-                    ),
+                    Name = group.Key.FamilyName,
+                    TypeName = group.Key.Name,
+                    Width = group.First().LookupParameter("ADSK_Размер_Ширина")?.AsValueString(),
                     Walls = group
-                        .Where(el => el.Host is Wall) // Только элементы, у которых есть хозяин-стена
+                        .Where(el => el.Host is Wall)
                         .GroupBy(el =>
                         {
-                            // Используем существующие типы стен
-                            var hostWall = el.Host as Wall;
-                            if (hostWall == null)
-                                return null;
-
-                            return doc.GetElement(hostWall.GetTypeId()) as WallType;
+                            var wall = el.Host as Wall;
+                            return wall?.GetTypeId();
                         })
                         .Where(wallGroup => wallGroup.Key != null)
                         .ToDictionary(
-                            wallGroup => wallGroup.Key, // Тип стены
-                            wallGroup => wallGroup.ToList<Element>()
+                            wallGroup => doc.GetElement(wallGroup.Key) as WallType,
+                            wallGroup => wallGroup
+                                .Cast<Element>()
+                                .ToList()
                         )
                 })
                 .ToList();
 
             return groupedElements;
         }
+
 
 
 
@@ -134,6 +117,108 @@ namespace FerrumAddin
                 }
             }
             return tempLintelsList;
+        }
+    }
+
+    public class LintelCreate : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+            Document doc = app.ActiveUIDocument.Document;
+            UIDocument uidoc = app.ActiveUIDocument;
+
+            using (Transaction trans = new Transaction(doc, "Добавление перемычек"))
+            {
+                trans.Start();
+
+                try
+                {
+                    // Получение модели данных из окна
+                    var mainViewModel = LintelCreatorForm2.MainViewModel;
+                    if (mainViewModel == null)
+                    {
+                        TaskDialog.Show("Ошибка", "Не удалось получить данные из окна.");
+                        trans.RollBack();
+                        return;
+                    }
+
+                    // Получение выбранного семейства, типа и элемента
+                    var selectedFamily = mainViewModel.SelectedFamily;
+                    var selectedType = mainViewModel.SelectedType;
+                    var selectedParentElement = mainViewModel.SelectedParentElement;
+
+                    if (selectedFamily == null || selectedType == null || selectedParentElement == null)
+                    {
+                        TaskDialog.Show("Ошибка", "Пожалуйста, выберите семейство, тип перемычки и элемент.");
+                        trans.RollBack();
+                        return;
+                    }
+
+                    // Проверяем, активен ли выбранный тип
+                    if (!selectedType.IsActive)
+                    {
+                        selectedType.Activate();
+                        doc.Regenerate();
+                    }
+
+                    // Получение выбранного типа стены из радиокнопки
+                    var selectedWallType = mainViewModel.SelectedWallTypeName;
+                    if (selectedWallType == null || !selectedParentElement.Walls.Keys.Select(x=>x.Name).Contains(selectedWallType))
+                    {
+                        TaskDialog.Show("Ошибка", "Пожалуйста, выберите тип стены через радиобокс.");
+                        trans.RollBack();
+                        return;
+                    }
+
+                    // Получаем элементы, связанные с выбранной стеной
+                    foreach (var wallElements in selectedParentElement.Walls)
+                    {
+                        if (wallElements.Key.Name != selectedWallType)
+                            continue;
+                        List<Element> wallElement = wallElements.Value;  
+                        foreach (var element in wallElement)
+                        {
+                            FamilyInstance newLintel = null;
+
+                            // Получаем уровень текущего элемента
+                            Level level = doc.GetElement(element.LevelId) as Level;
+
+                            // Рассчитываем координаты для размещения перемычки
+                            BoundingBoxXYZ bb = element.get_BoundingBox(null);
+                            double height = bb.Max.Z - bb.Min.Z;
+                            XYZ locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
+
+                            // Создаем экземпляр перемычки
+                            newLintel = doc.Create.NewFamilyInstance(locationPoint, selectedType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
+
+                            // Проверяем ориентацию и выполняем поворот, если необходимо
+                            if (!(element as FamilyInstance).FacingOrientation.IsAlmostEqualTo(newLintel.FacingOrientation))
+                            {
+                                Line rotateAxis = Line.CreateBound((newLintel.Location as LocationPoint).Point, (newLintel.Location as LocationPoint).Point + 1 * XYZ.BasisZ);
+                                double u1 = (element as FamilyInstance).FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                double u2 = newLintel.FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                double rotateAngle = (u2 - u1);
+
+                                ElementTransformUtils.RotateElement(doc, newLintel.Id, rotateAxis, rotateAngle);
+                            }
+                        }
+                        break;
+                    }
+
+                    trans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Ошибка", ex.Message);
+                    trans.RollBack();
+                }
+            }
+        }
+
+
+        public string GetName()
+        {
+            return "xxx";
         }
     }
 }

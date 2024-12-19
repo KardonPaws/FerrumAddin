@@ -133,7 +133,7 @@ namespace FerrumAddin
         public static UIApplication uiapp;
         public static string name;
         public RibbonPanel panelMEP;
-        public RibbonPanel panelAR;
+        public RibbonPanel panelKR;
         public Result OnStartup(UIControlledApplication a)
         {
             application = a;
@@ -215,7 +215,7 @@ namespace FerrumAddin
             ComboBox cb = (items[1] as ComboBox);
             cb.AddItems(new List<ComboBoxMemberData>() { new ComboBoxMemberData("Common", "Общие"),
                                                                              new ComboBoxMemberData("Views", "Виды"),
-                                                                             new ComboBoxMemberData("AR", "АР"),
+                                                                             new ComboBoxMemberData("KR", "КР"),
                                                                              new ComboBoxMemberData("MEP", "MEP"),
                                                                              new ComboBoxMemberData("Control", "Управление")});
 
@@ -241,12 +241,12 @@ namespace FerrumAddin
 
             panelMEP.AddItem(MEPName);
 
-            panelAR = a.CreateRibbonPanel(tabName, "АР");
-            panelAR.Visible = false;
+            panelKR = a.CreateRibbonPanel(tabName, "КР");
+            panelKR.Visible = false;
 
             PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandLintelCreator2");
 
-            panelAR.AddItem(LintelCreator);
+            panelKR.AddItem(LintelCreator);
 
             FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;
@@ -368,15 +368,15 @@ namespace FerrumAddin
             {
                 case "MEP":
                     panelMEP.Visible = true;
-                    panelAR.Visible = false;
+                    panelKR.Visible = false;
                     break;
-                case "АР":
+                case "КР":
                     panelMEP.Visible = false;
-                    panelAR.Visible = true;
+                    panelKR.Visible = true;
                     break;
                 default:
                     panelMEP.Visible=false;
-                    panelAR.Visible = false;
+                    panelKR.Visible = false;
                     break;
             }
         }
