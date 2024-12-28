@@ -16,12 +16,22 @@ namespace FerrumAddin
     class CommandLintelCreator2 : IExternalCommand
     {
         public static ExternalEvent lintelCreateEvent;
+        public static ExternalEvent lintelNumerateEvent;
+        public static ExternalEvent nestedElementsNumberingEvent;
+        public static ExternalEvent createSectionsEvent;
+        public static ExternalEvent tagLintelsEvent;
+
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             Document doc = commandData.Application.ActiveUIDocument.Document;
             Selection sel = commandData.Application.ActiveUIDocument.Selection;
 
             lintelCreateEvent = ExternalEvent.Create(new LintelCreate());
+            lintelNumerateEvent = ExternalEvent.Create(new LintelNumerate());
+            nestedElementsNumberingEvent = ExternalEvent.Create(new NestedElementsNumbering());
+            createSectionsEvent = ExternalEvent.Create(new CreateSectionsForLintels());
+            tagLintelsEvent = ExternalEvent.Create(new TagLintels());
+
 
             List<ElementId> windowsAndDoorsSelectionIds = sel.GetElementIds().ToList();
             List<FamilyInstance> windowsAndDoorsList = new List<FamilyInstance>();
@@ -117,6 +127,318 @@ namespace FerrumAddin
                 }
             }
             return tempLintelsList;
+        }
+    }
+
+    public class LintelNumerate : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+            Document doc = app.ActiveUIDocument.Document;
+
+            using (Transaction trans = new Transaction(doc, "Нумерация элементов"))
+            {
+                trans.Start();
+
+                try
+                {
+                    // Сбор всех элементов категории OST_StructuralFraming
+                    var framingElements = new FilteredElementCollector(doc)
+                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                        .WhereElementIsNotElementType()
+                        .Cast<FamilyInstance>()
+                .Where(f => (doc.GetElement(f.Symbol.Id)).get_Parameter(BuiltInParameter.ALL_MODEL_MODEL).AsString() == "Перемычки составные")
+                        .ToList();
+
+                    // Группировка элементов по типу
+                    var groupedElements = framingElements.GroupBy(el => el.Symbol.Id);
+
+                    // Нумерация групп
+                    int positionCounter = 1;
+                    foreach (var group in groupedElements)
+                    {
+                        string positionValue = $"Пр-{positionCounter}";
+
+                        foreach (var element in group)
+                        {
+                            // Назначение значения параметру ADSK_Позиция
+                            var positionParam = element.LookupParameter("ADSK_Позиция");
+                            if (positionParam != null && positionParam.IsReadOnly == false)
+                            {
+                                positionParam.Set(positionValue);
+                            }
+                        }
+
+                        positionCounter++;
+                    }
+
+                    trans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Ошибка", ex.Message);
+                    trans.RollBack();
+                }
+            }
+        }
+
+        public string GetName()
+        {
+            return "Нумерация перемычек";
+        }
+    }
+
+    public class NestedElementsNumbering : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+            Document doc = app.ActiveUIDocument.Document;
+
+            using (Transaction trans = new Transaction(doc, "Нумерация вложенных элементов"))
+            {
+                trans.Start();
+
+                try
+                {
+                    // Сбор всех элементов категории OST_StructuralFraming
+                    var framingElements = new FilteredElementCollector(doc)
+                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                        .WhereElementIsNotElementType()
+                        .Cast<FamilyInstance>()
+                .Where(f => (doc.GetElement(f.Symbol.Id)).get_Parameter(BuiltInParameter.ALL_MODEL_MODEL).AsString() == "Перемычки составные")
+                        .ToList();
+
+                    foreach (var element in framingElements)
+                    {
+                        if (element.SuperComponent == null)
+                        {
+                            var subElements = element.GetSubComponentIds();
+                            if (subElements.Count == 0)
+                            {
+                                // no nested families
+                                continue;
+                            }
+                            else
+                            {
+                                // has nested families
+                                int nestedCounter = 1;
+                                foreach (var aSubElemId in subElements)
+                                {
+                                    var nestedElement = doc.GetElement(aSubElemId);
+                                    if (nestedElement is FamilyInstance)
+                                    {
+                                        var positionParam = nestedElement.LookupParameter("ADSK_Позиция");
+                                        if (positionParam != null && positionParam.IsReadOnly == false)
+                                        {
+                                            positionParam.Set(nestedCounter.ToString());
+                                        }
+                                        nestedCounter++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    trans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Ошибка", ex.Message);
+                    trans.RollBack();
+                }
+            }
+        }
+
+        public string GetName()
+        {
+            return "Нумерация вложенных элементов перемычек";
+        }
+    }
+
+    public class CreateSectionsForLintels : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+            Document doc = app.ActiveUIDocument.Document;
+
+            using (Transaction trans = new Transaction(doc, "Создание разрезов для перемычек"))
+            {
+                trans.Start();
+
+                try
+                {
+                    // Получение всех перемычек
+                    var framingElements = new FilteredElementCollector(doc)
+                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                        .WhereElementIsNotElementType()
+                        .Cast<FamilyInstance>()
+                                        .Where(f => (doc.GetElement(f.Symbol.Id)).get_Parameter(BuiltInParameter.ALL_MODEL_MODEL).AsString() == "Перемычки составные")
+                        .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
+                        .ToList();
+
+                    // Группировка перемычек по параметру ADSK_Позиция
+                    var groupedElements = framingElements.GroupBy(el => el.LookupParameter("ADSK_Позиция").AsString());
+
+                    // Шаблон для разрезов
+                    ViewFamilyType sectionViewType = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ViewFamilyType))
+                    .Cast<ViewFamilyType>()
+                    .FirstOrDefault<ViewFamilyType>(x =>
+                      ViewFamily.Section == x.ViewFamily);
+
+                    ViewSection viewSection = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ViewSection))
+                    .OfType<ViewSection>()
+                    .FirstOrDefault(vt => vt.Name == "4_К_Пр");
+
+                    if (sectionViewType == null)
+                    {
+                        TaskDialog.Show("Ошибка", "Не найден шаблон разреза '4_К_Пр'.");
+                        trans.RollBack();
+                        return;
+                    }
+
+                    // Создание разрезов для каждой уникальной группы
+                    foreach (var group in groupedElements)
+                    {
+                        var firstElement = group.FirstOrDefault();
+                        if (firstElement == null) continue;
+
+                        // Определение центра перемычки
+                        XYZ center = (firstElement.Location as LocationPoint).Point;
+
+                        // Определение размера разреза
+                        BoundingBoxXYZ boundingBox = firstElement.get_BoundingBox(null);
+                        double width = boundingBox.Max.X - boundingBox.Min.X;
+                        double height = boundingBox.Max.Z - boundingBox.Min.Z;
+
+                        // Создание разреза
+                        ViewSection section = ViewSection.CreateSection(doc, sectionViewType.Id, boundingBox);
+                        if (section == null)
+                            continue;
+
+                        // Настройка размеров разреза, неправильно строит, изменить
+                        BoundingBoxXYZ sectionBox = section.get_BoundingBox(null);
+                        sectionBox.Min = new XYZ(-width / 2, -height / 2, 0);
+                        sectionBox.Max = new XYZ(width / 2, height / 2, 0);
+                        section.CropBox = (sectionBox);
+
+                        // Установка имени разреза
+                        string positionName = firstElement.LookupParameter("ADSK_Позиция").AsString();
+                        section.Name = positionName;
+                        section.LookupParameter("Шаблон вида").Set(viewSection.Id);
+                    }
+
+                    trans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Ошибка", ex.Message);
+                    trans.RollBack();
+                }
+            }
+        }
+
+        public string GetName()
+        {
+            return "Создание разрезов для уникальных перемычек";
+        }
+    }
+
+    public class TagLintels : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+            Document doc = app.ActiveUIDocument.Document;
+            UIDocument uidoc = app.ActiveUIDocument;
+
+            using (Transaction trans = new Transaction(doc, "Маркировка перемычек"))
+            {
+                trans.Start();
+
+                try
+                {
+                    // Сбор всех перемычек
+                    var lintelInstances = new FilteredElementCollector(doc, doc.ActiveView.Id)
+                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                        .WhereElementIsNotElementType()
+                        .Cast<FamilyInstance>()
+                                        .Where(f => (doc.GetElement(f.Symbol.Id)).get_Parameter(BuiltInParameter.ALL_MODEL_MODEL).AsString() == "Перемычки составные")
+                        .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
+                        .ToList();
+
+                    if (lintelInstances.Count == 0)
+                    {
+                        TaskDialog.Show("Ошибка", "Не найдено ни одной перемычки для маркировки.");
+                        trans.RollBack();
+                        return;
+                    }
+
+                    // Поиск типа марки
+                    var tagType = new FilteredElementCollector(doc)
+                        .OfClass(typeof(FamilySymbol))
+                        .OfType<FamilySymbol>().FirstOrDefault(tag => tag.FamilyName == "Марка несущего каркаса");
+                        //.FirstOrDefault(tag => tag.FamilyName == "ADSK_Марка_Балка" && tag.Name == "Экземпляр_ADSK_Позиция");
+
+                    if (tagType == null)
+                    {
+                        TaskDialog.Show("Ошибка", "Не найден тип марки 'Экземпляр_ADSK_Позиция' для семейства 'ADSK_Марка_Балка'.");
+                        trans.RollBack();
+                        return;
+                    }
+
+                    // Активируем тип марки, если не активирован
+                    if (!tagType.IsActive)
+                    {
+                        tagType.Activate();
+                        doc.Regenerate();
+                    }
+
+                    // Маркировка всех перемычек
+                    foreach (var lintel in lintelInstances)
+                    {
+                        // Получение центра перемычки
+                        BoundingBoxXYZ boundingBox = lintel.get_BoundingBox(null);
+                        if (boundingBox == null) continue;
+
+                        //Изменить логику простановки (сейчас поверх перемычки)
+                        XYZ centerTop = new XYZ(
+                            (boundingBox.Min.X + boundingBox.Max.X) / 2,
+                            (boundingBox.Min.Y + boundingBox.Max.Y) / 2,
+                            boundingBox.Max.Z
+                        );
+
+                        // Создание марки
+                        IndependentTag newTag = IndependentTag.Create(
+                            doc,
+                            tagType.Id,
+                            doc.ActiveView.Id,
+                            new Reference(lintel),
+                            false,
+                            TagOrientation.Horizontal,
+                            centerTop
+                        );
+
+                        if (newTag == null)
+                        {
+                            TaskDialog.Show("Ошибка", "Не удалось создать марку для перемычки.");
+                            continue;
+                        }
+                    }
+
+                    trans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    TaskDialog.Show("Ошибка", ex.Message);
+                    trans.RollBack();
+                }
+            }
+        }
+
+        public string GetName()
+        {
+            return "Маркировка перемычек";
         }
     }
 

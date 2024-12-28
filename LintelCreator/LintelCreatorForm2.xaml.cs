@@ -105,6 +105,26 @@ namespace FerrumAddin.LintelCreator
         {
             CommandLintelCreator2.lintelCreateEvent.Raise();
         }
+
+        private void Button_Click_1(object sender, RoutedEventArgs e)
+        {
+            CommandLintelCreator2.lintelNumerateEvent.Raise();
+        }
+
+        private void Button_Click_2(object sender, RoutedEventArgs e)
+        {
+            CommandLintelCreator2.nestedElementsNumberingEvent.Raise();
+        }
+
+        private void Button_Click_3(object sender, RoutedEventArgs e)
+        {
+            CommandLintelCreator2.createSectionsEvent.Raise();
+        }
+
+        private void Button_Click_4(object sender, RoutedEventArgs e)
+        {
+            CommandLintelCreator2.tagLintelsEvent.Raise();
+        }
     }
 
     public class MainViewModel : INotifyPropertyChanged
@@ -242,7 +262,7 @@ namespace FerrumAddin.LintelCreator
                         if (IsBrick85Checked && parts[0] != "88") return false;
 
                         // 2. Проверка толщины стены
-                        var wallThickness = (SelectedWallType?.Width * 304.8);
+                        var wallThickness = Math.Round((double)(SelectedWallType?.Width * 304.8));
                         if (Convert.ToDouble(parts[1]) != wallThickness) return false;
 
                         // 3. Размер пролёта
