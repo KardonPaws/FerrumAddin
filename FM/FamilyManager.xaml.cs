@@ -25,6 +25,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Xml.Linq;
+using static Autodesk.Revit.DB.SpecTypeId;
 using Button = System.Windows.Controls.Button;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using TabControl = System.Windows.Controls.TabControl;
@@ -467,7 +468,7 @@ namespace FerrumAddin
 
                         try
                         {
-                            projectVersion = GetFamilyVersionFromProject(family).Substring(1);
+                            projectVersion = GetFamilyVersionFromProject(family);
                         }
                         catch
                         {
@@ -490,7 +491,7 @@ namespace FerrumAddin
                             }
                         }
 
-                        string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily).Substring(1);
+                        string loadedFamilyVersion = GetFamilyVersionFromLoadedFamily(loadedFamily);
                         loadedFamily.Close(false);
                         CompareVersions(projectVersion, loadedFamilyVersion, matchingMenuItem, outdatedItems, newerItems);
                     }
@@ -578,15 +579,21 @@ namespace FerrumAddin
         {
             try
             {
+                projectVersion = Regex.Replace(projectVersion, @"[^\d\.]", "");
+                loadedFamilyVersion = Regex.Replace(loadedFamilyVersion, @"[^\d\.]", "");
                 // Разделение версии на основные и дополнительные номера
                 var projectParts = projectVersion.Split('.');
                 var loadedParts = loadedFamilyVersion.Split('.');
 
-                // Преобразование в числа для сравнения
-                int projectMajor = int.Parse(projectParts[0]);
-                int projectMinor = projectParts.Length > 1 ? int.Parse(projectParts[1]) : 0;
-                int loadedMajor = int.Parse(loadedParts[0]);
-                int loadedMinor = loadedParts.Length > 1 ? int.Parse(loadedParts[1]) : 0;
+
+                        int projectMajor = int.Parse(projectParts[0]);
+
+                        int projectMinor = int.Parse(projectParts[1]);
+
+                        int loadedMajor = int.Parse(loadedParts[0]);
+
+                        int loadedMinor = int.Parse(loadedParts[1]);
+
 
                 // Сравнение версии
                 if (projectMajor > loadedMajor || (projectMajor == loadedMajor && projectMinor > loadedMinor))

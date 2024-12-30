@@ -236,17 +236,24 @@ namespace FerrumAddin.FM
                 if (settings != null)
                 {
                     MenuCategoryFilters.Clear();
+                    foreach (var category in allCategoriesMenu)
+                    {
+                        MenuCategoryFilters.Add(new CategoryFilter() { CategoryName = category, IsChecked = true });
+                    }
                     foreach (var filter in settings.MenuCategoryFilters)
                     {
                         if (allCategoriesMenu.Contains(filter.CategoryName))
-                            MenuCategoryFilters.Add(filter);
+                            MenuCategoryFilters.Where(x=> x.CategoryName == filter.CategoryName).First().IsChecked = filter.IsChecked;
                     }
-
                     FamilyCategoryFilters.Clear();
+                    foreach (var category in allCategoriesRevit)
+                    {
+                        FamilyCategoryFilters.Add(new CategoryFilter() { CategoryName = category, IsChecked = true });
+                    }
                     foreach (var filter in settings.FamilyCategoryFilters)
                     {
                         if (allCategoriesRevit.Contains(filter.CategoryName))
-                            FamilyCategoryFilters.Add(filter);
+                            FamilyCategoryFilters.Where(x => x.CategoryName == filter.CategoryName).First().IsChecked = filter.IsChecked;
                     }
                     this.Height = settings.Height;
                     this.Width = settings.Width;

@@ -125,6 +125,20 @@ namespace FerrumAddin.LintelCreator
         {
             CommandLintelCreator2.tagLintelsEvent.Raise();
         }
+
+        private void CheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+            if (check)
+            {
+                check = false;
+            }
+            else
+            {
+                check = true;
+            }
+        }
+
+        public static bool check = false;
     }
 
     public class MainViewModel : INotifyPropertyChanged
