@@ -97,6 +97,7 @@
       <DependentUpon>ComparisonWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="FM\ComparisonWindowShow.cs" />
+    <Compile Include="FM\ComparisonWindowShow2.cs" />
     <Compile Include="FM\FamilyManagerShow.cs" />
     <Compile Include="FM\FamilyManager.xaml.cs">
       <DependentUpon>FamilyManager.xaml</DependentUpon>

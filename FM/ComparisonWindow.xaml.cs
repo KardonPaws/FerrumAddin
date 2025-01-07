@@ -423,7 +423,7 @@ namespace FerrumAddin.FM
             selFam = SelectedFamilies.ToList();
             selMen = SelectedMenuItems.ToList();
             SaveSettings();
-            ComparisonWindowShow.changeTypesEv.Raise();
+            ComparisonWindowShow2.changeTypesEv.Raise();
             this.Close();
         }
 
