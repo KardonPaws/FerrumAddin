@@ -251,7 +251,9 @@ namespace FerrumAddin
                         .Cast<FamilyInstance>()
                 .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
                         .ToList();
-
+                    Dictionary<string, int> dict = new Dictionary<string, int>();
+                    int nestedCounter = 1;
+                    Dictionary<string, List<Element>> nestedNames = new Dictionary<string, List<Element>>();
                     foreach (var element in framingElements)
                     {
                         if (element.SuperComponent == null)
@@ -265,22 +267,51 @@ namespace FerrumAddin
                             else
                             {
                                 // has nested families
-                                int nestedCounter = 1;
                                 foreach (var aSubElemId in subElements)
                                 {
                                     var nestedElement = doc.GetElement(aSubElemId);
                                     if (nestedElement is FamilyInstance)
                                     {
-                                        var positionParam = nestedElement.LookupParameter("ADSK_Позиция");
-                                        if (positionParam != null && positionParam.IsReadOnly == false)
+                                        if (nestedNames.Keys.Contains(nestedElement.Name))
                                         {
-                                            positionParam.Set(nestedCounter.ToString());
+                                            nestedNames[nestedElement.Name].Add(nestedElement);
                                         }
-                                        nestedCounter++;
+                                        else
+                                        {
+                                            nestedNames.Add(nestedElement.Name, new List<Element> { nestedElement });
+                                        }
+                                        //var positionParam = nestedElement.LookupParameter("ADSK_Позиция");
+                                        //if (positionParam != null && positionParam.IsReadOnly == false)
+                                        //{
+                                        //    if (dict.Keys.Contains(nestedElement.Name))
+                                        //    {
+                                        //        positionParam.Set(dict[nestedElement.Name].ToString());
+                                        //    }
+                                        //    else
+                                        //    {
+                                        //        positionParam.Set(nestedCounter.ToString());
+                                        //        dict.Add(nestedElement.Name, nestedCounter);
+                                        //        nestedCounter++;
+                                        //    }
+                                        //}
+                                        //nestedCounter++;
                                     }
                                 }
                             }
                         }
+                    }
+                    nestedNames = nestedNames.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
+                    foreach (var nestedElement in nestedNames.Values)
+                    {
+                        foreach (var el in nestedElement)
+                        {
+                            var positionParam = el.LookupParameter("ADSK_Позиция");
+                            if (positionParam != null && positionParam.IsReadOnly == false)
+                            {
+                                positionParam.Set(nestedCounter.ToString());
+                            }
+                        }
+                        nestedCounter++;
                     }
 
                     trans.Commit();
@@ -642,11 +673,12 @@ namespace FerrumAddin
 
                             // Рассчитываем координаты для размещения перемычки
                             BoundingBoxXYZ bb = element.get_BoundingBox(null);
-                            double height = bb.Max.Z - bb.Min.Z;
+                            double height = element.LookupParameter("ADSK_Размер_Высота").AsDouble();
                             XYZ locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
 
                             // Создаем экземпляр перемычки
                             newLintel = doc.Create.NewFamilyInstance(locationPoint, selectedType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
+                            XYZ translation = new XYZ(0, wallElements.Key.Width/2, 0);
 
                             // Проверяем ориентацию и выполняем поворот, если необходимо
                             if (!(element as FamilyInstance).FacingOrientation.IsAlmostEqualTo(newLintel.FacingOrientation))
@@ -657,7 +689,11 @@ namespace FerrumAddin
                                 double rotateAngle = (u2 - u1);
 
                                 ElementTransformUtils.RotateElement(doc, newLintel.Id, rotateAxis, rotateAngle);
+
+                                translation = new XYZ(wallElements.Key.Width/2, 0, 0);
                             }
+                            ElementTransformUtils.MoveElement(doc, newLintel.Id, translation);
+
                         }
                         break;
                     }

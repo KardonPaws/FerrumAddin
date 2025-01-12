@@ -81,6 +81,7 @@ namespace FerrumAddin.FM
                                 familySymbol.Activate();
                                 doc.Regenerate();
                             }
+                            family.Name = menuItem.FamilyName;
                         }
 
                         File.Delete(tempFilePath);
@@ -134,23 +135,6 @@ namespace FerrumAddin.FM
             output = output == "" ? "Выполнено" : output;
             App.AllowLoad = false;
             TaskDialog.Show("Отчет", output);
-        }
-
-        private void ApplyTypeParameters(ElementType source, ElementType target)
-        {
-            foreach (Parameter sourceParam in source.Parameters)
-            {
-                if (!sourceParam.IsReadOnly)
-                {
-                    Parameter targetParam = target.LookupParameter(sourceParam.Definition.Name);
-
-                    if (targetParam != null && targetParam.StorageType == sourceParam.StorageType)
-                    {
-                        object value = GetParameterValue(sourceParam);
-                        SetParameterValue(targetParam, value);
-                    }
-                }
-            }
         }
 
         private void ApplyWallStructureParameters(Document sourceDoc, ElementType source, ElementType target)
