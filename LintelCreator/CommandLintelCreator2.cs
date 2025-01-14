@@ -144,14 +144,16 @@ namespace FerrumAddin
                 {
                     // Сбор всех элементов категории OST_StructuralFraming
                     var framingElements = new FilteredElementCollector(doc)
-                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
-                        .WhereElementIsNotElementType()
-                        .Cast<FamilyInstance>()
-                .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
-                        .ToList();
+                    .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                    .WhereElementIsNotElementType()
+                    .Cast<FamilyInstance>()
+                    .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
+                    .OrderBy(f => f.Symbol.Name) // Сортировка элементов по имени символа
+                    .ToList();
 
-                    // Группировка элементов по типу
-                    var groupedElements = framingElements.GroupBy(el => el.Symbol.Id);
+                    // Группировка элементов по символу
+                    var groupedElements = framingElements.GroupBy(el => el.Symbol.Id)
+                                                         .OrderBy(group => doc.GetElement(group.Key).Name);
 
                     if (check)
                     {
@@ -615,6 +617,13 @@ namespace FerrumAddin
             Document doc = app.ActiveUIDocument.Document;
             UIDocument uidoc = app.ActiveUIDocument;
 
+            FilteredElementCollector levelCollector = new FilteredElementCollector(doc);
+            var levels = levelCollector.OfClass(typeof(Level))
+                                       .Cast<Level>()
+                                       .Where(l => l.Elevation >= 0)
+                                       .OrderBy(l => l.Elevation)
+                                       .ToList().Select(x =>x.Elevation).ToList();
+
             using (Transaction trans = new Transaction(doc, "Добавление перемычек"))
             {
                 trans.Start();
@@ -693,6 +702,9 @@ namespace FerrumAddin
                                 translation = new XYZ(wallElements.Key.Width/2, 0, 0);
                             }
                             ElementTransformUtils.MoveElement(doc, newLintel.Id, translation);
+                            newLintel.LookupParameter("ADSK_Группирование").Set("Пр");
+                            int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
+                            newLintel.LookupParameter("ZH_Этаж_Числовой").Set(intLev);
 
                         }
                         break;
