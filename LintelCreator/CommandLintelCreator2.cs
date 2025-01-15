@@ -459,6 +459,7 @@ namespace FerrumAddin
                         else
                             section.Name = positionName + " выше 0.000";
                         section.LookupParameter("Шаблон вида").Set(viewSection.Id);
+                        section.LookupParameter("Масштаб вида").Set(20);
                     }
 
                     trans.Commit();
@@ -702,9 +703,9 @@ namespace FerrumAddin
                                 translation = new XYZ(wallElements.Key.Width/2, 0, 0);
                             }
                             ElementTransformUtils.MoveElement(doc, newLintel.Id, translation);
-                            newLintel.LookupParameter("ADSK_Группирование").Set("Пр");
+                            newLintel.LookupParameter("ADSK_Группирование").Set("ПР");
                             int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
-                            newLintel.LookupParameter("ZH_Этаж_Числовой").Set(intLev);
+                            newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
 
                         }
                         break;
