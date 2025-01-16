@@ -552,7 +552,7 @@ namespace FerrumAddin
                         //Изменить логику простановки (сейчас поверх перемычки)
                         XYZ centerTop = new XYZ(
                             (boundingBox.Min.X + boundingBox.Max.X) / 2,
-                            (boundingBox.Max.Y + 495/304.8),
+                            (boundingBox.Max.Y + 495 / 304.8),
                             boundingBox.Max.Z
                         );
 
@@ -579,20 +579,29 @@ namespace FerrumAddin
                             boundingBox.Max.Z
                         );
 
-                        // Создание марки
-                        //SpotDimension newTag2 = doc.Create.NewSpotElevation(
-                        //    doc.ActiveView,
-                        //    lintel.Location,
-                            
-                        //);
+                        // Создание высотной отметки
+                        Reference ref_ = null;
+                        ref_ = lintel.GetReferences(FamilyInstanceReferenceType.Bottom).First();
+                        
+                        SpotDimension newTag2 = doc.Create.NewSpotElevation(
+                            doc.ActiveView,
+                            ref_,
+                            (lintel.Location as LocationPoint).Point,
+                            ((lintel.Location as LocationPoint).Point + centerTop)/2,
+                            centerTop,
+                            new XYZ(0,0,0),
+                            false
 
-                        //if (newTag2 == null)
-                        //{
-                        //    TaskDialog.Show("Ошибка", "Не удалось создать высотную отметку для перемычки.");
-                        //    continue;
-                        //}
+                        );
 
-                        //newTag2.SpotDimensionType = tagType2;
+                        if (newTag2 == null)
+                        {
+                            TaskDialog.Show("Ошибка", "Не удалось создать высотную отметку для перемычки.");
+                            continue;
+                        }
+
+                        newTag2.SpotDimensionType = tagType2;
+                        (newTag2 as Dimension).TextPosition = (lintel.Location as LocationPoint).Point + 0.5 * XYZ.BasisY;
                     }
 
                     trans.Commit();
