@@ -9,6 +9,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Controls;
 
 namespace FerrumAddin
 {
@@ -20,6 +21,7 @@ namespace FerrumAddin
         public static ExternalEvent nestedElementsNumberingEvent;
         public static ExternalEvent createSectionsEvent;
         public static ExternalEvent tagLintelsEvent;
+        public static ExternalEvent placeSectionsEvent;
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -31,6 +33,7 @@ namespace FerrumAddin
             nestedElementsNumberingEvent = ExternalEvent.Create(new NestedElementsNumbering());
             createSectionsEvent = ExternalEvent.Create(new CreateSectionsForLintels());
             tagLintelsEvent = ExternalEvent.Create(new TagLintels());
+            placeSectionsEvent = ExternalEvent.Create(new PlaceSections());
 
 
             List<ElementId> windowsAndDoorsSelectionIds = sel.GetElementIds().ToList();
@@ -127,6 +130,88 @@ namespace FerrumAddin
                 }
             }
             return tempLintelsList;
+        }
+    }
+
+    public class PlaceSections : IExternalEventHandler
+    {
+        public void Execute(UIApplication uiApp)
+        {
+            Document doc = uiApp.ActiveUIDocument.Document;
+
+            ViewSheet activeSheet = doc.ActiveView as ViewSheet;
+            if (activeSheet == null)
+            {
+                TaskDialog.Show("Ошибка", "Активный вид не является листом.");
+                return;
+            }
+
+            using (Transaction trans = new Transaction(doc, "Размещение разрезов"))
+            {
+                trans.Start();
+
+                // Получение всех ScheduleSheetInstance на активном листе
+                var scheduleInstances = new FilteredElementCollector(doc, activeSheet.Id)
+                    .OfClass(typeof(ScheduleSheetInstance))
+                    .Cast<ScheduleSheetInstance>()
+                    .ToList();
+
+                // Группировка ScheduleSheetInstance по имени ведомости
+                var scheduleGroups = scheduleInstances
+                    .GroupBy(s => doc.GetElement(s.ScheduleId).Name)
+                    .ToDictionary(g => g.Key, g => g.OrderBy(s => s.SegmentIndex).ToList());
+
+                // Получение всех разрезов из документа
+                var sections = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ViewSection))
+                    .Cast<ViewSection>()
+                    .ToList();
+
+                // Фильтрация разрезов по именам ("выше 0" или "ниже 0")
+                var sectionsAbove = sections.Where(s => s.Name.Contains("выше 0")).ToList();
+                var sectionsBelow = sections.Where(s => s.Name.Contains("ниже 0")).ToList();
+
+                // Размещение разрезов на листе
+                placeSections(doc, sectionsAbove, scheduleGroups, "Ведомость_Пр_выше 0,00");
+                placeSections(doc, sectionsBelow, scheduleGroups, "Ведомость_Пр_ниже 0,00");
+
+                trans.Commit();
+            }
+        }
+
+        private void placeSections(Document doc, List<ViewSection> sections,
+        Dictionary<string, List<ScheduleSheetInstance>> scheduleGroups, string scheduleName)
+        {
+            if (!scheduleGroups.ContainsKey(scheduleName)) return;
+            ElementId elId = new FilteredElementCollector(doc)
+                .OfClass(typeof(ElementType))
+                .Where(x => (x as ElementType).FamilyName == "Видовой экран")
+                .Where(x => x.Name == "Без названия")
+                .First().Id;
+
+            var scheduleInstances = scheduleGroups[scheduleName];
+            int sectionIndex = 0;
+
+            // Использовать только первую ScheduleSheetInstance для размещения
+            if (scheduleInstances.Count > 0)
+            {
+                var scheduleInstance = scheduleInstances.First();
+                XYZ basePoint = scheduleInstance.Point;
+                double yOffset = 0;
+
+                foreach (var section in sections)
+                {
+                    // Разместить разрез на листе
+                    Viewport view = Viewport.Create(doc, doc.ActiveView.Id, section.Id, new XYZ(basePoint.X + 0.16, basePoint.Y - 0.15 - yOffset, basePoint.Z));
+                    view.ChangeTypeId(elId);
+                    yOffset += 0.166; // Смещение для следующего разреза
+                }
+            }
+        }
+
+        public string GetName()
+        {
+            return "Размещение разрезов";
         }
     }
 
@@ -624,6 +709,7 @@ namespace FerrumAddin
     {
         public void Execute(UIApplication app)
         {
+            string output = "";
             Document doc = app.ActiveUIDocument.Document;
             UIDocument uidoc = app.ActiveUIDocument;
 
@@ -690,8 +776,48 @@ namespace FerrumAddin
                             // Получаем уровень текущего элемента
                             Level level = doc.GetElement(element.LevelId) as Level;
 
-                            // Рассчитываем координаты для размещения перемычки
+                            // Рассчитываем BoundingBox текущего элемента
                             BoundingBoxXYZ bb = element.get_BoundingBox(null);
+                            if (bb == null) continue;
+
+                            XYZ minPoint = bb.Min;
+                            XYZ maxPoint = bb.Max;
+
+                            // Увеличиваем BoundingBox вверх для поиска перемычки
+                            XYZ searchMinPoint = new XYZ(minPoint.X, minPoint.Y, maxPoint.Z);
+                            XYZ searchMaxPoint = new XYZ(maxPoint.X, maxPoint.Y, maxPoint.Z + 100/304.8); // 100 мм вверх
+
+                            Outline searchOutline = new Outline(searchMinPoint, searchMaxPoint);
+                            BoundingBoxIntersectsFilter searchFilter = new BoundingBoxIntersectsFilter(searchOutline);
+
+                            // Поиск существующих перемычек
+                            FilteredElementCollector lintelCollector = new FilteredElementCollector(doc)
+                                .OfClass(typeof(FamilyInstance))
+                                .WherePasses(searchFilter);
+                            List<ElementId> listToDel = new List<ElementId>();
+                            // Если есть существующая перемычка, пропускаем создание новой
+                            if (lintelCollector.Any(x=>x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
+                            {
+                                if (LintelCreatorForm2.recreate)
+                                {
+                                    foreach (Element e in lintelCollector.Where(x=> x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
+                                    {
+                                            listToDel.Add(e.Id);
+                                    }
+                                }
+                                else
+                                {
+                                    output += "У элемента " + element.Id + " уже создана перемычка, создание пропущено\n";
+                                    continue;
+                                }
+                                
+                            }
+                            
+                            foreach (ElementId id in listToDel.Distinct())
+                            {
+                                if (doc.GetElement(id) != null)
+                                doc.Delete(id);
+                            }    
                             double height = element.LookupParameter("ADSK_Размер_Высота").AsDouble();
                             XYZ locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
 
@@ -715,7 +841,7 @@ namespace FerrumAddin
                             newLintel.LookupParameter("ADSK_Группирование").Set("ПР");
                             int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
                             newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
-
+                            newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
                         }
                         break;
                     }

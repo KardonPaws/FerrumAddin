@@ -139,6 +139,24 @@ namespace FerrumAddin.LintelCreator
         }
 
         public static bool check = false;
+
+        private void CheckBox_Checked_1(object sender, RoutedEventArgs e)
+        {
+            if (recreate)
+            {
+                recreate = false;
+            }
+            else
+            {
+                recreate = true;
+            }
+        }
+        public static bool recreate = false;
+
+        private void Button_Click_5(object sender, RoutedEventArgs e)
+        {
+            CommandLintelCreator2.placeSectionsEvent.Raise();
+        }
     }
 
     public class MainViewModel : INotifyPropertyChanged
