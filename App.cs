@@ -228,7 +228,7 @@ namespace FerrumAddin
 
             panelFerrum.AddItem(FamilyManager);
 
-            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FM.ComparisonWindowShow2");
+            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FM.ComparisonWindowShow");
             Comparison.Image = Convert(Properties.Resources.FamilyManager);
             Comparison.LargeImage = Convert(Properties.Resources.FamilyManager);          
 

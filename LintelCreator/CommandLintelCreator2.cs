@@ -500,7 +500,7 @@ namespace FerrumAddin
                         XYZ crossDirection = direction.CrossProduct(upDirection).Negate();
 
                         // Определение центра перемычки
-                        XYZ center = (firstElement.get_BoundingBox(null).Max + firstElement.get_BoundingBox(null).Min)/2;
+                        XYZ center = (firstElement.get_BoundingBox(null).Max + (firstElement.get_BoundingBox(null).Min + XYZ.BasisZ*2000/304.8))/2;
 
                         Transform t = Transform.Identity;
                         t.Origin = center;
@@ -515,7 +515,7 @@ namespace FerrumAddin
                         // Размеры элемента
                         double elementWidth = firstElement.get_BoundingBox(null).Max.X - firstElement.get_BoundingBox(null).Min.X;
                         double elementHeight = firstElement.get_BoundingBox(null).Max.Y - firstElement.get_BoundingBox(null).Min.Y;
-                        double elementDepth = firstElement.get_BoundingBox(null).Max.Z - firstElement.get_BoundingBox(null).Min.Z;
+                        double elementDepth = firstElement.get_BoundingBox(null).Max.Z - firstElement.get_BoundingBox(null).Min.Z - 1900/304.8;
                         
                         BoundingBoxXYZ boundingBox = new BoundingBoxXYZ();
                         boundingBox.Transform = t;
