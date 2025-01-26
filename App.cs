@@ -411,7 +411,8 @@ namespace FerrumAddin
             { "Витражи", BuiltInCategory.OST_Walls },
             { "Крыши" , BuiltInCategory.OST_Roofs},
             { "Ограждения" , BuiltInCategory.OST_StairsRailing},
-            { "Пандусы", BuiltInCategory.OST_Ramps }
+            { "Пандусы", BuiltInCategory.OST_Ramps },
+            {"Материалы", BuiltInCategory.OST_Materials }
         };
 
             Document docToCopy = FamilyManagerWindow.doc;
@@ -489,12 +490,24 @@ namespace FerrumAddin
                 {
                     Document document = app.Application.OpenDocumentFile(tab.Path);
                     documents.Add(document);
-                    List<ElementId> el = new FilteredElementCollector(document)
+                    List<ElementId> el = new List<ElementId>();
+                    if (tab.Category != "Материалы")
+                    {
+                        el = new FilteredElementCollector(document)
                         .OfCategory(nameAndCat[tab.Category])
                         .WhereElementIsElementType()
                         .Where(x => x.Name == tab.Name)
                         .Select(x => x.Id)
                         .ToList();
+                    }
+                    else
+                    {
+                        el = new FilteredElementCollector(document)
+                        .OfCategory(nameAndCat[tab.Category])
+                        .Where(x => x.Name == tab.Name)
+                        .Select(x => x.Id)
+                        .ToList();
+                    }
 
                     bool elementExists = ElementExists(docToCopy, nameAndCat[tab.Category], tab.Name);
 

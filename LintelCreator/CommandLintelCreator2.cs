@@ -539,10 +539,18 @@ namespace FerrumAddin
                         // Установка имени разреза
                         string positionName = firstElement.LookupParameter("ADSK_Позиция").AsString();
                         bool lower0 = firstElement.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
-                        if (lower0)
-                            section.Name = positionName + " ниже 0.000";
-                        else
-                            section.Name = positionName + " выше 0.000";
+                        try
+                        {
+                            if (lower0)
+                                section.Name = positionName + " ниже 0.000";
+                            else
+                                section.Name = positionName + " выше 0.000";
+                        }
+                        catch 
+                        {
+                            doc.Delete(section.Id);
+                            continue;
+                        }
                         section.LookupParameter("Шаблон вида").Set(viewSection.Id);
                         section.LookupParameter("Масштаб вида").Set(20);
                     }
@@ -606,6 +614,10 @@ namespace FerrumAddin
                         .OfClass(typeof(SpotDimensionType))
                         .OfType<SpotDimensionType>().FirstOrDefault(tag => tag.FamilyName == "Высотные отметки" && tag.Name == "ADSK_Проектная_без всего");
 
+                    var tagType2Vert = new FilteredElementCollector(doc)
+                        .OfClass(typeof(SpotDimensionType))
+                        .OfType<SpotDimensionType>().FirstOrDefault(tag => tag.FamilyName == "Высотные отметки" && tag.Name == "ADSK_Проектная_без всего_(В)");
+
 
                     if (tagType == null)
                     {
@@ -616,6 +628,13 @@ namespace FerrumAddin
                     if (tagType2 == null)
                     {
                         TaskDialog.Show("Ошибка", "Не найден тип марки 'ADSK_Проектная_без всего' для семейства 'Высотные отметки'.");
+                        trans.RollBack();
+                        return;
+                    }
+
+                    if (tagType2Vert == null)
+                    {
+                        TaskDialog.Show("Ошибка", "Не найден тип марки 'ADSK_Проектная_без всего_(В)' для семейства 'Высотные отметки'.");
                         trans.RollBack();
                         return;
                     }
@@ -640,9 +659,17 @@ namespace FerrumAddin
                             (boundingBox.Max.Y + 495 / 304.8),
                             boundingBox.Max.Z
                         );
+                        XYZ centerLeft = new XYZ(
+                            boundingBox.Min.X - 315 / 304.8,
+                            (boundingBox.Max.Y + boundingBox.Min.Y)/2,
+                            boundingBox.Max.Z
+                        );
 
                         // Создание марки
-                        IndependentTag newTag = IndependentTag.Create(
+                        IndependentTag newTag = null;
+                        if ((lintel as FamilyInstance).HandOrientation.X == 1)
+                        {
+                            newTag = IndependentTag.Create(
                             doc,
                             tagType.Id,
                             doc.ActiveView.Id,
@@ -651,6 +678,19 @@ namespace FerrumAddin
                             TagOrientation.Horizontal,
                             centerTop
                         );
+                        }
+                        else
+                        {
+                            newTag = IndependentTag.Create(
+                            doc,
+                            tagType.Id,
+                            doc.ActiveView.Id,
+                            new Reference(lintel),
+                            false,
+                            TagOrientation.Vertical,
+                            centerLeft
+                        );
+                        }
 
                         if (newTag == null)
                         {
@@ -663,30 +703,58 @@ namespace FerrumAddin
                             (boundingBox.Max.Y + 150 / 304.8),
                             boundingBox.Max.Z
                         );
+                        centerLeft = new XYZ(
+                            boundingBox.Min.X - 150 / 304.8,
+                            (boundingBox.Max.Y + boundingBox.Min.Y) / 2,
+                            boundingBox.Max.Z
+                        );
 
                         // Создание высотной отметки
                         Reference ref_ = null;
                         ref_ = lintel.GetReferences(FamilyInstanceReferenceType.Bottom).First();
-                        
-                        SpotDimension newTag2 = doc.Create.NewSpotElevation(
+                        SpotDimension newTag2 = null;
+                        if ((lintel as FamilyInstance).HandOrientation.X == 1)
+                        {
+                            newTag2 = doc.Create.NewSpotElevation(
                             doc.ActiveView,
                             ref_,
                             (lintel.Location as LocationPoint).Point,
-                            ((lintel.Location as LocationPoint).Point + centerTop)/2,
+                            ((lintel.Location as LocationPoint).Point + centerTop) / 2,
                             centerTop,
-                            new XYZ(0,0,0),
+                            new XYZ(0, 0, 0),
                             false
-
                         );
+                            if (newTag2 == null)
+                            {
+                                TaskDialog.Show("Ошибка", "Не удалось создать высотную отметку для перемычки.");
+                                continue;
+                            }
 
-                        if (newTag2 == null)
+                            newTag2.SpotDimensionType = tagType2;
+                            (newTag2 as Dimension).TextPosition = (boundingBox.Max + boundingBox.Min) / 2 + 1.15 * XYZ.BasisY;
+                        }
+                        else
                         {
-                            TaskDialog.Show("Ошибка", "Не удалось создать высотную отметку для перемычки.");
-                            continue;
+                            newTag2 = doc.Create.NewSpotElevation(
+                            doc.ActiveView,
+                            ref_,
+                            (lintel.Location as LocationPoint).Point,
+                            ((lintel.Location as LocationPoint).Point + centerLeft) / 2,
+                            centerLeft,
+                            new XYZ(0, 0, 0),
+                            false
+                        );
+                            if (newTag2 == null)
+                            {
+                                TaskDialog.Show("Ошибка", "Не удалось создать высотную отметку для перемычки.");
+                                continue;
+                            }
+
+                            newTag2.SpotDimensionType = tagType2Vert;
+                            (newTag2 as Dimension).TextPosition = (boundingBox.Max + boundingBox.Min) / 2 - 0.8 * XYZ.BasisX;
                         }
 
-                        newTag2.SpotDimensionType = tagType2;
-                        (newTag2 as Dimension).TextPosition = (lintel.Location as LocationPoint).Point + 0.5 * XYZ.BasisY;
+                        
                     }
 
                     trans.Commit();

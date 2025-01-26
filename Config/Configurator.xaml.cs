@@ -107,7 +107,8 @@ namespace FerrumAddin
     { "Витражи", BuiltInCategory.OST_Walls },
     { "Крыши" , BuiltInCategory.OST_Roofs},
     { "Ограждения" , BuiltInCategory.OST_StairsRailing},
-    { "Пандусы", BuiltInCategory.OST_Ramps }
+    { "Пандусы", BuiltInCategory.OST_Ramps },
+                {"Материалы", BuiltInCategory.OST_Materials }
 };
 
             List<Document> documents = new List<Document>();
@@ -161,6 +162,12 @@ namespace FerrumAddin
                                 .Select(x => x.WallType)
                                 .Distinct()
                                 .Where(x => x.Kind == WallKind.Basic).Select(x => x as Element).ToList();
+                        }
+                        else if (categoryDir.Contains("Материалы"))
+                        {
+                            elements = new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .ToList();
                         }
                         else
                         {
@@ -295,7 +302,8 @@ namespace FerrumAddin
             { "Витражи", BuiltInCategory.OST_Walls },
             { "Крыши", BuiltInCategory.OST_Roofs },
             { "Ограждения", BuiltInCategory.OST_StairsRailing },
-            { "Пандусы", BuiltInCategory.OST_Ramps }
+            { "Пандусы", BuiltInCategory.OST_Ramps },
+                {"Материалы", BuiltInCategory.OST_Materials }
         };
 
                 List<Document> documents = new List<Document>();
@@ -364,6 +372,12 @@ namespace FerrumAddin
                                 .Distinct()
                                 .Where(x => x.Kind == WallKind.Basic)
                                 .Select(x => x as Element)
+                                .ToList();
+                        }
+                        else if (categoryDir.Contains("Материалы"))
+                        {
+                            elements = new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
                                 .ToList();
                         }
                         else
@@ -473,6 +487,12 @@ namespace FerrumAddin
                                 .Select(x => x.WallType)
                                 .Distinct()
                                 .Where(x => x.Kind == WallKind.Basic).Select(x => x as Element).ToList();
+                        }
+                        else if (categoryDir.Contains("Материалы"))
+                        {
+                            elements = new FilteredElementCollector(doc)
+                                .OfCategory(nameAndCat[directory])
+                                .ToList();
                         }
                         else
                         {

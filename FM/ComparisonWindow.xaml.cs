@@ -94,6 +94,41 @@ namespace FerrumAddin.FM
             if (!File.Exists(filePath))
                 return;
             MenuItems.Clear();
+            List<string> categoryNames = new List<string>
+            {
+                "Перекрытия",                 
+                "Стены",                      
+                "Потолки",                  
+                "Окна",                     
+                "Двери",                   
+                "Крыши",                    
+                "Мебель",                 
+                "Сантехнические приборы",   
+                "Электрические приборы",     
+                "Ограждения",              
+                "Выступающие профили",     
+                "Ребра плит",               
+                "Обобщенные модели",     
+                "Колонны",            
+                "Каркас несущий",           
+                "Пандус",                     
+                "Лестница",                   
+                "Типовые аннотации",          
+                "Несущие колонны",            
+                "Несущая арматура",           
+                "Фундамент несущих конструкций", 
+                "Трубы",                      
+                "Материалы изоляции труб",    
+                "Соединительные детали трубопроводов", 
+                "Арматура трубопроводов",     
+                "Оборудование",               
+                "Арматура воздуховодов",      
+                "Воздуховоды",                
+                "Воздухораспределители",      
+                "Материалы изоляции воздуховодов", 
+                "Соединительные детали воздуховодов" 
+            };
+
 
             var xdoc = XDocument.Load(filePath);
 
@@ -104,15 +139,17 @@ namespace FerrumAddin.FM
 
                     foreach (var menuItemElement in tabItemElement.Descendants("MenuItem"))
                     {
-                        var menuItem = new MenuItem
+                        if (categoryNames.Contains(menuItemElement.Element("Category")?.Value))
                         {
-                            Name = menuItemElement.Element("Name")?.Value,
-                            Category = menuItemElement.Element("Category")?.Value,
-                            ImagePath = menuItemElement.Element("ImagePath")?.Value,
-                            Path = menuItemElement.Element("Path")?.Value
-                        };
-
-                        MenuItems.Add(menuItem);
+                            var menuItem = new MenuItem
+                            {
+                                Name = menuItemElement.Element("Name")?.Value,
+                                Category = menuItemElement.Element("Category")?.Value,
+                                ImagePath = menuItemElement.Element("ImagePath")?.Value,
+                                Path = menuItemElement.Element("Path")?.Value
+                            };
+                            MenuItems.Add(menuItem);
+                        }
                     }
                 }
             }
@@ -124,6 +161,39 @@ namespace FerrumAddin.FM
             .WhereElementIsNotElementType().ToElements()
             .Where(e => e.Category != null && e.Category.HasMaterialQuantities).ToList();
             RevitFamilies.Clear();
+            List<BuiltInCategory> categories = new List<BuiltInCategory>
+            {
+                BuiltInCategory.OST_Floors,                // Перекрытия
+                BuiltInCategory.OST_Walls,                 // Стены
+                BuiltInCategory.OST_Ceilings,              // Потолки
+                BuiltInCategory.OST_Windows,               // Окна
+                BuiltInCategory.OST_Doors,                 // Двери
+                BuiltInCategory.OST_Roofs,                 // Крыши
+                BuiltInCategory.OST_Furniture,             // Мебель
+                BuiltInCategory.OST_PlumbingFixtures,      // Сантехнические приборы
+                BuiltInCategory.OST_ElectricalFixtures,    // Электрические приборы
+                BuiltInCategory.OST_Railings,              // Ограждения
+                BuiltInCategory.OST_Cornices,              // Выступающие профили
+                BuiltInCategory.OST_StructuralFraming,     // Ребра плит и каркас несущий
+                BuiltInCategory.OST_GenericModel,          // Обобщенные модели
+                BuiltInCategory.OST_Columns,               // Колонны
+                BuiltInCategory.OST_Ramps,                 // Пандус
+                BuiltInCategory.OST_Stairs,                // Лестница
+                BuiltInCategory.OST_GenericAnnotation,     // Типовые аннотации
+                BuiltInCategory.OST_StructuralColumns,     // Несущие колонны
+                BuiltInCategory.OST_Rebar,                 // Несущая арматура
+                BuiltInCategory.OST_StructuralFoundation,  // Фундамент несущих конструкций
+                BuiltInCategory.OST_PipeCurves,            // Трубы
+                BuiltInCategory.OST_PipeInsulations,       // Материалы изоляции труб
+                BuiltInCategory.OST_PipeFitting,           // Соединительные детали трубопроводов
+                BuiltInCategory.OST_PipeAccessory,         // Арматура трубопроводов
+                BuiltInCategory.OST_MechanicalEquipment,   // Оборудование
+                BuiltInCategory.OST_DuctAccessory,         // Арматура воздуховодов
+                BuiltInCategory.OST_DuctCurves,            // Воздуховоды
+                BuiltInCategory.OST_DuctTerminal,          // Воздухораспределители
+                BuiltInCategory.OST_DuctInsulations,       // Материалы изоляции воздуховодов
+                BuiltInCategory.OST_DuctFitting            // Соединительные детали воздуховодов
+            };
 
             // Создаем список для хранения данных
             List<(Category category, string familyName, string typeName)> elementData = new List<(Category, string, string)>();
@@ -134,7 +204,7 @@ namespace FerrumAddin.FM
                 ElementId typeId = elem.GetTypeId();
                 ElementType elementType = doc.GetElement(typeId) as ElementType;
 
-                if (elementType != null)
+                if (elementType != null && categories.Contains(elem.Category.BuiltInCategory))
                 {
                     // Получаем категорию, имя семейства и тип
                     Category category = elem.Category;
@@ -156,7 +226,6 @@ namespace FerrumAddin.FM
             .ToList();
 
             // Вывод данных в окно
-            string result = "Список элементов (сортировано по категории, семейству и типу):\n";
             foreach (var data in sortedData)
             {
                 RevitFamilies.Add(new MenuItem()
