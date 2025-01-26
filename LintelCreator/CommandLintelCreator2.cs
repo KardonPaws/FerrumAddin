@@ -440,7 +440,7 @@ namespace FerrumAddin
                         .ToList();
 
                     // Группировка перемычек по параметру ADSK_Позиция
-                    var groupedElements = framingElements.GroupBy(el => el.LookupParameter("ADSK_Позиция").AsString());
+                    var groupedElements = framingElements.OrderBy(el => el.LookupParameter("ADSK_Позиция").AsString()).GroupBy(el => el.LookupParameter("ADSK_Позиция").AsString());
 
                     // Шаблон для разрезов
                     ViewFamilyType sectionViewType = new FilteredElementCollector(doc)
@@ -536,23 +536,53 @@ namespace FerrumAddin
                             ViewSection section = ViewSection.CreateSection(doc, sectionViewType.Id, boundingBox);
                         if (section == null)
                             continue;
+
                         // Установка имени разреза
                         string positionName = firstElement.LookupParameter("ADSK_Позиция").AsString();
                         bool lower0 = firstElement.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
-                        try
+
+                        var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName)).FirstOrDefault();
+                        if (view != null)
                         {
-                            if (lower0)
+                            var framingElements_ = new FilteredElementCollector(doc, view.Id)
+                            .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                            .WhereElementIsNotElementType()
+                            .Cast<FamilyInstance>()
+                            .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
+                            .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
+                            .ToList().FirstOrDefault();
+
+                            string positionName_ = framingElements_.LookupParameter("ADSK_Позиция").AsString();
+                            bool lower0_ = framingElements_.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
+
+                            if (framingElements_ != null)
+                                if (positionName == positionName_)
+                                {
+                                    doc.Delete(section.Id);
+                                    continue;
+                                }
+                                else
+                                {
+                                    if (lower0_)
+                                        view.Name = positionName_ + " ниже 0.000_";
+                                    else
+                                        view.Name = positionName_ + " выше 0.000_";
+                                }
+                        }
+                        if (lower0)
                                 section.Name = positionName + " ниже 0.000";
                             else
                                 section.Name = positionName + " выше 0.000";
-                        }
-                        catch 
-                        {
-                            doc.Delete(section.Id);
-                            continue;
-                        }
+
+                            
+                        
                         section.LookupParameter("Шаблон вида").Set(viewSection.Id);
                         section.LookupParameter("Масштаб вида").Set(20);
+                    }
+                    var views = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x=> x.Name.Contains("Пр") && x.Name.Contains("0.000_")).ToList();
+                    foreach (var view in views)
+                    {
+                        view.Name = view.Name.Replace("_", "");
                     }
 
                     trans.Commit();
