@@ -952,6 +952,7 @@ namespace FerrumAddin
                     trans.RollBack();
                 }
             }
+            TaskDialog.Show("Отчет", output);
         }
 
 

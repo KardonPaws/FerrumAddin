@@ -38,7 +38,7 @@ namespace FerrumAddin.LintelCreator
             DataContext = new MainViewModel
             {
                 FilteredFamilies = new ObservableCollection<FamilyWrapper>(familyWrappers),
-                ElementList = new ObservableCollection<ParentElement>(list)
+                ElementList = new ObservableCollection<ParentElement>(list.Where(x=>x.Walls.Count()>0))
             };
             MainViewModel = DataContext as MainViewModel;
         }

@@ -139,8 +139,7 @@ namespace FerrumAddin.FM
 
                     foreach (var menuItemElement in tabItemElement.Descendants("MenuItem"))
                     {
-                        if (categoryNames.Contains(menuItemElement.Element("Category")?.Value))
-                        {
+
                             var menuItem = new MenuItem
                             {
                                 Name = menuItemElement.Element("Name")?.Value,
@@ -149,7 +148,7 @@ namespace FerrumAddin.FM
                                 Path = menuItemElement.Element("Path")?.Value
                             };
                             MenuItems.Add(menuItem);
-                        }
+                        
                     }
                 }
             }

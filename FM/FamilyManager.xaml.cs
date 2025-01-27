@@ -456,9 +456,8 @@ namespace FerrumAddin
                     Family family = familyInstance.Symbol?.Family;
                     if (family == null) continue;
 
-                    var matchingMenuItem = FamilyManagerWindow.mvm.TabItems
-                        .SelectMany(ti => ti.MenuItems)
-                        .FirstOrDefault(mi => mi.Name == family.Name);
+                    var MenuItems = mvm.TabItems.Where(x => x.Header == (Tabs.SelectedItem as TabItemViewModel).Header).Select(x => x.OriginalMenuItems).First();
+                    var matchingMenuItem = MenuItems.Where(mi => mi.Name == family.Name).FirstOrDefault();
 
                     if (matchingMenuItem != null)
                     {
@@ -512,15 +511,14 @@ namespace FerrumAddin
 
                     foreach (var pair in nameAndCat)
                     {
-                        if (element.Category.Id.IntegerValue == (int)pair.Value)
+                        if (element.Category.Id.Value == (int)pair.Value)
                         {
                             string projectVersion = doc.GetElement(element.GetTypeId()).LookupParameter("ZH_Версия_Семейства")?.AsString();
 
-                            
 
-                            var matchingMenuItem = FamilyManagerWindow.mvm.TabItems
-                                .SelectMany(ti => ti.MenuItems)
-                                .FirstOrDefault(mi => mi.Name == element.Name);
+
+                            var MenuItems = mvm.TabItems.Where(x => x.Header == (Tabs.SelectedItem as TabItemViewModel).Header).Select(x => x.OriginalMenuItems).First();
+                            var matchingMenuItem = MenuItems.Where(mi => mi.Name == element.Name).FirstOrDefault();
 
                             if (matchingMenuItem != null)
                             {
@@ -646,6 +644,10 @@ namespace FerrumAddin
                 {
                     return versionParam.AsString();
                 }
+                else
+                {
+
+                }
             }
 
             return string.Empty;
@@ -676,6 +678,11 @@ namespace FerrumAddin
                     MenuItems = outdatedItems,
                     OriginalMenuItems = outdatedItems.ToList()
                 };
+                if (FamilyManagerWindow.mvm.TabItems.Any(x=>x.Header == "Устаревшее"))
+                {
+                    TabItemViewModel viewModel = FamilyManagerWindow.mvm.TabItems.Where(x => x.Header == "Устаревшее").FirstOrDefault();
+                    FamilyManagerWindow.mvm.TabItems.Remove(viewModel);
+                }
                 FamilyManagerWindow.mvm.TabItems.Insert(0, outdatedTab);
 
             }
@@ -687,6 +694,11 @@ namespace FerrumAddin
                     MenuItems = newerItems,
                     OriginalMenuItems = newerItems.ToList()
                 };
+                if (FamilyManagerWindow.mvm.TabItems.Any(x => x.Header == "Новее"))
+                {
+                    TabItemViewModel viewModel = FamilyManagerWindow.mvm.TabItems.Where(x => x.Header == "Новее").FirstOrDefault();
+                    FamilyManagerWindow.mvm.TabItems.Remove(viewModel);
+                }
                 FamilyManagerWindow.mvm.TabItems.Insert(0, newerTab);
 
             }
