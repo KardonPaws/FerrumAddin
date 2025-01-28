@@ -1,4 +1,5 @@
 ﻿using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -87,15 +88,33 @@ namespace FerrumAddin.LintelCreator
             {
                 if (DataContext is MainViewModel viewModel)
                 {
-                    // Найти ParentElement, содержащий этот ChildElement
-                    var parentElement = viewModel.ElementList.FirstOrDefault(pe =>
-                        pe.Walls.Any(wall => wall.Key == childElement.Key && wall.Value.Contains(childElement.Value.FirstOrDefault())));
-
-                    if (parentElement != null)
+                    if (radioButton != null)
                     {
-                        viewModel.SelectedParentElement = parentElement;
-                        viewModel.SelectedWallTypeName = (sender as RadioButton).Content.ToString();
-                        viewModel.FilterFamiliesAndTypes();
+                        // Находим родительский элемент HierarchicalDataTemplate
+                        DependencyObject parent = VisualTreeHelper.GetParent(radioButton);
+                        again:
+                        while (parent != null && !(parent is TreeViewItem))
+                        {
+                            parent = VisualTreeHelper.GetParent(parent);
+                        }
+                        if (((parent as TreeViewItem).DataContext as ParentElement) == null)
+                        {
+                            parent = VisualTreeHelper.GetParent(parent);
+                            goto again;
+                        }
+
+                        if (parent is TreeViewItem treeViewItem)
+                        {
+                            // Получаем DataContext родительского элемента
+                            var parentElement = treeViewItem.DataContext as ParentElement;
+
+                            if (parentElement != null)
+                            {
+                                viewModel.SelectedParentElement = parentElement;
+                                viewModel.SelectedWallTypeName = (sender as RadioButton).Content.ToString();
+                                viewModel.FilterFamiliesAndTypes();
+                            }
+                        }
                     }
                 }
             }
@@ -103,7 +122,10 @@ namespace FerrumAddin.LintelCreator
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            CommandLintelCreator2.lintelCreateEvent.Raise();
+            if (MainViewModel.SelectedWallType != null)
+                CommandLintelCreator2.lintelCreateEvent.Raise();
+            else
+                TaskDialog.Show("Ошибка", "Выберите проем и тип стены для простановки перемычек");
         }
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
@@ -231,7 +253,7 @@ namespace FerrumAddin.LintelCreator
             {
                 if (SelectedParentElement?.Walls != null && SelectedParentElement.Walls.Any())
                 {
-                    return SelectedParentElement.Walls.Keys.FirstOrDefault(); // Берем первую стену
+                    return SelectedParentElement.Walls.Keys.Where(x => x.Name == SelectedWallTypeName).FirstOrDefault();
                 }
                 return null;
             }
@@ -294,8 +316,15 @@ namespace FerrumAddin.LintelCreator
                         if (IsBrick85Checked && parts[0] != "88") return false;
 
                         // 2. Проверка толщины стены
-                        var wallThickness = Math.Round((double)(SelectedWallType?.Width * 304.8));
-                        if (Convert.ToDouble(parts[1]) != wallThickness) return false;
+                        try
+                        {
+                            var wallThickness = Math.Round((double)(SelectedWallType?.Width * 304.8));
+                            if (Convert.ToDouble(parts[1]) != wallThickness) return false;
+                        }
+                        catch
+                        {
+                            return true;
+                        }
 
                         // 3. Размер пролёта
                         if (double.TryParse(parts[2], out double spanWidth))

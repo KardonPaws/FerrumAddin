@@ -61,7 +61,7 @@ namespace FerrumAddin
             List<Family> lintelFamilysList = new FilteredElementCollector(doc)
                 .OfClass(typeof(Family))
                 .Cast<Family>()
-                .Where(f => f.FamilyCategory.Id.IntegerValue.Equals((int)BuiltInCategory.OST_StructuralFraming))
+                .Where(f => f.FamilyCategory.Id.Value.Equals((int)BuiltInCategory.OST_StructuralFraming))
                 .Where(f => f.GetFamilySymbolIds() != null)
                 .Where(f => f.GetFamilySymbolIds().Count != 0)
                 .Where(f => (doc.GetElement(f.GetFamilySymbolIds().First()) as FamilySymbol).get_Parameter(BuiltInParameter.ALL_MODEL_MODEL).AsString() == "Перемычки составные")
@@ -952,7 +952,8 @@ namespace FerrumAddin
                     trans.RollBack();
                 }
             }
-            TaskDialog.Show("Отчет", output);
+            if (output != null && output != "")
+                TaskDialog.Show("Отчет", output);
         }
 
 
