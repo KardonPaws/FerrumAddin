@@ -25,16 +25,16 @@
             <TreeView.ItemTemplate>
                 <HierarchicalDataTemplate DataType="{x:Type local:ParentElement}" ItemsSource="{Binding Walls}">
                     <StackPanel>
-                        <WrapPanel Orientation="Horizontal">
+                        <WrapPanel Orientation="Vertical">
                             <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                            <TextBlock Text="-" FontWeight="Bold"/>
-                            <TextBlock Text="{Binding TypeName}" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding TypeName}"/>
                         </WrapPanel>
                         <WrapPanel Orientation="Horizontal">
                             <TextBlock Text="Ширина проема " FontStyle="Italic"/>
                             <TextBlock Text="{Binding Width}" FontStyle="Italic"/>
                             <TextBlock Text=" мм" FontStyle="Italic"/>
                         </WrapPanel>
+                        <Line Stroke="Black" X1="0" X2="300" Stretch="Fill"/>
                     </StackPanel>
                     <HierarchicalDataTemplate.ItemTemplate>
                         <DataTemplate>

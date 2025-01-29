@@ -88,6 +88,9 @@ namespace FerrumAddin
                     el.Symbol.Name,       // Имя типа
                     Width = el.LookupParameter("ADSK_Размер_Ширина")?.AsValueString()
                 })
+                .OrderBy(group => group.Key.FamilyName)  // Сортировка по имени семейства
+                .ThenBy(group => group.Key.Name)         // Сортировка по имени типа
+                .ThenBy(group => group.Key.Width)
                 .Select(group => new ParentElement
                 {
                     Name = group.Key.FamilyName,
@@ -921,7 +924,7 @@ namespace FerrumAddin
 
                             // Создаем экземпляр перемычки
                             newLintel = doc.Create.NewFamilyInstance(locationPoint, selectedType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
-                            XYZ translation = new XYZ(0, wallElements.Key.Width/2, 0);
+                            XYZ translation = (element as FamilyInstance).FacingOrientation * wallElements.Key.Width/2;
 
                             // Проверяем ориентацию и выполняем поворот, если необходимо
                             if (!(element as FamilyInstance).FacingOrientation.IsAlmostEqualTo(newLintel.FacingOrientation))
@@ -932,8 +935,6 @@ namespace FerrumAddin
                                 double rotateAngle = (u2 - u1);
 
                                 ElementTransformUtils.RotateElement(doc, newLintel.Id, rotateAxis, rotateAngle);
-
-                                translation = new XYZ(wallElements.Key.Width/2, 0, 0);
                             }
                             ElementTransformUtils.MoveElement(doc, newLintel.Id, translation);
                             newLintel.LookupParameter("ADSK_Группирование").Set("ПР");
