@@ -1,5 +1,6 @@
 ﻿using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Autodesk.Revit.UI.Selection;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -28,7 +29,7 @@ namespace FerrumAddin.LintelCreator
         List<ParentElement> ElementList;
         public static MainViewModel MainViewModel;
 
-        public LintelCreatorForm2(Document doc, List<ParentElement> list, List<Family> families)
+        public LintelCreatorForm2(Document doc, Selection sel, List<ParentElement> list, List<Family> families)
         {
             InitializeComponent();
 
@@ -42,7 +43,9 @@ namespace FerrumAddin.LintelCreator
                 ElementList = new ObservableCollection<ParentElement>(list.Where(x=>x.Walls.Count()>0))
             };
             MainViewModel = DataContext as MainViewModel;
+            selection = sel;
         }
+        public static Selection selection;
 
         // Обработка прокрутки ListBox
         //private void ListBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -113,6 +116,7 @@ namespace FerrumAddin.LintelCreator
                                 viewModel.SelectedParentElement = parentElement;
                                 viewModel.SelectedWallTypeName = (sender as RadioButton).Content.ToString();
                                 viewModel.FilterFamiliesAndTypes();
+                                selection.SetElementIds(parentElement.Walls[childElement.Key].Select(x => x.Id).ToList());
                             }
                         }
                     }
@@ -319,6 +323,12 @@ namespace FerrumAddin.LintelCreator
                         try
                         {
                             var wallThickness = Math.Round((double)(SelectedWallType?.Width * 304.8));
+                            if (wallThickness == 400)
+                                wallThickness = 380;
+                            if (wallThickness == 500)
+                                wallThickness = 510;
+                            if (wallThickness == 600)
+                                wallThickness = 640;
                             if (Convert.ToDouble(parts[1]) != wallThickness) return false;
                         }
                         catch

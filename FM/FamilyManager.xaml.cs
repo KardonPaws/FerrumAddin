@@ -465,11 +465,11 @@ namespace FerrumAddin
                         Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
                         if (loadedFamily == null) continue;
 
-                        try
-                        {
+
+                        
                             projectVersion = GetFamilyVersionFromProject(family);
-                        }
-                        catch
+                        
+                        if (string.IsNullOrEmpty(projectVersion))
                         {
                             string ver2 = GetFamilyVersionFromLoadedFamily(loadedFamily);
                             if (string.IsNullOrEmpty(ver2))
