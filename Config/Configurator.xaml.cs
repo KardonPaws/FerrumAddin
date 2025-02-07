@@ -440,7 +440,8 @@ namespace FerrumAddin
             { "Витражи", BuiltInCategory.OST_Walls },
             { "Крыши", BuiltInCategory.OST_Roofs },
             { "Ограждения", BuiltInCategory.OST_StairsRailing },
-            { "Пандусы", BuiltInCategory.OST_Ramps }
+            { "Пандусы", BuiltInCategory.OST_Ramps },
+                {"Материалы", BuiltInCategory.OST_Materials }
         };
 
             // Получение pathFam из первого элемента MenuItem.Path на две папки выше
