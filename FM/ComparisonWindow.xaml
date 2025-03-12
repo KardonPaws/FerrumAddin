@@ -36,7 +36,9 @@
                    IsOpen="{Binding IsChecked, ElementName=MenuCategoryFilterButton}"
                    StaysOpen="False" Width="{Binding ActualWidth, ElementName=MenuCategoryFilterButton}">
                 <Border BorderBrush="Gray" Background="White">
-                    <ScrollViewer MaxHeight="400" BorderBrush="Black">
+                    <StackPanel>
+                        <CheckBox x:Name="allCatMenu" Content="Все" Checked="CheckBox_Checked" Unchecked="CheckBox_Checked"/>
+                        <ScrollViewer MaxHeight="400" BorderBrush="Black">
                         <ItemsControl ItemsSource="{Binding MenuCategoryFilters}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -45,6 +47,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
+                    </StackPanel>
                 </Border>
             </Popup>
             <Border x:Name="HeightHelperPanel" BorderBrush="Black" Grid.Row="3">
@@ -82,7 +85,9 @@
                    IsOpen="{Binding IsChecked, ElementName=FamilyCategoryFilterButton}"
                    StaysOpen="False" Width="{Binding ActualWidth, ElementName=FamilyCategoryFilterButton}">
                 <Border BorderBrush="Gray" Background="White">
-                    <ScrollViewer MaxHeight="400" BorderBrush="Black">
+                    <StackPanel>
+                        <CheckBox x:Name="allRevitCat" Content="Все" Checked="CheckBox_Checked" Unchecked="CheckBox_Checked"/>
+                        <ScrollViewer MaxHeight="400" BorderBrush="Black">
                     <ItemsControl ItemsSource="{Binding FamilyCategoryFilters}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -92,7 +97,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     </ScrollViewer>
-
+                    </StackPanel>
                 </Border>
             </Popup>
             <Border x:Name="HeightHelperPanel2" BorderBrush="Black" Grid.Row="3">

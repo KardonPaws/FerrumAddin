@@ -708,6 +708,14 @@ namespace FerrumAddin
             Tabs.ItemsSource = mvm.TabItems;
             Tabs.SelectedIndex = 0;
         }
+
+        private void allItems_Checked(object sender, RoutedEventArgs e)
+        {
+            foreach (var item in CategoryFilters)
+            {
+                item.IsChecked = (bool)(sender as System.Windows.Controls.CheckBox).IsChecked;
+            }
+        }
     }
 
     public class BooleanToVisibilityConverter : IValueConverter

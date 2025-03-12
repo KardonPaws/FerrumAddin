@@ -245,8 +245,10 @@ namespace FerrumAddin
             panelKR.Visible = false;
 
             PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandLintelCreator2");
-
             panelKR.AddItem(LintelCreator);
+
+            PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandGrillageCreator");
+            panelKR.AddItem(GrillageCreator);
 
             FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;

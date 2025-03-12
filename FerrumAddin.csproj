@@ -102,6 +102,10 @@
     <Compile Include="FM\FamilyManager.xaml.cs">
       <DependentUpon>FamilyManager.xaml</DependentUpon>
     </Compile>
+    <Compile Include="GrillageCreator\CommandGrillageCreator.cs" />
+    <Compile Include="GrillageCreator\WindowGrillageCreator.xaml.cs">
+      <DependentUpon>WindowGrillageCreator.xaml</DependentUpon>
+    </Compile>
     <Compile Include="LintelCreator\AlphanumComparatorFastString.cs" />
     <Compile Include="LintelCreator\CommandLintelCreator2.cs" />
     <Compile Include="LintelCreator\LintelCreatorForm2.xaml.cs">
@@ -143,6 +147,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="GrillageCreator\WindowGrillageCreator.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="LintelCreator\LintelCreatorForm2.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -164,6 +172,9 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="FM\Железно-верт-синий.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="GrillageCreator\GrillageCreatorBackground.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

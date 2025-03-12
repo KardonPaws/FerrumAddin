@@ -1,0 +1,48 @@
+﻿<Window x:Class="FerrumAddin.GrillageCreator.WindowGrillageCreator"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:FerrumAddin.GrillageCreator"
+        mc:Ignorable="d"
+        Title="WindowGrillageCreator" Height="auto" Width="auto" ResizeMode="NoResize" SizeToContent="WidthAndHeight">
+    <Grid Height="450" Margin="0,10,0,0">
+        <!-- Фон окна -->
+        <Image HorizontalAlignment="Left" Height="403" VerticalAlignment="Top" Width="540" Margin="10,10,10,10" Source="/FerrumAddin;component/GrillageCreator/GrillageCreatorBackground.png"/>
+        <!-- Выбор способа задания количества арматуры -->
+        <GroupBox HorizontalAlignment="Right" VerticalAlignment="Top" BorderBrush="#FF3F4040" Margin="0,5,5,0" >
+            <StackPanel Margin="5,5,5,5">
+                <TextBlock TextWrapping="Wrap" Text="Количество арматуры" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                <RadioButton x:Name="radioBtnNumber" Content="Ввод количества" HorizontalAlignment="Left" VerticalAlignment="Top" IsChecked="True" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked"/>
+                <RadioButton x:Name="radioBtnStep" Content="Расчет по шагу" HorizontalAlignment="Left" VerticalAlignment="Top" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked"/>
+            </StackPanel>
+        </GroupBox>
+        <!-- Количество/шаг горизонтальных каркасов -->
+        <TextBox x:Name="boxHorizont" HorizontalAlignment="Center" Margin="0,41,0,0" TextWrapping="Wrap" Text="1" VerticalAlignment="Top" Width="120" PreviewTextInput="previewTextInput"/>
+        <TextBlock x:Name="textHorizont" HorizontalAlignment="Center" Margin="0,7,0,0" TextWrapping="Wrap" Text="Количество&#x0a;горизонтальных каркасов" VerticalAlignment="Top" TextAlignment="Center"/>
+        <!-- Количество/шаг вертикальных каркасов -->
+        <TextBox x:Name="boxVertical" HorizontalAlignment="Left" Margin="58,181,0,0" TextWrapping="Wrap" Text="200" VerticalAlignment="Top" Width="45" PreviewTextInput="previewTextInput"/>
+        <TextBlock x:Name="textVertical" HorizontalAlignment="Left" Margin="25,182,0,0" TextWrapping="Wrap" Text="Шаг" VerticalAlignment="Top"/>
+        <!-- Количество/шаг вертикальных каркасов -->
+        <TextBox x:Name="boxHorizontal" HorizontalAlignment="Left" Margin="419,395,0,0" TextWrapping="Wrap" Text="200" VerticalAlignment="Top" Width="45" PreviewTextInput="previewTextInput"/>
+        <TextBlock x:Name="textHorizontal" HorizontalAlignment="Left" Margin="386,395,0,0" TextWrapping="Wrap" Text="Шаг" VerticalAlignment="Top"/>
+        <!-- Диаметр верхней арматуры -->
+        <ComboBox x:Name="comboTop" HorizontalAlignment="Left" Margin="25,48,0,0" VerticalAlignment="Top" Width="60"/>
+        <TextBlock HorizontalAlignment="Left" Margin="25,31,0,0" TextWrapping="Wrap" Text="Ø верхней арматуры" VerticalAlignment="Top"/>
+        <!-- Диаметр нижней арматуры -->
+        <ComboBox x:Name="comboBottom" HorizontalAlignment="Left" Margin="25,254,0,0" VerticalAlignment="Top" Width="60"/>
+        <TextBlock HorizontalAlignment="Left" Margin="25,237,0,0" TextWrapping="Wrap" Text="Ø нижней арматуры" VerticalAlignment="Top"/>
+        <!-- Диметр вертикальной арматуры -->
+        <ComboBox x:Name="comboVert" HorizontalAlignment="Left" Margin="23,151,0,0" VerticalAlignment="Top" Width="60"/>
+        <TextBlock HorizontalAlignment="Left" Margin="23,134,0,0" TextWrapping="Wrap" Text="Ø вертикальной арматуры" VerticalAlignment="Top"/>
+        <!--Диаметр горизонтальной арматуры -->
+        <ComboBox x:Name="comboHorizont" HorizontalAlignment="Left" Margin="385,363,0,0" VerticalAlignment="Top" Width="60"/>
+        <TextBlock HorizontalAlignment="Left" Margin="385,346,0,0" TextWrapping="Wrap" Text="Ø горизонтальной арматуры" VerticalAlignment="Top"/>
+        <!-- Отступ слева/справа -->
+        <TextBox x:Name="boxLeftRight" HorizontalAlignment="Left" Margin="214,366,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
+        <!-- Отступ сверху/снизу -->
+        <TextBox x:Name="boxTopBottom" HorizontalAlignment="Left" Margin="68,366,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
+
+        <Button Content="Выполнить" HorizontalAlignment="Right" Margin="0,420,13,0" VerticalAlignment="Top" Click="Button_Click"/>
+    </Grid>
+</Window>

@@ -459,13 +459,30 @@ namespace FerrumAddin.FM
                 // Запуск нового фильтра с токеном отмены
                 UpdateFilteredMenuItemsAsync(_cancellationTokenSource1.Token).ConfigureAwait(false);
             }
-            else
+            else if ((sender as CheckBox).Name == "RevitCat")
             {
                 _cancellationTokenSource2?.Cancel();
                 _cancellationTokenSource2 = new CancellationTokenSource();
 
                 // Запуск нового фильтра с токеном отмены
                 UpdateFilteredRevitFamiliesAsync(_cancellationTokenSource2.Token).ConfigureAwait(false);
+            }
+            else if ((sender as CheckBox).Name == "allCatMenu")
+            {
+                foreach (var item in MenuCategoryFilters)
+                {
+                    item.IsChecked = (bool)(sender as CheckBox).IsChecked;
+                }
+                UpdateFilteredMenuItemsAsync(_cancellationTokenSource1.Token).ConfigureAwait(false);
+            }
+            else
+            {
+                foreach (var item in FamilyCategoryFilters)
+                {
+                    item.IsChecked = (bool)(sender as CheckBox).IsChecked;
+                }
+                UpdateFilteredRevitFamiliesAsync(_cancellationTokenSource2.Token).ConfigureAwait(false);
+
             }
         }
 
