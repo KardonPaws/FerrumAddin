@@ -27,6 +27,7 @@ using System.Windows.Shapes;
 using System.Xml.Linq;
 using static Autodesk.Revit.DB.SpecTypeId;
 using Button = System.Windows.Controls.Button;
+using CheckBox = System.Windows.Controls.CheckBox;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using TabControl = System.Windows.Controls.TabControl;
 using TextBox = System.Windows.Controls.TextBox;
@@ -715,6 +716,16 @@ namespace FerrumAddin
             {
                 item.IsChecked = (bool)(sender as System.Windows.Controls.CheckBox).IsChecked;
             }
+        }
+
+        private void createInstance_Checked(object sender, RoutedEventArgs e)
+        {
+            isCreateInstanceChecked = (bool)(sender as CheckBox).IsChecked;
+        }
+        private static bool isCreateInstanceChecked = false;
+        public static bool IsCreateInstanceChecked()
+        {
+            return isCreateInstanceChecked;
         }
     }
 

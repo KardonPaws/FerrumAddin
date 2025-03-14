@@ -57,15 +57,16 @@
         <Button Grid.Row="0" Grid.Column="1" Content="⚙" x:Name="OptionsButton"
                 MouseEnter="OptionsButton_MouseEnter" MouseLeave="OptionsButton_MouseLeave" Background="{x:Null}" BorderBrush="{x:Null}"/>
         <Popup x:Name="OptionsPopup" PlacementTarget="{Binding ElementName=OptionsButton}" Placement="Bottom"
-               StaysOpen="False"
+               StaysOpen="False" PopupAnimation="Scroll"
                MouseEnter="OptionsPopup_MouseEnter" MouseLeave="OptionsPopup_MouseLeave">
             <Border BorderBrush="Black">
-            <StackPanel Background="White">
-                <Label Content="При совпадении имен"/>
-                <RadioButton x:Name="FirstRadioButton" Content="Заменить существующее" Margin="5" IsChecked="True"
+                <StackPanel Background="White">
+                    <Label Content="При совпадении имен"/>
+                    <RadioButton x:Name="FirstRadioButton" Content="Заменить существующее" Margin="5" IsChecked="True"
                              GroupName="OptionsGroup" Checked="RadioButton_Checked"/>
-                <RadioButton x:Name="SecondRadioButton" Content="Добавить цифру к имени" Margin="5"
+                    <RadioButton x:Name="SecondRadioButton" Content="Добавить цифру к имени" Margin="5"
                              GroupName="OptionsGroup" Checked="RadioButton_Checked"/>
+                    <CheckBox x:Name="createInstance" Margin="5" Content="Разместить после загрузки" Checked="createInstance_Checked" Unchecked="createInstance_Checked"/>
                     <Button x:Name="checkButton" Margin="5" Click="CheckFamilyVersions" Content="Проверка версий"/>
                 </StackPanel>
             </Border>

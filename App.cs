@@ -134,6 +134,8 @@ namespace FerrumAddin
         public static string name;
         public RibbonPanel panelMEP;
         public RibbonPanel panelKR;
+        public RibbonPanel panelControl;
+
         public Result OnStartup(UIControlledApplication a)
         {
             application = a;
@@ -234,12 +236,14 @@ namespace FerrumAddin
 
             panelFerrum.AddItem(Comparison);
 
+
             panelMEP = a.CreateRibbonPanel(tabName, "ВИС");
             panelMEP.Visible = false;
 
             PushButtonData MEPName = new PushButtonData("mepName", "Наименование труб|воздуховодов", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandMepName");
 
             panelMEP.AddItem(MEPName);
+
 
             panelKR = a.CreateRibbonPanel(tabName, "КР");
             panelKR.Visible = false;
@@ -249,6 +253,13 @@ namespace FerrumAddin
 
             PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandGrillageCreator");
             panelKR.AddItem(GrillageCreator);
+
+
+            panelControl = a.CreateRibbonPanel(tabName, "Управление");
+            panelControl.Visible = false;
+
+            PushButtonData LinkFiles = new PushButtonData("LinkedFiles", "Управление связями", Assembly.GetExecutingAssembly().Location, "FerrumAddin.LinkedFilesCommand");
+            panelControl.AddItem(LinkFiles);
 
             FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;
@@ -371,14 +382,22 @@ namespace FerrumAddin
                 case "MEP":
                     panelMEP.Visible = true;
                     panelKR.Visible = false;
+                    panelControl.Visible = false;
                     break;
                 case "КР":
                     panelMEP.Visible = false;
                     panelKR.Visible = true;
+                    panelControl.Visible = false;
+                    break;
+                case "Управление":
+                    panelMEP.Visible = false;
+                    panelKR.Visible = false;
+                    panelControl.Visible = true;
                     break;
                 default:
                     panelMEP.Visible=false;
                     panelKR.Visible = false;
+                    panelControl.Visible = false;
                     break;
             }
         }
@@ -452,6 +471,7 @@ namespace FerrumAddin
                                 MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions();
                                 docToCopy.LoadFamily(tab.Path, loadOptions, out Family load);
                                 tx.Commit();
+                                
                             }
                         }
                         else
@@ -469,6 +489,15 @@ namespace FerrumAddin
                                 docToCopy.LoadFamily(famPath, loadOptions, out Family load);
                                 File.Delete(famPath);
                                 tx.Commit();
+                                if (list.Count == 1 && FamilyManagerWindow.IsCreateInstanceChecked())
+                                {
+                                    Family family = new FilteredElementCollector(docToCopy)
+                                     .OfClass(typeof(Family))
+                                     .Cast<Family>()
+                                     .FirstOrDefault(fam => fam.Name == familyName);
+                                    ElementType type = docToCopy.GetElement(family.GetFamilySymbolIds().FirstOrDefault()) as ElementType;
+                                    app.ActiveUIDocument.PostRequestForElementTypePlacement(type);
+                                }
                             }
                         }
                     }
@@ -485,6 +514,15 @@ namespace FerrumAddin
                             MyFamilyLoadOptions loadOptions = new MyFamilyLoadOptions();
                             docToCopy.LoadFamily(tab.Path, loadOptions, out Family load);
                             tx.Commit();
+                            if (list.Count == 1 && FamilyManagerWindow.IsCreateInstanceChecked())
+                            {
+                                Family family = new FilteredElementCollector(docToCopy)
+                                .OfClass(typeof(Family))
+                                .Cast<Family>()
+                                .FirstOrDefault(fam => fam.Name == familyName);
+                                ElementType type = docToCopy.GetElement(family.GetFamilySymbolIds().FirstOrDefault()) as ElementType;
+                                app.ActiveUIDocument.PostRequestForElementTypePlacement(type);
+                            }
                         }
                     }
                 }
@@ -525,6 +563,13 @@ namespace FerrumAddin
                             //tx.SetFailureHandlingOptions(failureOptions);
                             ElementTransformUtils.CopyElements(document, el, docToCopy, null, null);
                             tx.Commit();
+                            if (list.Count == 1 && FamilyManagerWindow.IsCreateInstanceChecked())
+                            {
+                                ElementType type = new FilteredElementCollector(docToCopy)
+                                 .OfCategory(nameAndCat[tab.Category]).WhereElementIsElementType()
+                                 .FirstOrDefault(fam => fam.Name == tab.Name) as ElementType;
+                                app.ActiveUIDocument.PostRequestForElementTypePlacement(type);
+                            }
                         }
                     }
                     else
@@ -603,6 +648,13 @@ namespace FerrumAddin
                                 copiedElement.Name = newName;
 
                                 tx.Commit();
+                                if (list.Count == 1 && FamilyManagerWindow.IsCreateInstanceChecked())
+                                {
+                                    ElementType type = new FilteredElementCollector(docToCopy)
+                                     .OfCategory(nameAndCat[tab.Category]).WhereElementIsElementType()
+                                     .FirstOrDefault(fam => fam.Name == tab.Name) as ElementType;
+                                    app.ActiveUIDocument.PostRequestForElementTypePlacement(type);
+                                }
                             }
                         }
                     }

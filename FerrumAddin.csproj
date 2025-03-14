@@ -106,6 +106,10 @@
     <Compile Include="GrillageCreator\WindowGrillageCreator.xaml.cs">
       <DependentUpon>WindowGrillageCreator.xaml</DependentUpon>
     </Compile>
+    <Compile Include="LinkedFiles\LinkedFilesCommand.cs" />
+    <Compile Include="LinkedFiles\LinkedFilesWindow.xaml.cs">
+      <DependentUpon>LinkedFilesWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="LintelCreator\AlphanumComparatorFastString.cs" />
     <Compile Include="LintelCreator\CommandLintelCreator2.cs" />
     <Compile Include="LintelCreator\LintelCreatorForm2.xaml.cs">
@@ -148,6 +152,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="GrillageCreator\WindowGrillageCreator.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="LinkedFiles\LinkedFilesWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
