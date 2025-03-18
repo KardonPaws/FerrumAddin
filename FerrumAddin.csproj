@@ -127,6 +127,19 @@
     <Compile Include="Update.xaml.cs">
       <DependentUpon>Update.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Worksets\CommandWorksets.cs" />
+    <Compile Include="Worksets\InfosStorage.cs" />
+    <Compile Include="Worksets\Workset.xaml.cs">
+      <DependentUpon>Workset.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Worksets\WorksetBy.cs" />
+    <Compile Include="Worksets\WorksetByCategory.cs" />
+    <Compile Include="Worksets\WorksetByFamily.cs" />
+    <Compile Include="Worksets\WorksetByLink.cs" />
+    <Compile Include="Worksets\WorksetByParameter.cs" />
+    <Compile Include="Worksets\WorksetByRazd.cs" />
+    <Compile Include="Worksets\WorksetByType.cs" />
+    <Compile Include="Worksets\WorksetTool.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
@@ -167,6 +180,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="Worksets\Workset.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Resources\Железно-верт-синий.png" />
@@ -183,6 +200,9 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="GrillageCreator\GrillageCreatorBackground.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Worksets\Worksets_Sample.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

@@ -261,6 +261,13 @@ namespace FerrumAddin
             PushButtonData LinkFiles = new PushButtonData("LinkedFiles", "Управление связями", Assembly.GetExecutingAssembly().Location, "FerrumAddin.LinkedFilesCommand");
             panelControl.AddItem(LinkFiles);
 
+            var CommandWorksets = new PushButtonData("Распределение элементов\nпо рабочим наборам", "Распределение элементов\nпо рабочим наборам", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandWorksets");
+            var ComandWorksets = panelControl.AddItem(CommandWorksets) as PushButton;
+            ComandWorksets.Enabled = true;
+            ContextualHelp helpComand = new ContextualHelp(ContextualHelpType.Url, "https://docs.google.com/document/d/1XSpM4HcRagr0BNgYW2WUo8hMjI7oEH93g94kwdJLwC0/edit?usp=sharing");
+            ComandWorksets.SetContextualHelp(helpComand);
+            ComandWorksets.ToolTip = "В соответсвии с выбранным xml файлом разносит элементы по рабочим наборам, в случае, если рабочего набора не существует - создает новый рабочий набор.";
+
             FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;
 
@@ -750,7 +757,7 @@ namespace FerrumAddin
        bool familyInUse,
        out bool overwriteParameterValues)
         {
-            overwriteParameterValues = true;
+            overwriteParameterValues = false;
             return true;
         }
 

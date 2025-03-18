@@ -122,82 +122,6 @@ namespace FerrumAddin.LinkedFiles
             }
         }
 
-        private void DisableAnnotationVisibility_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                // Получаем выбранные связанные модели
-                var selectedLinkedFiles = LinkedFilesList.ItemsSource
-                    .Cast<LinkedFileModel>()
-                    .Where(x => x.IsSelected)
-                    .Select(x => x.Id)
-                    .ToList();
-
-                if (selectedLinkedFiles.Count == 0)
-                {
-                    MessageBox.Show("Не выбрано ни одной связанной модели.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                // Начинаем транзакцию
-                using (Transaction trans = new Transaction(doc, "Отключение видимости аннотаций в связях"))
-                {
-                    trans.Start();
-
-                    // Получаем все связанные модели по именам
-                    FilteredElementCollector collector = new FilteredElementCollector(doc);
-
-                    // Получаем все категории аннотаций
-                    var annotationCategories = doc.Settings.Categories
-                        .Cast<Category>()
-                        .Where(c => c.CategoryType == CategoryType.Annotation) // Фильтруем только аннотации
-                        .ToList();
-
-                    // Получаем все виды и шаблоны в проекте
-                    var views = new FilteredElementCollector(doc)
-                        .OfClass(typeof(View))
-                        .Cast<View>()
-                        .ToList(); // Все виды, включая шаблоны
-
-                    // Отключаем видимость аннотаций в выбранных связанных моделях
-                    foreach (ElementId linkTypeID in selectedLinkedFiles)
-                    {
-
-                        foreach (View view in views)
-                        {
-                            // Отключаем видимость всех категорий аннотаций в связанной модели
-                            RevitLinkGraphicsSettings graphicsSettings = new RevitLinkGraphicsSettings() { LinkVisibilityType = LinkVisibility.Custom };
-                            
-                            try
-                            {
-                                view.SetLinkOverrides(linkTypeID, graphicsSettings);
-
-                                foreach (Category category in annotationCategories)
-                                {
-                                    if (view.CanCategoryBeHidden(category.Id))
-                                    {
-
-                                    }
-                                }
-                            }
-                            catch
-                            {
-                                continue;
-                            }
-                        }
-                    }
-
-                    trans.Commit();
-                }
-
-                MessageBox.Show("Видимость аннотаций в выбранных связанных моделях отключена.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
         private void MoveToWorksets_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -450,6 +374,87 @@ namespace FerrumAddin.LinkedFiles
                         MessageBox.Show("Не удалось загрузить связь.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SelectAll_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Получаем все элементы в LinkedFilesList
+                var linkedFiles = LinkedFilesList.ItemsSource.Cast<LinkedFileModel>().ToList();
+
+                // Устанавливаем флаг IsSelected для всех элементов
+                foreach (var linkedFile in linkedFiles)
+                {
+                    linkedFile.IsSelected = true;
+                }
+
+                // Обновляем отображение ListView
+                LinkedFilesList.Items.Refresh();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void DisableAnnotationVisibility_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Получаем выбранные связанные файлы
+                var selectedLinkedFiles = LinkedFilesList.ItemsSource
+                    .Cast<LinkedFileModel>()
+                    .Where(x => x.IsSelected)
+                    .ToList();
+                List<Element> lstRvtLinkType = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).ToList();
+
+                if (selectedLinkedFiles.Count == 0)
+                {
+                    MessageBox.Show("Не выбрано ни одной связанной модели.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                foreach (Document _linkdoc in doc.Application.Documents)
+                {
+                    foreach (LinkedFileModel model in selectedLinkedFiles)
+                    {
+                        if (model.Name.Remove(model.Name.Length - 4, 4) == _linkdoc.Title)
+                        {
+                            WorksetConfiguration wk = new WorksetConfiguration(WorksetConfigurationOption.OpenLastViewed);
+                            ModelPath _modelpath = _linkdoc.GetWorksharingCentralModelPath();
+                            IList<WorksetPreview> lstPreview = WorksharingUtils.GetUserWorksetInfo(_modelpath);
+                            WorksetTable _worksetTable = _linkdoc.GetWorksetTable();
+                            List<WorksetId> lstWkSet_Close = new List<WorksetId>();
+
+                            foreach (WorksetPreview item in lstPreview)
+                            {
+                                Workset wkset = _worksetTable.GetWorkset(item.Id);
+                                if (!wkset.IsOpen)
+                                {
+                                    lstWkSet_Close.Add(item.Id);
+                                }
+                                else
+                                {
+                                    if ((item.Name.CompareTo("Общие уровни и сетки") == 0) || (item.Name.CompareTo("Аннотации") == 0))
+                                    {
+                                        lstWkSet_Close.Add(item.Id);
+                                        continue;
+                                    }
+                                }
+                            }
+                            wk.Close(lstWkSet_Close);
+                            (doc.GetElement(model.Id) as RevitLinkType).LoadFrom(_modelpath, wk);
+                        }
+                    }
+                }
+
+                MessageBox.Show("Аннотации в выбранных связанных файлах отключены.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {

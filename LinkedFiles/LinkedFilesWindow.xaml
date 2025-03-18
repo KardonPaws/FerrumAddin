@@ -15,20 +15,25 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-
                     <!-- Список загруженных связей с CheckBox -->
-                    <ListView x:Name="LinkedFilesList" Grid.Column="0" Margin="10" Grid.RowSpan="2">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" Margin="5"/>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="auto"/>
+                            <RowDefinition/>
+                        </Grid.RowDefinitions>
+                        <Button Content="Выбрать все" Margin="10,5,10,5" Width="100" Click="SelectAll_Click" HorizontalAlignment="Left"/>
+                        <ListView x:Name="LinkedFilesList" Grid.Column="0" Margin="10,0,10,10" Grid.Row="1">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" Margin="5"/>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
                     <!-- Кнопки управления -->
                     <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right" Margin="10">
                         <Button Content="Выключить видимость" Margin="5" Width="215" Click="DisableVisibility_Click" HorizontalAlignment="Left"/>
-                        <Button Content="Выключить аннотации (в разработке)" Margin="5" Width="215" Click="DisableAnnotationVisibility_Click" HorizontalAlignment="Left" IsEnabled="False"/>
+                        <Button Content="Выключить аннотации" Margin="5" Width="215" Click="DisableAnnotationVisibility_Click" HorizontalAlignment="Left"/>
                         <Button Content="Перенос в рабочие наборы" Margin="5" Width="215" Click="MoveToWorksets_Click" HorizontalAlignment="Left"/>
                         <CheckBox x:Name="createWorkset" Content="Создавать отдельный РН" Margin="5" VerticalAlignment="Center"/>
                     </StackPanel>
