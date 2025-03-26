@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Autodesk.Revit.DB;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,9 +21,18 @@ namespace FerrumAddin.GrillageCreator
     /// </summary>
     public partial class WindowGrillageCreator : Window
     {
-        public WindowGrillageCreator()
+        public WindowGrillageCreator(List<Element> elements)
         {
             InitializeComponent();
+            List<string> rebars = new List<string>();
+            foreach (Element element in elements)
+            {
+                rebars.Add(element.Name);
+            }
+            comboBottom.ItemsSource = rebars;
+            comboTop.ItemsSource = rebars;
+            comboVert.ItemsSource = rebars;
+            comboHorizont.ItemsSource = rebars;
         }
 
         private void RadioButton_Checked(object sender, RoutedEventArgs e)
@@ -87,27 +97,54 @@ namespace FerrumAddin.GrillageCreator
         public static string horizontDiameter;
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            if ((bool)radioBtnNumber.IsChecked)
+            // Проверяем, что все обязательные поля заполнены
+            if (string.IsNullOrEmpty(boxHorizont.Text) ||
+                string.IsNullOrEmpty(boxVertical.Text) ||
+                string.IsNullOrEmpty(boxLeftRight.Text) ||
+                string.IsNullOrEmpty(boxTopBottom.Text) ||
+                string.IsNullOrEmpty(boxHorizontal.Text) ||
+                comboTop.SelectedItem == null ||
+                comboBottom.SelectedItem == null ||
+                comboVert.SelectedItem == null ||
+                comboHorizont.SelectedItem == null)
+            {
+                MessageBox.Show("Пожалуйста, заполните все параметры перед выполнением команды.",
+                               "Не все параметры заполнены",
+                               MessageBoxButton.OK,
+                               MessageBoxImage.Warning);
+                return;
+            }
+
+            try
             {
                 isNumber = true;
-            }
-            else
-            {
-                isNumber = false;
-            }
-            // Собираем значения из текстовых полей
-            horizontalCount = int.Parse(boxHorizont.Text);
-            verticalCount = int.Parse(boxVertical.Text);
-            leftRightOffset = int.Parse(boxLeftRight.Text);
-            topBottomOffset = int.Parse(boxTopBottom.Text);
-            horizontCount = int.Parse(boxHorizontal.Text);
+                horizontalCount = int.Parse(boxHorizont.Text);
+                verticalCount = int.Parse(boxVertical.Text);
+                leftRightOffset = int.Parse(boxLeftRight.Text);
+                topBottomOffset = int.Parse(boxTopBottom.Text);
+                horizontCount = int.Parse(boxHorizontal.Text);
 
-            // Собираем значения из комбобоксов
-            //topDiameter = comboTop.SelectedItem.ToString();
-            //bottomDiameter = comboBottom.SelectedItem.ToString();
-            //vertDiameter = comboVert.SelectedItem.ToString();
-            //horizontDiameter = comboHorizont.SelectedItem.ToString();
-            CommandGrillageCreator.createGrillage.Raise();
+                topDiameter = comboTop.SelectedItem.ToString();
+                bottomDiameter = comboBottom.SelectedItem.ToString();
+                vertDiameter = comboVert.SelectedItem.ToString();
+                horizontDiameter = comboHorizont.SelectedItem.ToString();
+
+                CommandGrillageCreator.createGrillage.Raise();
+            }
+            catch (FormatException)
+            {
+                MessageBox.Show("Пожалуйста, введите корректные числовые значения во все поля.",
+                               "Ошибка ввода",
+                               MessageBoxButton.OK,
+                               MessageBoxImage.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Произошла ошибка: {ex.Message}",
+                               "Ошибка",
+                               MessageBoxButton.OK,
+                               MessageBoxImage.Error);
+            }
         }
     }
 }

@@ -10,13 +10,13 @@
         <!-- Фон окна -->
         <Image HorizontalAlignment="Left" Height="403" VerticalAlignment="Top" Width="540" Margin="10,10,10,10" Source="/FerrumAddin;component/GrillageCreator/GrillageCreatorBackground.png"/>
         <!-- Выбор способа задания количества арматуры -->
-        <GroupBox HorizontalAlignment="Right" VerticalAlignment="Top" BorderBrush="#FF3F4040" Margin="0,5,5,0" >
+        <!--<GroupBox HorizontalAlignment="Right" VerticalAlignment="Top" BorderBrush="#FF3F4040" Margin="0,5,5,0" >
             <StackPanel Margin="5,5,5,5">
                 <TextBlock TextWrapping="Wrap" Text="Количество арматуры" HorizontalAlignment="Left" VerticalAlignment="Top"/>
                 <RadioButton x:Name="radioBtnNumber" Content="Ввод количества" HorizontalAlignment="Left" VerticalAlignment="Top" IsChecked="True" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked"/>
                 <RadioButton x:Name="radioBtnStep" Content="Расчет по шагу" HorizontalAlignment="Left" VerticalAlignment="Top" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked"/>
             </StackPanel>
-        </GroupBox>
+        </GroupBox>-->
         <!-- Количество/шаг горизонтальных каркасов -->
         <TextBox x:Name="boxHorizont" HorizontalAlignment="Center" Margin="0,41,0,0" TextWrapping="Wrap" Text="1" VerticalAlignment="Top" Width="120" PreviewTextInput="previewTextInput"/>
         <TextBlock x:Name="textHorizont" HorizontalAlignment="Center" Margin="0,7,0,0" TextWrapping="Wrap" Text="Количество&#x0a;горизонтальных каркасов" VerticalAlignment="Top" TextAlignment="Center"/>
