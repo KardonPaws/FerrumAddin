@@ -1,6 +1,7 @@
 ﻿using Autodesk.Revit.DB;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -13,6 +14,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Xml.Serialization;
 
 namespace FerrumAddin.GrillageCreator
 {
@@ -21,7 +23,7 @@ namespace FerrumAddin.GrillageCreator
     /// </summary>
     public partial class WindowGrillageCreator : Window
     {
-        public WindowGrillageCreator(List<Element> elements)
+        public WindowGrillageCreator(List<Element> elements, List<Element> elements2)
         {
             InitializeComponent();
             List<string> rebars = new List<string>();
@@ -29,10 +31,86 @@ namespace FerrumAddin.GrillageCreator
             {
                 rebars.Add(element.Name);
             }
+            List<string> rebars2 = new List<string>();
+            foreach (Element element in elements2)
+            {
+                rebars2.Add(element.Name);
+            }
             comboBottom.ItemsSource = rebars;
             comboTop.ItemsSource = rebars;
             comboVert.ItemsSource = rebars;
-            comboHorizont.ItemsSource = rebars;
+            comboHorizont.ItemsSource = rebars2;
+            comboCorner.ItemsSource = rebars2;
+            LoadSettings();
+        }
+
+        private string _settingsFilePath = App.xmlFilePath + "GrillageCreator.xml";
+
+        private void LoadSettings()
+        {
+            if (string.IsNullOrEmpty(_settingsFilePath)) return;
+
+            var settings = GrillageSettings.LoadSettings(_settingsFilePath);
+            if (settings == null) return;
+
+            // Загружаем значения в UI элементы с проверкой наличия в ItemsSource
+            SetComboBoxValueIfExists(comboTop, settings.TopDiameter);
+            SetComboBoxValueIfExists(comboBottom, settings.BottomDiameter);
+            SetComboBoxValueIfExists(comboVert, settings.VertDiameter);
+            SetComboBoxValueIfExists(comboHorizont, settings.HorizontDiameter);
+            SetComboBoxValueIfExists(comboCorner, settings.CornerDiameter);
+
+            // Загружаем числовые значения
+            boxHorizont.Text = settings.HorizontCount == 0 ? "2" : settings.HorizontCount.ToString();
+            boxVertical.Text = settings.VerticalStep == 0 ? "200" : settings.VerticalStep.ToString() ;
+            boxHorizontal.Text = settings.HorizontalStep == 0 ? "200" : settings.HorizontalStep.ToString();
+            boxLeftRight.Text = settings.LeftRightOffset == 0 ? "50" : settings.LeftRightOffset.ToString();
+            boxTopBottom.Text = settings.TopBottomOffset == 0 ? "50" : settings.TopBottomOffset.ToString();
+        }
+        private void SaveSettings()
+        {
+            if (string.IsNullOrEmpty(_settingsFilePath)) return;
+
+            var settings = new GrillageSettings
+            {
+                TopDiameter = comboTop.SelectedValue?.ToString(),
+                BottomDiameter = comboBottom.SelectedValue?.ToString(),
+                VertDiameter = comboVert.SelectedValue?.ToString(),
+                HorizontDiameter = comboHorizont.SelectedValue?.ToString(),
+                CornerDiameter = comboCorner.SelectedValue?.ToString(),
+                HorizontCount = int.TryParse(boxHorizont.Text, out var hc) ? hc : 2,
+                VerticalStep = int.TryParse(boxVertical.Text, out var vs) ? vs : 200,
+                HorizontalStep = int.TryParse(boxHorizontal.Text, out var hs) ? hs : 200,
+                LeftRightOffset = int.TryParse(boxLeftRight.Text, out var lr) ? lr : 50,
+                TopBottomOffset = int.TryParse(boxTopBottom.Text, out var tb) ? tb : 50
+            };
+
+            GrillageSettings.SaveSettings(settings, _settingsFilePath);
+        }
+
+        private void SetComboBoxValueIfExists(ComboBox comboBox, string value)
+        {
+            if (string.IsNullOrEmpty(value) || comboBox.ItemsSource == null)
+            {
+                comboBox.SelectedIndex = -1;
+                return;
+            }
+
+            // Ищем элемент в ItemsSource
+            foreach (var item in comboBox.ItemsSource)
+            {
+                // Предполагаем, что элементы - это объекты Element или строки
+                string itemValue = item is string element ? element : item.ToString();
+
+                if (itemValue == value)
+                {
+                    comboBox.SelectedValue = item;
+                    return;
+                }
+            }
+
+            // Если элемент не найден
+            comboBox.SelectedIndex = -1;
         }
 
         private void RadioButton_Checked(object sender, RoutedEventArgs e)
@@ -95,6 +173,8 @@ namespace FerrumAddin.GrillageCreator
         public static string bottomDiameter;
         public static string vertDiameter;
         public static string horizontDiameter;
+        public static string cornerDiameter;
+
         private void Button_Click(object sender, RoutedEventArgs e)
         {
             // Проверяем, что все обязательные поля заполнены
@@ -106,7 +186,8 @@ namespace FerrumAddin.GrillageCreator
                 comboTop.SelectedItem == null ||
                 comboBottom.SelectedItem == null ||
                 comboVert.SelectedItem == null ||
-                comboHorizont.SelectedItem == null)
+                comboHorizont.SelectedItem == null ||
+                comboCorner.SelectedItem == null)
             {
                 MessageBox.Show("Пожалуйста, заполните все параметры перед выполнением команды.",
                                "Не все параметры заполнены",
@@ -117,7 +198,6 @@ namespace FerrumAddin.GrillageCreator
 
             try
             {
-                isNumber = true;
                 horizontalCount = int.Parse(boxHorizont.Text);
                 verticalCount = int.Parse(boxVertical.Text);
                 leftRightOffset = int.Parse(boxLeftRight.Text);
@@ -128,8 +208,18 @@ namespace FerrumAddin.GrillageCreator
                 bottomDiameter = comboBottom.SelectedItem.ToString();
                 vertDiameter = comboVert.SelectedItem.ToString();
                 horizontDiameter = comboHorizont.SelectedItem.ToString();
+                cornerDiameter = comboCorner.SelectedItem.ToString();
 
-                CommandGrillageCreator.createGrillage.Raise();
+                if (horizontalCount >= 2)
+                {
+                    SaveSettings();
+                    CommandGrillageCreator.createGrillage.Raise();
+                }
+                else
+                    MessageBox.Show("Пожалуйста, введите число каркасов >1.",
+                               "Ошибка ввода",
+                               MessageBoxButton.OK,
+                               MessageBoxImage.Error);
             }
             catch (FormatException)
             {
@@ -144,6 +234,45 @@ namespace FerrumAddin.GrillageCreator
                                "Ошибка",
                                MessageBoxButton.OK,
                                MessageBoxImage.Error);
+            }
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            SaveSettings();
+        }
+    }
+
+    public class GrillageSettings
+    {
+        public string TopDiameter { get; set; }
+        public string BottomDiameter { get; set; }
+        public string VertDiameter { get; set; }
+        public string HorizontDiameter { get; set; }
+        public string CornerDiameter { get; set; }
+        public int HorizontCount { get; set; }
+        public int VerticalStep { get; set; }
+        public int HorizontalStep { get; set; }
+        public int LeftRightOffset { get; set; }
+        public int TopBottomOffset { get; set; }
+
+        public static void SaveSettings(GrillageSettings settings, string filePath)
+        {
+            var serializer = new XmlSerializer(typeof(GrillageSettings));
+            using (var writer = new StreamWriter(filePath))
+            {
+                serializer.Serialize(writer, settings);
+            }
+        }
+
+        public static GrillageSettings LoadSettings(string filePath)
+        {
+            if (!File.Exists(filePath)) return new GrillageSettings();
+
+            var serializer = new XmlSerializer(typeof(GrillageSettings));
+            using (var reader = new StreamReader(filePath))
+            {
+                return (GrillageSettings)serializer.Deserialize(reader);
             }
         }
     }

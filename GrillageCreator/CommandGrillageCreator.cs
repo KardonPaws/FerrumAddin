@@ -24,9 +24,11 @@ namespace FerrumAddin
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             List<Element> rebarTypes = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).Where(x => x.Name.StartsWith("к")).ToList();
+            List<Element> rebarTypesHorizontal = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).Where(x => x.LookupParameter("Комментарии к типоразмеру").AsString().Contains("основная")).ToList();
+
 
             createGrillage = ExternalEvent.Create(new CreateGrillage());
-            WindowGrillageCreator window = new WindowGrillageCreator(rebarTypes);
+            WindowGrillageCreator window = new WindowGrillageCreator(rebarTypes, rebarTypesHorizontal);
             window.Show();
             
             return Result.Succeeded;
@@ -40,6 +42,7 @@ namespace FerrumAddin
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
             List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Where(x => x.Name.StartsWith("к")).ToList();
+            List<Element> rebarTypesHorizontal = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Where(x => x.LookupParameter("Комментарии к типоразмеру").AsString().Contains("основная")).ToList();
 
             // Получаем выбранный элемент (перекрытие)
             List<Reference> elements = (List<Reference>)uiDoc.Selection.PickObjects(ObjectType.Element);
@@ -125,9 +128,12 @@ namespace FerrumAddin
                         // Расстояние между линиями
                         double distanceBetweenLines = lineBR.GetEndPoint(0).DistanceTo(lineBL.GetEndPoint(0));
                         // Делим расстояние на равные участки
-                        double step = distanceBetweenLines / (WindowGrillageCreator.horizontalCount + 1);
+                        double step = distanceBetweenLines / (WindowGrillageCreator.horizontalCount -1);
+                        
+                        intermediateLinesTop.Add(lineTL);
+                        intermediateLinesBottom.Add(lineBL);
 
-                        for (int i = 1; i <= WindowGrillageCreator.horizontalCount; i++)
+                        for (int i = 1; i <= WindowGrillageCreator.horizontalCount-2; i++)
                         {
                             XYZ offset_ = perpendicularDirection * (step * i);
                             Line intermediateLine = Line.CreateBound(lineBL.GetEndPoint(0) + offset_, lineBL.GetEndPoint(1) + offset_);
@@ -136,16 +142,27 @@ namespace FerrumAddin
                             intermediateLinesTop.Add(intermediateLine);
                         }
 
-                        intermediateLinesTop.AddRange(new List<Line>() { lineTL, lineTR });
+                        intermediateLinesTop.Add(lineTR);
                         dictTop.Add(centerLine, intermediateLinesTop);
-                        intermediateLinesBottom.AddRange(new List<Line>() { lineBL, lineBR });
-                        dictTop.Add(centerLine, intermediateLinesBottom);
+                        intermediateLinesBottom.Add(lineBR);
+                        dictBottom.Add(centerLine, intermediateLinesBottom);
+                        
+                        RebarBarType typeTop = rebarTypes.Where(x => x.Name == WindowGrillageCreator.topDiameter).FirstOrDefault() as RebarBarType;
+                        RebarBarType typeBot = rebarTypes.Where(x => x.Name == WindowGrillageCreator.bottomDiameter).FirstOrDefault() as RebarBarType;
+                        
+                        CreateRebarFromLines(doc, intermediateLinesBottom, typeTop, RebarStyle.Standard, element, true);
+                        CreateRebarFromLines(doc, intermediateLinesTop, typeBot, RebarStyle.Standard, element, false);
 
-                        RebarBarType type = rebarTypes.Where(x => x.Name == WindowGrillageCreator.bottomDiameter).FirstOrDefault() as RebarBarType;
-                        CreateRebarFromLines(doc, intermediateLinesBottom, type, RebarStyle.Standard, element, true);
+                        // Вертикальные линии
+                        RebarBarType typeVertical = rebarTypes.Where(x => x.Name == WindowGrillageCreator.vertDiameter).FirstOrDefault() as RebarBarType;
 
-                        type = rebarTypes.Where(x => x.Name == WindowGrillageCreator.topDiameter).FirstOrDefault() as RebarBarType;
-                        CreateRebarFromLines(doc, intermediateLinesTop, type, RebarStyle.Standard, element, false);
+                        // Получаем диаметры арматуры в футах
+                        double topRadius = typeTop.BarModelDiameter / 2;
+                        double bottomRadius = typeBot.BarModelDiameter / 2;
+                        double verticalRadius = typeVertical.BarModelDiameter / 2;
+
+                        // Вычисляем смещение от края
+                        double offsetFromEdge = Math.Max(topRadius, bottomRadius) + verticalRadius;
 
                         Line verticalLineRightStart = Line.CreateBound(lineBR.GetEndPoint(0), lineTR.GetEndPoint(0));
                         Line verticalLineLeftStart = Line.CreateBound(lineBL.GetEndPoint(0), lineTL.GetEndPoint(0));
@@ -153,7 +170,7 @@ namespace FerrumAddin
                         double verticalCount = WindowGrillageCreator.verticalCount / 304.8;
 
                         List<Line> verticalLines = new List<Line>();
-                        verticalLines.Add(verticalLineRightStart);
+                        
 
                         // Начальная и конечная точки для вертикальных линий
                         XYZ startPoint1 = verticalLineRightStart.GetEndPoint(0); // Начальная точка первой линии
@@ -163,8 +180,15 @@ namespace FerrumAddin
 
                         // Направление для вертикальных линий 
                         XYZ verticalDirection = (startPoint2 - startPoint1).Normalize();
+                        XYZ centerPoint = (startPoint1 + startPoint2) / 2;
 
-                        for (int i = 1; i <= WindowGrillageCreator.horizontalCount; i++)
+                        XYZ rightOffset = verticalDirection * offsetFromEdge;
+                        Line offsetRightLine = Line.CreateBound(
+                            verticalLineRightStart.GetEndPoint(0) + rightOffset,
+                            verticalLineRightStart.GetEndPoint(1) + rightOffset);
+                        verticalLines.Add(offsetRightLine);
+
+                        for (int i = 1; i <= WindowGrillageCreator.horizontalCount-2; i++)
                         {
                             // Вычисляем смещение для текущей линии
                             XYZ offset_ = verticalDirection * (step * i);
@@ -173,12 +197,26 @@ namespace FerrumAddin
                             XYZ currentStart = startPoint1 + offset_;
                             XYZ currentEnd = endPoint1 + offset_;
 
+                            if ((centerPoint - currentStart).Normalize() == verticalDirection)
+                            {
+                                currentStart = currentStart + offsetFromEdge * verticalDirection;
+                                currentEnd = currentEnd + offsetFromEdge * verticalDirection;
+                            }
+                            else
+                            {
+                                currentStart = currentStart - offsetFromEdge * verticalDirection;
+                                currentEnd = currentEnd - offsetFromEdge * verticalDirection;
+                            }
                             // Создаем линию и добавляем ее в список
                             Line currentLine = Line.CreateBound(currentStart, currentEnd);
                             verticalLines.Add(currentLine);
                         }
-                        verticalLines.Add(verticalLineLeftStart);
 
+                        XYZ leftOffset = -verticalDirection * offsetFromEdge;
+                        Line offsetLeftLine = Line.CreateBound(
+                            verticalLineLeftStart.GetEndPoint(0) + leftOffset,
+                            verticalLineLeftStart.GetEndPoint(1) + leftOffset);
+                        verticalLines.Add(offsetLeftLine);
                         // Длина центральной линии (centerLine)
                         double centerLineLength = centerLine.Length;
 
@@ -188,9 +226,11 @@ namespace FerrumAddin
                         // Направление для создания линий
                         XYZ direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
 
-                        type = rebarTypes.Where(x => x.Name == WindowGrillageCreator.vertDiameter).FirstOrDefault() as RebarBarType;
-                        CreateRebarSet(doc, verticalLines, type, RebarStyle.Standard, element, direction, numberOfLinesTop, verticalCount);
+                        CreateRebarSet(doc, verticalLines, typeVertical, RebarStyle.Standard, element, direction, numberOfLinesTop, verticalCount);
 
+
+                        //Горизонтальные линии
+                        RebarBarType typeHorizontal = rebarTypesHorizontal.Where(x => x.Name == WindowGrillageCreator.horizontDiameter).FirstOrDefault() as RebarBarType;
 
                         List<Line> horizontalLines = new List<Line>();
                         // Количество линий, которые нужно создать
@@ -200,25 +240,33 @@ namespace FerrumAddin
                         direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
 
                         // Вычисляем смещение для текущей линии
-                        double offsetDistance = WindowGrillageCreator.horizontCount / 304.8; // Шаг в футах
-                        XYZ offset = direction * offsetDistance * 0;
+                        double offsetTop = topRadius + (typeHorizontal.BarModelDiameter / 2);
+                        double offsetBot = bottomRadius + (typeHorizontal.BarModelDiameter / 2);
+                        double offsetLen = verticalRadius + (typeHorizontal.BarModelDiameter / 2);
+
+
+                        XYZ offsetT = XYZ.BasisZ * offsetTop;
+                        XYZ offsetB = XYZ.BasisZ * offsetBot;
+                        XYZ offsetL = centerLine.Direction * offsetLen;
+
 
                         // Линия между verticalLineRightStart(0) и verticalLineLeftStart(0)
-                        XYZ start3 = verticalLineRightStart.GetEndPoint(0) + offset;
-                        XYZ end3 = verticalLineLeftStart.GetEndPoint(0) + offset;
+                        XYZ start3 = verticalLineRightStart.GetEndPoint(0) + offsetT + offsetL;
+                        XYZ end3 = verticalLineLeftStart.GetEndPoint(0) + offsetT + offsetL;
                         Line line3 = Line.CreateBound(start3, end3);
                         horizontalLines.Add(line3);                   
 
                         // Линия между verticalLineRightStart(1) и verticalLineLeftStart(1)
-                        XYZ start4 = verticalLineRightStart.GetEndPoint(1) + offset;
-                        XYZ end4 = verticalLineLeftStart.GetEndPoint(1) + offset;
+                        XYZ start4 = verticalLineRightStart.GetEndPoint(1) - offsetB + offsetL;
+                        XYZ end4 = verticalLineLeftStart.GetEndPoint(1) - offsetB + offsetL;
                         Line line4 = Line.CreateBound(start4, end4);
                         horizontalLines.Add(line4);
 
-                        type = rebarTypes.Where(x => x.Name == WindowGrillageCreator.horizontDiameter).FirstOrDefault() as RebarBarType;
-                        CreateRebarSet(doc, horizontalLines, type, RebarStyle.Standard, element, direction, numberOfLinesBot, WindowGrillageCreator.horizontCount / 304.8);
+                        CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, element, direction, numberOfLinesBot, WindowGrillageCreator.horizontCount / 304.8);
                     }
-                    
+
+                    RebarBarType type2 = rebarTypesHorizontal.Where(x => x.Name == WindowGrillageCreator.cornerDiameter).FirstOrDefault() as RebarBarType;
+                    CreateCornerRebarsAtIntersections(doc, dictTop, dictBottom, type2, element);
                 }
             }
             
@@ -228,12 +276,122 @@ namespace FerrumAddin
             return "xxx";
         }
 
+        private void CreateCornerRebarsAtIntersections(Document doc,
+    Dictionary<Line, List<Line>> dictTop,
+    Dictionary<Line, List<Line>> dictBottom,
+    RebarBarType barType,
+    Element host)
+        {
+            using (Transaction tx = new Transaction(doc, "Создание угловых арматур"))
+            {
+                tx.Start();
+
+                List<Line> processedCenterLines = new List<Line>();
+
+                foreach (var centerLine1 in dictTop.Keys)
+                {
+                    processedCenterLines.Add(centerLine1);
+                    int i = 0;
+
+                    foreach (var centerLine2 in dictTop.Keys.Except(processedCenterLines))
+                    {
+                        if (centerLine1.Intersect(centerLine2) == SetComparisonResult.Overlap)
+                        {
+                            XYZ centerIntersection = GetIntersectionPoint(centerLine1, centerLine2);
+                            if (centerIntersection == null) continue;
+
+                            i++;
+                            List<Line> topLines1 = dictTop[centerLine1];
+                            List<Line> topLines2 = dictTop[centerLine2];
+                            List<Line> bottomLines1 = dictBottom[centerLine1];
+                            List<Line> bottomLines2 = dictBottom[centerLine2];
+
+                            // Создаем уголки для верхних линий (от первого к последнему)
+                            CreateCornersBetweenLines(doc, topLines1, topLines2, centerIntersection, barType, host);
+
+                            // Создаем уголки для нижних линий (от первого к последнему)
+                            CreateCornersBetweenLines(doc, bottomLines1, bottomLines2, centerIntersection, barType, host);
+                            if (i == 4)
+                                break;
+                        }
+                    }
+                }
+
+                tx.Commit();
+            }
+        }
+
+        private void CreateCornersBetweenLines(Document doc,
+    List<Line> lines1,
+    List<Line> lines2,
+    XYZ centerIntersection,
+    RebarBarType barType,
+    Element host)
+        {
+            int minCount = Math.Min(lines1.Count, lines2.Count);
+
+            for (int i = 0; i < minCount; i++)
+            {
+                //int reverseIndex = lines2.Count - 1 - i;
+                //if (reverseIndex < 0) break;
+
+                Line line1 = lines1[i];
+                Line line2 = lines2[i];
+
+                // Находим точку пересечения линий
+                XYZ intersection = GetIntersectionPoint(line1, line2);
+                if (intersection == null) continue;
+
+                // Определяем правильные направления для уголков
+                XYZ dir1 = GetCorrectDirection(line1, intersection);
+                XYZ dir2 = GetCorrectDirection(line2, intersection);
+
+                // Создаем уголок с учетом направлений
+                CreateCornerRebar(doc, line1, line2, intersection, dir1, dir2, barType, host);
+            }
+        }
+
+        private XYZ GetCorrectDirection(Line line, XYZ intersection)
+        {
+            // Определяем, к какому концу линии ближе точка пересечения
+            double distToStart = intersection.DistanceTo(line.GetEndPoint(0));
+            double distToEnd = intersection.DistanceTo(line.GetEndPoint(1));
+
+            // Возвращаем направление от точки пересечения вдоль линии
+            return distToStart < distToEnd
+                ? (line.GetEndPoint(1) - line.GetEndPoint(0)).Normalize()
+                : (line.GetEndPoint(0) - line.GetEndPoint(1)).Normalize();
+        }
+
+        private void CreateCornerRebar(Document doc,
+            Line line1,
+            Line line2,
+            XYZ intersection,
+            XYZ dir1,
+            XYZ dir2,
+            RebarBarType barType,
+            Element host)
+        {
+            double legLength = 150/304.8; // 15 см в каждую сторону
+
+            // Создаем ножки уголка с учетом направления
+            Line leg1 = Line.CreateBound(intersection + dir1 * legLength, intersection);
+            Line leg2 = Line.CreateBound(intersection, intersection + dir2 * legLength);
+
+            List<Curve> cornerCurves = new List<Curve> { leg1, leg2 };
+
+            Rebar cornerRebar = Rebar.CreateFromCurves(doc, RebarStyle.Standard, barType,
+                null, null, host, XYZ.BasisZ, cornerCurves,
+                RebarHookOrientation.Right, RebarHookOrientation.Left,
+                true, true);
+        }
+
         private void CreateRebarFromLines(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, bool bottom)
         {
             using (Transaction tx = new Transaction(doc))
             {
                 tx.Start("Создание арматуры");
-                double extensionLength = 15.0 / 304.8; // Расширение в футах
+                double extensionLength = 0.08202; // Расширение в футах
 
                 foreach (Line line in lines)
                 {
@@ -251,6 +409,19 @@ namespace FerrumAddin
                     Rebar rebar = Rebar.CreateFromCurves(doc, style, barType, null, null, host,
                         XYZ.BasisZ, new List<Curve>() { extendedLine },
                         RebarHookOrientation.Right, RebarHookOrientation.Left, true, true);
+                    rebar.LookupParameter("ADSK_A").Set(extendedLine.Length);
+                    //Plane plane;
+                    //if (line.Direction.Z != 0)
+                    //{
+                    //    plane = Plane.CreateByThreePoints(extendedLine.GetEndPoint(0), extendedLine.GetEndPoint(1), extendedLine.GetEndPoint(0) + 1 * XYZ.BasisX);
+                    //}
+                    //else
+                    //{
+                    //    plane = Plane.CreateByThreePoints(extendedLine.GetEndPoint(0), extendedLine.GetEndPoint(1), extendedLine.GetEndPoint(0) + 1 * XYZ.BasisZ);
+                    //}
+                    //// Создаем модель линии
+                    //doc.Create.NewModelCurve(extendedLine, SketchPlane.Create(doc, plane));
+
 
                     if (bottom)
                     {
@@ -266,7 +437,7 @@ namespace FerrumAddin
             using (Transaction tx = new Transaction(doc))
             {
                 tx.Start("Создание арматуры");
-                double extensionLength = 15.0 / 304.8; // Расширение в футах
+                double extensionLength = 0.08202; // Расширение в футах
 
                 foreach (Line line in lines)
                 {
@@ -284,6 +455,18 @@ namespace FerrumAddin
                     Rebar rebarSet = Rebar.CreateFromCurves(doc, style, barType, null, null, host,
                         dir, new List<Curve>() { extendedLine },
                         RebarHookOrientation.Right, RebarHookOrientation.Left, true, false);
+                    rebarSet.LookupParameter("ADSK_A").Set(extendedLine.Length);
+                    //Plane plane;
+                    //if (line.Direction.Z != 0)
+                    //{
+                    //    plane = Plane.CreateByThreePoints(extendedLine.GetEndPoint(0), extendedLine.GetEndPoint(1), extendedLine.GetEndPoint(0) + 1 * XYZ.BasisX);
+                    //}
+                    //else
+                    //{
+                    //    plane = Plane.CreateByThreePoints(extendedLine.GetEndPoint(0), extendedLine.GetEndPoint(1), extendedLine.GetEndPoint(0) + 1 * XYZ.BasisZ);
+                    //}
+                    //// Создаем модель линии
+                    //doc.Create.NewModelCurve(extendedLine, SketchPlane.Create(doc, plane));
 
                     if (rebarSet != null)
                     {
@@ -300,56 +483,90 @@ namespace FerrumAddin
         private List<Line> ExtendCenterLines(List<Line> centerLines, double modLength)
         {
             List<Line> extendedLines = new List<Line>();
-            double extensionValue = modLength - (25 / 304.8); // Расстояние для продления
-            double reductionValue = 25 / 304.8; // Расстояние для сокращения
+            double extensionValue = modLength - (50 / 304.8); // Длина для дотягивания
+            double reductionValue = 50 / 304.8; // Длина для уменьшения
 
-            foreach (Line centerLine in centerLines)
+            foreach (Line currentLine in centerLines)
             {
-                XYZ startPoint = centerLine.GetEndPoint(0);
-                XYZ endPoint = centerLine.GetEndPoint(1);
-                XYZ direction = (endPoint - startPoint).Normalize();
+                XYZ startPoint = currentLine.GetEndPoint(0);
+                XYZ endPoint = currentLine.GetEndPoint(1);
+                XYZ lineDirection = (endPoint - startPoint).Normalize();
 
-                // Проверяем пересечения для начальной точки
-                bool hasStartIntersection = HasIntersectionAtPoint(startPoint, centerLines, centerLine);
+                // Списки пересечений для каждого конца
+                List<Line> startIntersections = new List<Line>();
+                List<Line> endIntersections = new List<Line>();
 
-                // Проверяем пересечения для конечной точки
-                bool hasEndIntersection = HasIntersectionAtPoint(endPoint, centerLines, centerLine);
+                // Находим все пересечения текущей линии с другими
+                foreach (Line otherLine in centerLines)
+                {
+                    if (currentLine == otherLine) continue;
 
-                // Модифицируем точки в зависимости от наличия пересечений
-                XYZ newStartPoint = hasStartIntersection
-                    ? startPoint - direction * extensionValue
-                    : startPoint + direction * reductionValue;
+                    IntersectionResultArray results;
+                    currentLine.Intersect(otherLine, out results);
 
-                XYZ newEndPoint = hasEndIntersection
-                    ? endPoint + direction * extensionValue
-                    : endPoint - direction * reductionValue;
+                    if (results != null && results.Size > 0)
+                    {
+                        foreach (IntersectionResult result in results)
+                        {
+                            XYZ intersection = result.XYZPoint;
+                            // Определяем к какому концу ближе пересечение
+                            double distToStart = intersection.DistanceTo(startPoint);
+                            double distToEnd = intersection.DistanceTo(endPoint);
 
-                // Создаем новую линию с модифицированными точками
-                Line extendedLine = Line.CreateBound(newStartPoint, newEndPoint);
-                extendedLines.Add(extendedLine);
+                            if (distToStart < distToEnd)
+                                startIntersections.Add(otherLine);
+                            else
+                                endIntersections.Add(otherLine);
+                        }
+                    }
+                }
+
+                // Обрабатываем каждый конец линии
+                XYZ newStart = ProcessLineEnd(startPoint, startIntersections, -lineDirection, extensionValue, reductionValue);
+                XYZ newEnd = ProcessLineEnd(endPoint, endIntersections, lineDirection, extensionValue, reductionValue);
+
+                extendedLines.Add(Line.CreateBound(newStart, newEnd));
             }
 
             return extendedLines;
         }
 
-        private bool HasIntersectionAtPoint(XYZ point, List<Line> lines, Line currentLine)
+        private XYZ ProcessLineEnd(XYZ point, List<Line> intersectingLines, XYZ lineDirection,
+                                  double extensionValue, double reductionValue)
         {
-            double tolerance = 1e-6; // Допустимая погрешность
-
-            foreach (Line line in lines)
+            switch (intersectingLines.Count)
             {
-                if (line == currentLine) continue; // Пропускаем текущую линию
+                case 0: // Нет пересечений - уменьшаем
+                    return point - lineDirection * reductionValue;
 
-                // Проверяем, совпадает ли точка с началом или концом другой линии
-                if (point.IsAlmostEqualTo(line.GetEndPoint(0), tolerance) ||
-                    point.IsAlmostEqualTo(line.GetEndPoint(1), tolerance))
-                {
-                    return true;
-                }
+                case 1: // Одно пересечение - дотягиваем
+                    return point + lineDirection * extensionValue;
+
+                case 2: // Два пересечения - проверяем перпендикулярность
+                    if (AreLinesPerpendicularToBoth(intersectingLines, lineDirection))
+                        return point + lineDirection * extensionValue;
+                    break;
+
+                    // Для 3+ пересечений ничего не делаем
             }
 
-            return false;
+            return point; // Возвращаем исходную точку
         }
+
+        private bool AreLinesPerpendicularToBoth(List<Line> lines, XYZ referenceDirection)
+        {
+            foreach (Line line in lines)
+            {
+                XYZ otherDirection = (line.GetEndPoint(1) - line.GetEndPoint(0)).Normalize();
+                double dotProduct = Math.Abs(referenceDirection.DotProduct(otherDirection));
+
+                // Если хотя бы одна линия не перпендикулярна - возвращаем false
+                if (dotProduct > 1e-6)
+                    return false;
+            }
+            return true;
+        }
+
 
         private List<Line> ExtendLinesToConnect(List<Line> lines, double modLength)
         {
