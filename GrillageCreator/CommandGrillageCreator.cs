@@ -43,7 +43,7 @@ namespace FerrumAddin
             Document doc = uiDoc.Document;
             List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Where(x => x.Name.StartsWith("к")).ToList();
             List<Element> rebarTypesHorizontal = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Where(x => x.LookupParameter("Комментарии к типоразмеру").AsString().Contains("основная")).ToList();
-
+            List<Element> rearCoverTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarCoverType)).ToList();
             // Получаем выбранный элемент (перекрытие)
             List<Reference> elements = (List<Reference>)uiDoc.Selection.PickObjects(ObjectType.Element);
 
@@ -53,223 +53,243 @@ namespace FerrumAddin
                 return;
                 
             }
-            foreach (Reference reference in elements)
+            using (TransactionGroup tg = new TransactionGroup(doc))
             {
-                Element element = doc.GetElement(reference.ElementId);
-                // Получаем SketchId перекрытия
-                Sketch sketch = doc.GetElement((element as Floor).SketchId) as Sketch;
-                if (sketch == null)
+                tg.Start("Армирование ростверков");
+                foreach (Reference reference in elements)
                 {
-                    message = "Не удалось получить Sketch перекрытия.";
-                    return;
-                }
-
-                // Получаем Profile из Sketch
-                CurveArrArray profile = sketch.Profile;
-                if (profile == null)
-                {
-                    message = "Не удалось получить Profile из Sketch.";
-                    return;
-                }
-
-                Parameter thicknessParam = element.LookupParameter("Толщина");
-                if (thicknessParam == null || thicknessParam.StorageType != StorageType.Double)
-                {
-                    TaskDialog.Show("Ошибка", "Не удалось получить параметр 'Толщина'.");
-                    return;
-                }
-                double thickness = thicknessParam.AsDouble();
-
-                foreach (CurveArray array in profile)
-                {
-                    // Собираем все кривые из профиля
-                    List<Line> allCurves = new List<Line>();
-                    foreach (Line curveLoop in array)
+                    Element element = doc.GetElement(reference.ElementId);
+                    // Получаем SketchId перекрытия
+                    Sketch sketch = doc.GetElement((element as Floor).SketchId) as Sketch;
+                    if (sketch == null)
                     {
-                        Line l1 = Line.CreateBound(curveLoop.GetEndPoint(0) - XYZ.BasisZ * thickness + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble(), 
-                            curveLoop.GetEndPoint(1) - XYZ.BasisZ * thickness + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble());
-                        allCurves.Add(l1);
+                        message = "Не удалось получить Sketch перекрытия.";
+                        return;
                     }
 
-                    // Вычисляем средние линии для боковых граней
-                    List<Line> centerLines = ComputeCenterLines(allCurves);
-                    centerLines = ExtendLinesToConnect(centerLines, modLength);
-                    centerLines = ExtendCenterLines(centerLines, modLength);
-
-                    Dictionary<Line, List<Line>> dictTop = new Dictionary<Line, List<Line>>();
-                    Dictionary<Line, List<Line>> dictBottom = new Dictionary<Line, List<Line>>();
-
-
-                    foreach (Line centerLine in centerLines)
+                    // Получаем Profile из Sketch
+                    CurveArrArray profile = sketch.Profile;
+                    if (profile == null)
                     {
-                        XYZ lineDirection = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
+                        message = "Не удалось получить Profile из Sketch.";
+                        return;
+                    }
 
-                        // Перпендикулярное направление
-                        XYZ perpendicularDirection = new XYZ(-lineDirection.Y, lineDirection.X, 0);
+                    Parameter thicknessParam = element.LookupParameter("Толщина");
+                    if (thicknessParam == null || thicknessParam.StorageType != StorageType.Double)
+                    {
+                        TaskDialog.Show("Ошибка", "Не удалось получить параметр 'Толщина'.");
+                        return;
+                    }
+                    double thickness = thicknessParam.AsDouble();
 
-                        // Вычисляем смещения
-                        XYZ offsetBottomRight = perpendicularDirection * (modLength - WindowGrillageCreator.leftRightOffset / 304.8) + WindowGrillageCreator.topBottomOffset / 304.8 * XYZ.BasisZ;
-                        XYZ offsetBottomLeft = perpendicularDirection * (-modLength + WindowGrillageCreator.leftRightOffset / 304.8) + WindowGrillageCreator.topBottomOffset / 304.8 * XYZ.BasisZ;
-                        XYZ offsetTopRight = perpendicularDirection * (modLength - WindowGrillageCreator.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator.topBottomOffset / 304.8) * XYZ.BasisZ;
-                        XYZ offsetTopLeft = perpendicularDirection * (-modLength + WindowGrillageCreator.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator.topBottomOffset / 304.8) * XYZ.BasisZ;
-
-                        // Создаем 4 линии - крайние верхние и нижние линии
-                        Line lineBR = Line.CreateBound(centerLine.GetEndPoint(0) + offsetBottomRight, centerLine.GetEndPoint(1) + offsetBottomRight);
-                        Line lineBL = Line.CreateBound(centerLine.GetEndPoint(0) + offsetBottomLeft, centerLine.GetEndPoint(1) + offsetBottomLeft);
-
-                        Line lineTR = Line.CreateBound(centerLine.GetEndPoint(0) + offsetTopRight, centerLine.GetEndPoint(1) + offsetTopRight);
-                        Line lineTL = Line.CreateBound(centerLine.GetEndPoint(0) + offsetTopLeft, centerLine.GetEndPoint(1) + offsetTopLeft);
-
-
-                        List<Line> intermediateLinesTop = new List<Line>();
-                        List<Line> intermediateLinesBottom = new List<Line>();
-
-
-                        // Расстояние между линиями
-                        double distanceBetweenLines = lineBR.GetEndPoint(0).DistanceTo(lineBL.GetEndPoint(0));
-                        // Делим расстояние на равные участки
-                        double step = distanceBetweenLines / (WindowGrillageCreator.horizontalCount -1);
-                        
-                        intermediateLinesTop.Add(lineTL);
-                        intermediateLinesBottom.Add(lineBL);
-
-                        for (int i = 1; i <= WindowGrillageCreator.horizontalCount-2; i++)
+                    foreach (CurveArray array in profile)
+                    {
+                        // Собираем все кривые из профиля
+                        List<Line> allCurves = new List<Line>();
+                        foreach (Line curveLoop in array)
                         {
-                            XYZ offset_ = perpendicularDirection * (step * i);
-                            Line intermediateLine = Line.CreateBound(lineBL.GetEndPoint(0) + offset_, lineBL.GetEndPoint(1) + offset_);
-                            intermediateLinesBottom.Add(intermediateLine);
-                            intermediateLine = Line.CreateBound(lineTL.GetEndPoint(0) + offset_, lineTL.GetEndPoint(1) + offset_);
-                            intermediateLinesTop.Add(intermediateLine);
+                            Line l1 = Line.CreateBound(curveLoop.GetEndPoint(0) - XYZ.BasisZ * thickness + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble(),
+                                curveLoop.GetEndPoint(1) - XYZ.BasisZ * thickness + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble());
+                            allCurves.Add(l1);
                         }
 
-                        intermediateLinesTop.Add(lineTR);
-                        dictTop.Add(centerLine, intermediateLinesTop);
-                        intermediateLinesBottom.Add(lineBR);
-                        dictBottom.Add(centerLine, intermediateLinesBottom);
-                        
-                        RebarBarType typeTop = rebarTypes.Where(x => x.Name == WindowGrillageCreator.topDiameter).FirstOrDefault() as RebarBarType;
-                        RebarBarType typeBot = rebarTypes.Where(x => x.Name == WindowGrillageCreator.bottomDiameter).FirstOrDefault() as RebarBarType;
-                        
-                        CreateRebarFromLines(doc, intermediateLinesBottom, typeTop, RebarStyle.Standard, element, true);
-                        CreateRebarFromLines(doc, intermediateLinesTop, typeBot, RebarStyle.Standard, element, false);
+                        // Вычисляем средние линии для боковых граней
+                        List<Line> centerLines = ComputeCenterLines(allCurves);
+                        centerLines = ExtendLinesToConnect(centerLines, modLength);
+                        centerLines = ExtendCenterLines(centerLines, modLength);
 
-                        // Вертикальные линии
-                        RebarBarType typeVertical = rebarTypes.Where(x => x.Name == WindowGrillageCreator.vertDiameter).FirstOrDefault() as RebarBarType;
+                        Dictionary<Line, List<Line>> dictTop = new Dictionary<Line, List<Line>>();
+                        Dictionary<Line, List<Line>> dictBottom = new Dictionary<Line, List<Line>>();
 
-                        // Получаем диаметры арматуры в футах
-                        double topRadius = typeTop.BarModelDiameter / 2;
-                        double bottomRadius = typeBot.BarModelDiameter / 2;
-                        double verticalRadius = typeVertical.BarModelDiameter / 2;
 
-                        // Вычисляем смещение от края
-                        double offsetFromEdge = Math.Max(topRadius, bottomRadius) + verticalRadius;
-
-                        Line verticalLineRightStart = Line.CreateBound(lineBR.GetEndPoint(0), lineTR.GetEndPoint(0));
-                        Line verticalLineLeftStart = Line.CreateBound(lineBL.GetEndPoint(0), lineTL.GetEndPoint(0));
-
-                        double verticalCount = WindowGrillageCreator.verticalCount / 304.8;
-
-                        List<Line> verticalLines = new List<Line>();
-                        
-
-                        // Начальная и конечная точки для вертикальных линий
-                        XYZ startPoint1 = verticalLineRightStart.GetEndPoint(0); // Начальная точка первой линии
-                        XYZ endPoint1 = verticalLineRightStart.GetEndPoint(1);   // Конечная точка первой линии
-                        XYZ startPoint2 = verticalLineLeftStart.GetEndPoint(0); // Начальная точка второй линии
-                        XYZ endPoint2 = verticalLineLeftStart.GetEndPoint(1);   // Конечная точка второй линии
-
-                        // Направление для вертикальных линий 
-                        XYZ verticalDirection = (startPoint2 - startPoint1).Normalize();
-                        XYZ centerPoint = (startPoint1 + startPoint2) / 2;
-
-                        XYZ rightOffset = verticalDirection * offsetFromEdge;
-                        Line offsetRightLine = Line.CreateBound(
-                            verticalLineRightStart.GetEndPoint(0) + rightOffset,
-                            verticalLineRightStart.GetEndPoint(1) + rightOffset);
-                        verticalLines.Add(offsetRightLine);
-
-                        for (int i = 1; i <= WindowGrillageCreator.horizontalCount-2; i++)
+                        foreach (Line centerLine in centerLines)
                         {
+                            XYZ lineDirection = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
+
+                            // Перпендикулярное направление
+                            XYZ perpendicularDirection = new XYZ(-lineDirection.Y, lineDirection.X, 0);
+
+                            // Вычисляем смещения
+                            XYZ offsetBottomRight = perpendicularDirection * (modLength - WindowGrillageCreator.leftRightOffset / 304.8) + WindowGrillageCreator.topBottomOffset / 304.8 * XYZ.BasisZ;
+                            XYZ offsetBottomLeft = perpendicularDirection * (-modLength + WindowGrillageCreator.leftRightOffset / 304.8) + WindowGrillageCreator.topBottomOffset / 304.8 * XYZ.BasisZ;
+                            XYZ offsetTopRight = perpendicularDirection * (modLength - WindowGrillageCreator.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator.topBottomOffset / 304.8) * XYZ.BasisZ;
+                            XYZ offsetTopLeft = perpendicularDirection * (-modLength + WindowGrillageCreator.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator.topBottomOffset / 304.8) * XYZ.BasisZ;
+
+                            // Создаем 4 линии - крайние верхние и нижние линии
+                            Line lineBR = Line.CreateBound(centerLine.GetEndPoint(0) + offsetBottomRight, centerLine.GetEndPoint(1) + offsetBottomRight);
+                            Line lineBL = Line.CreateBound(centerLine.GetEndPoint(0) + offsetBottomLeft, centerLine.GetEndPoint(1) + offsetBottomLeft);
+
+                            Line lineTR = Line.CreateBound(centerLine.GetEndPoint(0) + offsetTopRight, centerLine.GetEndPoint(1) + offsetTopRight);
+                            Line lineTL = Line.CreateBound(centerLine.GetEndPoint(0) + offsetTopLeft, centerLine.GetEndPoint(1) + offsetTopLeft);
+
+
+                            List<Line> intermediateLinesTop = new List<Line>();
+                            List<Line> intermediateLinesBottom = new List<Line>();
+
+
+                            // Расстояние между линиями
+                            double distanceBetweenLines = lineBR.GetEndPoint(0).DistanceTo(lineBL.GetEndPoint(0));
+                            // Делим расстояние на равные участки
+                            double step = distanceBetweenLines / (WindowGrillageCreator.horizontalCount - 1);
+
+                            intermediateLinesTop.Add(lineTL);
+                            intermediateLinesBottom.Add(lineBL);
+
+                            for (int i = 1; i <= WindowGrillageCreator.horizontalCount - 2; i++)
+                            {
+                                XYZ offset_ = perpendicularDirection * (step * i);
+                                Line intermediateLine = Line.CreateBound(lineBL.GetEndPoint(0) + offset_, lineBL.GetEndPoint(1) + offset_);
+                                intermediateLinesBottom.Add(intermediateLine);
+                                intermediateLine = Line.CreateBound(lineTL.GetEndPoint(0) + offset_, lineTL.GetEndPoint(1) + offset_);
+                                intermediateLinesTop.Add(intermediateLine);
+                            }
+
+                            intermediateLinesTop.Add(lineTR);
+                            dictTop.Add(centerLine, intermediateLinesTop);
+                            intermediateLinesBottom.Add(lineBR);
+                            dictBottom.Add(centerLine, intermediateLinesBottom);
+
+                            RebarBarType typeTop = rebarTypes.Where(x => x.Name == WindowGrillageCreator.topDiameter).FirstOrDefault() as RebarBarType;
+                            RebarBarType typeBot = rebarTypes.Where(x => x.Name == WindowGrillageCreator.bottomDiameter).FirstOrDefault() as RebarBarType;
+
+                            CreateRebarFromLines(doc, intermediateLinesBottom, typeTop, RebarStyle.Standard, element, true);
+                            CreateRebarFromLines(doc, intermediateLinesTop, typeBot, RebarStyle.Standard, element, false);
+
+                            // Вертикальные линии
+                            RebarBarType typeVertical = rebarTypes.Where(x => x.Name == WindowGrillageCreator.vertDiameter).FirstOrDefault() as RebarBarType;
+
+                            // Получаем диаметры арматуры в футах
+                            double topRadius = typeTop.BarModelDiameter / 2;
+                            double bottomRadius = typeBot.BarModelDiameter / 2;
+                            double verticalRadius = typeVertical.BarModelDiameter / 2;
+
+                            // Вычисляем смещение от края
+                            double offsetFromEdge = Math.Max(topRadius, bottomRadius) + verticalRadius;
+
+                            Line verticalLineRightStart = Line.CreateBound(lineBR.GetEndPoint(0), lineTR.GetEndPoint(0));
+                            Line verticalLineLeftStart = Line.CreateBound(lineBL.GetEndPoint(0), lineTL.GetEndPoint(0));
+
+                            double verticalCount = WindowGrillageCreator.verticalCount / 304.8;
+
+                            List<Line> verticalLines = new List<Line>();
+
+
+                            // Начальная и конечная точки для вертикальных линий
+                            XYZ startPoint1 = verticalLineRightStart.GetEndPoint(0); // Начальная точка первой линии
+                            XYZ endPoint1 = verticalLineRightStart.GetEndPoint(1);   // Конечная точка первой линии
+                            XYZ startPoint2 = verticalLineLeftStart.GetEndPoint(0); // Начальная точка второй линии
+                            XYZ endPoint2 = verticalLineLeftStart.GetEndPoint(1);   // Конечная точка второй линии
+
+                            // Направление для вертикальных линий 
+                            XYZ verticalDirection = (startPoint2 - startPoint1).Normalize();
+                            XYZ centerPoint = (startPoint1 + startPoint2) / 2;
+
+                            XYZ rightOffset = verticalDirection * offsetFromEdge;
+                            XYZ leftOffset = -verticalDirection * offsetFromEdge;
+
+                            Line offsetRightLine = Line.CreateBound(
+                                verticalLineRightStart.GetEndPoint(0) + rightOffset,
+                                verticalLineRightStart.GetEndPoint(1) + rightOffset);
+                            verticalLines.Add(offsetRightLine);
+
+                            for (int i = 1; i <= WindowGrillageCreator.horizontalCount - 2; i++)
+                            {
+                                // Вычисляем смещение для текущей линии
+                                XYZ offset_ = verticalDirection * (step * i);
+
+                                // Начальная и конечная точки для текущей вертикальной линии
+                                XYZ currentStart = startPoint1 + offset_;
+                                XYZ currentEnd = endPoint1 + offset_;
+                                XYZ curDir = (centerPoint - currentStart).Normalize();
+
+                                if (curDir.IsAlmostEqualTo(verticalDirection))
+                                {
+                                    currentStart = currentStart + offsetFromEdge * verticalDirection;
+                                    currentEnd = currentEnd + offsetFromEdge * verticalDirection;
+                                }
+                                else
+                                {
+                                    currentStart = currentStart - offsetFromEdge * verticalDirection;
+                                    currentEnd = currentEnd - offsetFromEdge * verticalDirection;
+                                }
+                                // Создаем линию и добавляем ее в список
+                                Line currentLine = Line.CreateBound(currentStart, currentEnd);
+                                verticalLines.Add(currentLine);
+                            }
+
+                            Line offsetLeftLine = Line.CreateBound(
+                                verticalLineLeftStart.GetEndPoint(0) + leftOffset,
+                                verticalLineLeftStart.GetEndPoint(1) + leftOffset);
+                            verticalLines.Add(offsetLeftLine);
+                            // Длина центральной линии (centerLine)
+                            double centerLineLength = centerLine.Length;
+
+                            // Количество линий, которые нужно создать
+                            int numberOfLinesTop = (int)(centerLineLength / verticalCount) + 1;
+
+                            // Направление для создания линий
+                            XYZ direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
+
+                            CreateRebarSet(doc, verticalLines, typeVertical, RebarStyle.Standard, element, direction, numberOfLinesTop, verticalCount);
+
+
+                            //Горизонтальные линии
+                            RebarBarType typeHorizontal = rebarTypesHorizontal.Where(x => x.Name == WindowGrillageCreator.horizontDiameter).FirstOrDefault() as RebarBarType;
+
+                            List<Line> horizontalLines = new List<Line>();
+                            // Количество линий, которые нужно создать
+                            int numberOfLinesBot = (int)(centerLineLength / (WindowGrillageCreator.horizontCount / 304.8)) + 1;
+
+                            // Направление для создания линий
+                            direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
+
                             // Вычисляем смещение для текущей линии
-                            XYZ offset_ = verticalDirection * (step * i);
+                            double offsetTop = topRadius + (typeHorizontal.BarModelDiameter / 2);
+                            double offsetBot = bottomRadius + (typeHorizontal.BarModelDiameter / 2);
+                            double offsetLen = verticalRadius + (typeHorizontal.BarModelDiameter / 2);
 
-                            // Начальная и конечная точки для текущей вертикальной линии
-                            XYZ currentStart = startPoint1 + offset_;
-                            XYZ currentEnd = endPoint1 + offset_;
 
-                            if ((centerPoint - currentStart).Normalize() == verticalDirection)
-                            {
-                                currentStart = currentStart + offsetFromEdge * verticalDirection;
-                                currentEnd = currentEnd + offsetFromEdge * verticalDirection;
-                            }
-                            else
-                            {
-                                currentStart = currentStart - offsetFromEdge * verticalDirection;
-                                currentEnd = currentEnd - offsetFromEdge * verticalDirection;
-                            }
-                            // Создаем линию и добавляем ее в список
-                            Line currentLine = Line.CreateBound(currentStart, currentEnd);
-                            verticalLines.Add(currentLine);
+                            XYZ offsetT = XYZ.BasisZ * offsetTop;
+                            XYZ offsetB = XYZ.BasisZ * offsetBot;
+                            XYZ offsetL = centerLine.Direction * offsetLen;
+
+
+                            // Линия между verticalLineRightStart(0) и verticalLineLeftStart(0)
+                            XYZ start3 = verticalLineRightStart.GetEndPoint(0) + offsetT + offsetL;
+                            XYZ end3 = verticalLineLeftStart.GetEndPoint(0) + offsetT + offsetL;
+                            Line line3 = Line.CreateBound(start3, end3);
+                            horizontalLines.Add(line3);
+
+                            // Линия между verticalLineRightStart(1) и verticalLineLeftStart(1)
+                            XYZ start4 = verticalLineRightStart.GetEndPoint(1) - offsetB + offsetL;
+                            XYZ end4 = verticalLineLeftStart.GetEndPoint(1) - offsetB + offsetL;
+                            Line line4 = Line.CreateBound(start4, end4);
+                            horizontalLines.Add(line4);
+
+                            CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, element, direction, numberOfLinesBot, WindowGrillageCreator.horizontCount / 304.8);
                         }
 
-                        XYZ leftOffset = -verticalDirection * offsetFromEdge;
-                        Line offsetLeftLine = Line.CreateBound(
-                            verticalLineLeftStart.GetEndPoint(0) + leftOffset,
-                            verticalLineLeftStart.GetEndPoint(1) + leftOffset);
-                        verticalLines.Add(offsetLeftLine);
-                        // Длина центральной линии (centerLine)
-                        double centerLineLength = centerLine.Length;
-
-                        // Количество линий, которые нужно создать
-                        int numberOfLinesTop = (int)(centerLineLength / verticalCount) + 1;
-
-                        // Направление для создания линий
-                        XYZ direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
-
-                        CreateRebarSet(doc, verticalLines, typeVertical, RebarStyle.Standard, element, direction, numberOfLinesTop, verticalCount);
-
-
-                        //Горизонтальные линии
-                        RebarBarType typeHorizontal = rebarTypesHorizontal.Where(x => x.Name == WindowGrillageCreator.horizontDiameter).FirstOrDefault() as RebarBarType;
-
-                        List<Line> horizontalLines = new List<Line>();
-                        // Количество линий, которые нужно создать
-                        int numberOfLinesBot = (int)(centerLineLength / (WindowGrillageCreator.horizontCount / 304.8)) + 1;
-
-                        // Направление для создания линий
-                        direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
-
-                        // Вычисляем смещение для текущей линии
-                        double offsetTop = topRadius + (typeHorizontal.BarModelDiameter / 2);
-                        double offsetBot = bottomRadius + (typeHorizontal.BarModelDiameter / 2);
-                        double offsetLen = verticalRadius + (typeHorizontal.BarModelDiameter / 2);
-
-
-                        XYZ offsetT = XYZ.BasisZ * offsetTop;
-                        XYZ offsetB = XYZ.BasisZ * offsetBot;
-                        XYZ offsetL = centerLine.Direction * offsetLen;
-
-
-                        // Линия между verticalLineRightStart(0) и verticalLineLeftStart(0)
-                        XYZ start3 = verticalLineRightStart.GetEndPoint(0) + offsetT + offsetL;
-                        XYZ end3 = verticalLineLeftStart.GetEndPoint(0) + offsetT + offsetL;
-                        Line line3 = Line.CreateBound(start3, end3);
-                        horizontalLines.Add(line3);                   
-
-                        // Линия между verticalLineRightStart(1) и verticalLineLeftStart(1)
-                        XYZ start4 = verticalLineRightStart.GetEndPoint(1) - offsetB + offsetL;
-                        XYZ end4 = verticalLineLeftStart.GetEndPoint(1) - offsetB + offsetL;
-                        Line line4 = Line.CreateBound(start4, end4);
-                        horizontalLines.Add(line4);
-
-                        CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, element, direction, numberOfLinesBot, WindowGrillageCreator.horizontCount / 304.8);
+                        RebarBarType type2 = rebarTypesHorizontal.Where(x => x.Name == WindowGrillageCreator.cornerDiameter).FirstOrDefault() as RebarBarType;
+                        CreateCornerRebarsAtIntersections(doc, dictTop, dictBottom, type2, element);
                     }
-
-                    RebarBarType type2 = rebarTypesHorizontal.Where(x => x.Name == WindowGrillageCreator.cornerDiameter).FirstOrDefault() as RebarBarType;
-                    CreateCornerRebarsAtIntersections(doc, dictTop, dictBottom, type2, element);
+                    using (Transaction tx = new Transaction(doc))
+                    {
+                        tx.Start("Защитный слой");
+                        Element coverLeftRight = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (WindowGrillageCreator.leftRightOffset / 304.8 - 25 / 304.8)).FirstOrDefault();
+                        if (coverLeftRight != null)
+                            element.get_Parameter(BuiltInParameter.CLEAR_COVER_OTHER).Set(coverLeftRight.Id);
+                        Element coverTopBottom = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (WindowGrillageCreator.topBottomOffset / 304.8 - 25 / 304.8)).FirstOrDefault();
+                        if (coverTopBottom != null)
+                        {
+                            element.get_Parameter(BuiltInParameter.CLEAR_COVER_TOP).Set(coverTopBottom.Id);
+                            element.get_Parameter(BuiltInParameter.CLEAR_COVER_BOTTOM).Set(coverTopBottom.Id);
+                        }
+                        tx.Commit();
+                    }
                 }
+                tg.Assimilate();
             }
-            
         }
         public string GetName()
         {
