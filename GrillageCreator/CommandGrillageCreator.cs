@@ -340,7 +340,7 @@ namespace FerrumAddin
                 tx.Commit();
             }
         }
-
+        List<XYZ> corners = new List<XYZ>();
         private void CreateCornersBetweenLines(Document doc,
     List<Line> lines1,
     List<Line> lines2,
@@ -365,9 +365,12 @@ namespace FerrumAddin
                 // Определяем правильные направления для уголков
                 XYZ dir1 = GetCorrectDirection(line1, intersection);
                 XYZ dir2 = GetCorrectDirection(line2, intersection);
-
-                // Создаем уголок с учетом направлений
-                CreateCornerRebar(doc, line1, line2, intersection, dir1, dir2, barType, host);
+                if (!corners.Any(x=>x.IsAlmostEqualTo(intersection)))
+                {
+                    corners.Add(intersection);
+                    // Создаем уголок с учетом направлений
+                    CreateCornerRebar(doc, line1, line2, intersection, dir1, dir2, barType, host);
+                }
             }
         }
 
