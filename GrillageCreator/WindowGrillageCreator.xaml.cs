@@ -31,11 +31,13 @@ namespace FerrumAddin.GrillageCreator
             {
                 rebars.Add(element.Name);
             }
+            rebars = rebars.OrderBy(x=>x, new NaturalStringComparer()).ToList();
             List<string> rebars2 = new List<string>();
             foreach (Element element in elements2)
             {
                 rebars2.Add(element.Name);
             }
+            rebars2 = rebars2.OrderBy(x => x, new NaturalStringComparer()).ToList();
             comboBottom.ItemsSource = rebars;
             comboTop.ItemsSource = rebars;
             comboVert.ItemsSource = rebars;
@@ -274,6 +276,47 @@ namespace FerrumAddin.GrillageCreator
             {
                 return (GrillageSettings)serializer.Deserialize(reader);
             }
+        }
+    }
+
+    public class NaturalStringComparer : IComparer<string>
+    {
+        public int Compare(string x, string y)
+        {
+            if (x == null && y == null) return 0;
+            if (x == null) return -1;
+            if (y == null) return 1;
+
+            int i = 0, j = 0;
+            while (i < x.Length && j < y.Length)
+            {
+                if (char.IsDigit(x[i]) && char.IsDigit(y[j]))
+                {
+                    // Сравниваем числовые части
+                    double numX = 0, numY = 0;
+                    while (i < x.Length && char.IsDigit(x[i]))
+                    {
+                        numX = numX * 10 + (x[i] - '0');
+                        i++;
+                    }
+                    while (j < y.Length && char.IsDigit(y[j]))
+                    {
+                        numY = numY * 10 + (y[j] - '0');
+                        j++;
+                    }
+                    if (numX != numY)
+                        return numX.CompareTo(numY);
+                }
+                else
+                {
+                    // Сравниваем символы
+                    if (x[i] != y[j])
+                        return x[i].CompareTo(y[j]);
+                    i++;
+                    j++;
+                }
+            }
+            return x.Length.CompareTo(y.Length);
         }
     }
 }
