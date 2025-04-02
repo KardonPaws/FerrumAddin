@@ -256,14 +256,14 @@ namespace FerrumAddin
 
 
                             // Линия между verticalLineRightStart(0) и verticalLineLeftStart(0)
-                            XYZ start3 = verticalLineRightStart.GetEndPoint(0) + offsetT + offsetL;
-                            XYZ end3 = verticalLineLeftStart.GetEndPoint(0) + offsetT + offsetL;
+                            XYZ start3 = verticalLineRightStart.GetEndPoint(0) - offsetT + offsetL;
+                            XYZ end3 = verticalLineLeftStart.GetEndPoint(0) - offsetT + offsetL;
                             Line line3 = Line.CreateBound(start3, end3);
                             horizontalLines.Add(line3);
 
                             // Линия между verticalLineRightStart(1) и verticalLineLeftStart(1)
-                            XYZ start4 = verticalLineRightStart.GetEndPoint(1) - offsetB + offsetL;
-                            XYZ end4 = verticalLineLeftStart.GetEndPoint(1) - offsetB + offsetL;
+                            XYZ start4 = verticalLineRightStart.GetEndPoint(1) + offsetB + offsetL;
+                            XYZ end4 = verticalLineLeftStart.GetEndPoint(1) + offsetB + offsetL;
                             Line line4 = Line.CreateBound(start4, end4);
                             horizontalLines.Add(line4);
 
