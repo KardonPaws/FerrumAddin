@@ -71,7 +71,7 @@
                 </StackPanel>
             </Border>
         </Popup>
-        <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="10,1,10,1">
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="10,1,10,1">
             <ToggleButton x:Name="CategoryFilterButton"
                   Content="Фильтр по категориям ▽"
                   Background="{x:Null}"
@@ -100,7 +100,7 @@
                     </StackPanel>
                 </Border>
             </Popup>
-        </StackPanel>
+        </Grid>
 
         <TabControl x:Name="Tabs" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Margin="0" ItemsSource="{Binding TabItems}" TabStripPlacement="Right">
             <TabControl.Resources>
