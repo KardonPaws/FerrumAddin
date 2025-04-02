@@ -124,6 +124,10 @@
     <Compile Include="Config\Configurator.xaml.cs">
       <DependentUpon>Configurator.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Stats\StatsShow.cs" />
+    <Compile Include="Stats\StatsWindow.xaml.cs">
+      <DependentUpon>StatsWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Update.xaml.cs">
       <DependentUpon>Update.xaml</DependentUpon>
     </Compile>
@@ -175,6 +179,10 @@
     <Page Include="LintelCreator\LintelCreatorForm2.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Stats\StatsWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Update.xaml">
       <SubType>Designer</SubType>

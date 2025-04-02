@@ -26,6 +26,7 @@ using System.Security.Cryptography;
 using Autodesk.Revit.ApplicationServices;
 using Transform = Autodesk.Revit.DB.Transform;
 using System.Runtime.InteropServices;
+using Autodesk.Revit.DB.Events;
 #endregion
 
 namespace FerrumAddin
@@ -268,6 +269,10 @@ namespace FerrumAddin
             ComandWorksets.SetContextualHelp(helpComand);
             ComandWorksets.ToolTip = "В соответсвии с выбранным xml файлом разносит элементы по рабочим наборам, в случае, если рабочего набора не существует - создает новый рабочий набор.";
 
+            var CommandStats = new PushButtonData("Статистика", "Статистика", Assembly.GetExecutingAssembly().Location, "FerrumAddin.StatsShow");
+            var ComandStats = panelControl.AddItem(CommandStats) as PushButton;
+            ComandStats.Enabled = true;
+
             FamilyManagerWindow dock = new FamilyManagerWindow();
             dockableWindow = dock;
 
@@ -283,8 +288,18 @@ namespace FerrumAddin
                 {
                     a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
                 }
+               
+                a.ControlledApplication.DocumentOpening += ControlledApplication_DocumentOpening;
                 a.ControlledApplication.DocumentOpened += ControlledApplication_DocumentOpened;
+                a.ControlledApplication.DocumentClosing += ControlledApplication_DocumentClosing;
+
+                a.ControlledApplication.DocumentSynchronizingWithCentral += ControlledApplication_DocumentSynchronizingWithCentral;
+                a.ControlledApplication.DocumentSynchronizedWithCentral += ControlledApplication_DocumentSynchronizedWithCentral;
+
+                a.ControlledApplication.DocumentChanged += ControlledApplication_DocumentChanged;
+
                 a.ViewActivated += A_ViewActivated;
+                
                 LoadEvent = ExternalEvent.Create(new LoadEvent());
             }
             catch (Exception ex)
@@ -293,9 +308,50 @@ namespace FerrumAddin
             }
 
             ButtonConf(root);
+            CleanOldLogFiles();
 
             return Result.Succeeded;
         }
+
+        public void CleanOldLogFiles()
+        {
+            try
+            {
+                string logsFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FerrumLogs");
+
+                if (!Directory.Exists(logsFolder))
+                    return;
+
+                // Определяем дату, старше которой файлы будем удалять
+                DateTime thresholdDate = DateTime.Now.AddDays(-14);
+
+                // Получаем все XML-файлы в папке логов
+                DirectoryInfo di = new DirectoryInfo(logsFolder);
+                FileInfo[] logFiles = di.GetFiles("*.xml");
+
+                foreach (FileInfo file in logFiles)
+                {
+                    try
+                    {
+                        // Проверяем дату создания файла
+                        if (file.CreationTime < thresholdDate)
+                        {
+                            // Удаляем файлы старше 2 недель
+                            file.Delete();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+            }
+        }
+
         public static string xmlFilePath;
         public static string TabPath;
         public static string FamilyFolder;
@@ -350,13 +406,405 @@ namespace FerrumAddin
                 dockableWindow.CustomInitiator(d);
             }
         }
+        private DateTime openTimeStart;
+        private DateTime synchronizingTimeStart;
+        private Dictionary<string, int> countStart = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> modifiedDict = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> deletedDict = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> createdDict = new Dictionary<string, int>();
 
-        private void ControlledApplication_DocumentOpened(object sender, Autodesk.Revit.DB.Events.DocumentOpenedEventArgs e)
+        private void ControlledApplication_DocumentOpening(object sender, DocumentOpeningEventArgs e)
         {
-            if (AllowLoad == false)
+            try
             {
-                Document d = e.Document;
-                dockableWindow.CustomInitiator(d);
+                openTimeStart = DateTime.Now;
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void ControlledApplication_DocumentOpened(object sender, DocumentOpenedEventArgs e)
+        {
+            try
+            {
+                if (e?.Document == null) return;
+
+                if (AllowLoad == false)
+                {
+                    Document d = e.Document;
+                    dockableWindow?.GetType().GetMethod("CustomInitiator")?.Invoke(dockableWindow, new object[] { d });
+                }
+
+                TimeSpan openingTime = DateTime.Now - openTimeStart;
+
+                // Сбор элементов
+                List<Element> elements = new FilteredElementCollector(e.Document)
+                    .WhereElementIsNotElementType()
+                    .ToElements()
+                    .Where(x => x.Category != null)
+                    .ToList();
+                countStart[e.Document.Title] = elements?.Count ?? 0;
+
+                // Запись в файл
+                SaveOpenTimeStat(e.Document, openingTime);
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void ControlledApplication_DocumentSynchronizedWithCentral(object sender, DocumentSynchronizedWithCentralEventArgs e)
+        {
+            try
+            {
+                if (e?.Document == null) return;
+
+                TimeSpan synchroTime = DateTime.Now - synchronizingTimeStart;
+
+                // Запись в файл
+                SaveSynchroTimeStat(e.Document, synchroTime);
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void ControlledApplication_DocumentSynchronizingWithCentral(object sender, DocumentSynchronizingWithCentralEventArgs e)
+        {
+            try
+            {
+                if (e?.Document == null) return;
+
+                string docTitle = e.Document.Title;
+
+                // Сбор элементов
+                List<Element> elements = new FilteredElementCollector(e.Document)
+                    .WhereElementIsNotElementType()
+                    .ToElements()
+                    .Where(x => x.Category != null)
+                    .ToList();
+                int totalCount = elements?.Count ?? 0;
+
+                modifiedDict.TryGetValue(docTitle, out int modified);
+                deletedDict.TryGetValue(docTitle, out int deleted);
+                createdDict.TryGetValue(docTitle, out int created);
+
+                // Запись в файл
+                SaveElementsStat(e.Document, countStart[e.Document.Title], modified, deleted, created, totalCount);
+                SaveTransactionsToXml(e.Document.Title);
+
+                transactionsLog[e.Document.Title].Clear();
+
+                // Обновляем счетчик элементов
+                countStart[docTitle] = totalCount;
+                synchronizingTimeStart = DateTime.Now;
+
+                modifiedDict[docTitle] = 0;
+                deletedDict[docTitle] = 0;
+                createdDict[docTitle] = 0;
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void ControlledApplication_DocumentClosing(object sender, DocumentClosingEventArgs e)
+        {
+            try
+            {
+                if (e?.Document == null) return;
+
+                string docTitle = e.Document.Title;
+
+                modifiedDict.Remove(docTitle);
+                deletedDict.Remove(docTitle);
+                createdDict.Remove(docTitle);
+                countStart.Remove(docTitle);
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private readonly Dictionary<string, List<string>> transactionsLog = new Dictionary<string, List<string>>();
+
+        private void ControlledApplication_DocumentChanged(object sender, DocumentChangedEventArgs e)
+        {
+            try
+            {
+                if (e?.GetDocument() == null) return;
+
+                Document doc = e.GetDocument();
+                string documentName = doc.Title;
+                DateTime changeTime = DateTime.Now;
+
+                // Инициализация списка транзакций для документа
+                if (!transactionsLog.ContainsKey(documentName))
+                {
+                    transactionsLog[documentName] = new List<string>();
+                }
+
+                // Обработка всех транзакций в этом событии
+                foreach (string transactionName in e.GetTransactionNames())
+                {
+                    // Обработка измененных элементов
+                    foreach (ElementId id in e.GetModifiedElementIds())
+                    {
+                        Element element = doc.GetElement(id);
+                        if (element == null || element.Category == null) continue;
+                        LogElementChange(doc, documentName, "Изменение", transactionName, id, changeTime, element.Category.Name);
+                    }
+
+                    // Обработка удаленных элементов
+                    foreach (ElementId id in e.GetDeletedElementIds())
+                    {
+                        LogElementChange(doc, documentName, "Удаление", transactionName, id, changeTime, "*Удалено*");
+                    }
+
+                    // Обработка созданных элементов
+                    foreach (ElementId id in e.GetAddedElementIds())
+                    {
+                        Element element = doc.GetElement(id);
+                        if (element == null || element.Category == null) continue;
+                        LogElementChange(doc, documentName, "Создание", transactionName, id, changeTime, element.Category.Name);
+                    }
+                }
+
+                // Обновляем общую статистику (как в предыдущей версии)
+                modifiedDict[documentName] = e.GetModifiedElementIds().Count;
+                deletedDict[documentName] = e.GetDeletedElementIds().Count;
+                createdDict[documentName] = e.GetAddedElementIds().Count;
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void LogElementChange(Document doc, string documentName, string changeType,
+                                    string transactionName, ElementId elementId, DateTime changeTime, string categoryName)
+        {       
+            string elementInfo = $"{changeType} - {transactionName} - " +
+                               $"Id элемента: {elementId.IntegerValue} - " +
+                               $"Категория: {categoryName} - " +
+                               $"Время: {changeTime:HH:mm:ss}";
+
+            transactionsLog[documentName].Add(elementInfo);
+        }
+
+        private void SaveTransactionsToXml(string documentName)
+        {
+            try
+            {
+                // Создаем папку для логов, если ее нет
+                string logsFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FerrumLogs");
+
+                if (!Directory.Exists(logsFolder))
+                {
+                    Directory.CreateDirectory(logsFolder);
+                }
+
+                // Формируем имя файла
+                string fileName = $"Транзакции - {Environment.UserName} - {DateTime.Now:dd.MM.yyyy}.xml";
+                string filePath = Path.Combine(logsFolder, fileName);
+
+                XDocument xdoc;
+                XElement rootElement;
+
+                // Проверяем существует ли файл
+                if (File.Exists(filePath))
+                {
+                    // Загружаем существующий документ
+                    xdoc = XDocument.Load(filePath);
+                    rootElement = xdoc.Root;
+                }
+                else
+                {
+                    // Создаем новый документ
+                    xdoc = new XDocument();
+                    rootElement = new XElement("RevitTransactions");
+                    xdoc.Add(rootElement);
+                }
+
+                // Ищем или создаем элемент для текущего документа
+                XElement docElement = rootElement.Elements("Document")
+                    .FirstOrDefault(e => e.Attribute("Name")?.Value == documentName);
+
+                if (docElement == null)
+                {
+                    docElement = new XElement("Document",
+                        new XAttribute("Name", documentName));
+                    rootElement.Add(docElement);
+                }
+
+                // Добавляем новые транзакции
+                if (transactionsLog.TryGetValue(documentName, out List<string> newTransactions))
+                {
+                    // Получаем существующие транзакции (если нужно избежать дублирования)
+                    var existingTransactions = docElement.Elements("Transaction")
+                        .Select(t => t.Value)
+                        .ToList();
+
+                    // Добавляем только новые уникальные транзакции
+                    foreach (var transaction in newTransactions)
+                    {
+                        if (!existingTransactions.Contains(transaction))
+                        {
+                            docElement.Add(new XElement("Transaction", transaction));
+                        }
+                    }
+                }
+
+                // Сохраняем изменения
+                xdoc.Save(filePath);
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void SaveOpenTimeStat(Document doc, TimeSpan duration)
+        {
+            try
+            {
+                string filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FerrumLogs");
+                if (!Directory.Exists(Path.GetDirectoryName(filePath)))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                }
+                filePath = Path.Combine(filePath, System.Environment.UserName + " - " + DateTime.Now.ToShortDateString() + ".xml");
+
+
+                XDocument xdoc;
+
+                if (File.Exists(filePath))
+                {
+                    xdoc = XDocument.Load(filePath);
+                }
+                else
+                {
+                    xdoc = new XDocument(new XElement("RevitStatistics"));
+                }
+
+                // Находим или создаем запись для этого документа
+                XElement docElement = xdoc.Root.Elements("Document")
+                    .FirstOrDefault(e => e.Attribute("Name")?.Value == doc.Title);
+
+                if (docElement == null)
+                {
+                    docElement = new XElement("Document",
+                        new XAttribute("Name", doc.Title));
+                    xdoc.Root.Add(docElement);
+                }
+
+                // Обновляем или добавляем раздел OpenTime
+                XElement openTimeElement = docElement.Element("OpenTime");
+                if (openTimeElement == null)
+                {
+                    openTimeElement = new XElement("OpenTime");
+                    docElement.Add(openTimeElement);
+                }
+
+                openTimeElement.Add(new XElement("Record",
+                    new XAttribute("Timestamp", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                    new XAttribute("Duration", duration.ToString())));
+
+                xdoc.Save(filePath);
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void SaveSynchroTimeStat(Document doc, TimeSpan duration)
+        {
+            try
+            {
+                string filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FerrumLogs");
+                if (!Directory.Exists(Path.GetDirectoryName(filePath)))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                }
+                filePath = Path.Combine(filePath, System.Environment.UserName + " - " + DateTime.Now.ToShortDateString() + ".xml");
+
+                XDocument xdoc = XDocument.Load(filePath);
+
+                // Находим запись для этого документа
+                XElement docElement = xdoc.Root.Elements("Document")
+                    .FirstOrDefault(e => e.Attribute("Name")?.Value == doc.Title);
+
+                if (docElement == null) return;
+
+                // Обновляем или добавляем раздел SynchroTime
+                XElement synchroTimeElement = docElement.Element("SynchroTime");
+                if (synchroTimeElement == null)
+                {
+                    synchroTimeElement = new XElement("SynchroTime");
+                    docElement.Add(synchroTimeElement);
+                }
+
+                synchroTimeElement.Add(new XElement("Record",
+                    new XAttribute("Timestamp", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                    new XAttribute("Duration", duration.ToString())));
+
+                xdoc.Save(filePath);
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        private void SaveElementsStat(Document doc, int initialCount, int modified, int deleted, int created, int finalCount)
+        {
+            try
+            {
+                string filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FerrumLogs");
+                if (!Directory.Exists(Path.GetDirectoryName(filePath)))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                }
+                filePath = Path.Combine(filePath, System.Environment.UserName + " - " + DateTime.Now.ToShortDateString() + ".xml");
+
+                XDocument xdoc = XDocument.Load(filePath);
+
+                // Находим запись для этого документа
+                XElement docElement = xdoc.Root.Elements("Document")
+                    .FirstOrDefault(e => e.Attribute("Name")?.Value == doc.Title);
+
+                if (docElement == null) return;
+
+                // Обновляем или добавляем раздел Elements
+                XElement elementsElement = docElement.Element("Elements");
+                if (elementsElement == null)
+                {
+                    elementsElement = new XElement("Elements");
+                    docElement.Add(elementsElement);
+                }
+
+                elementsElement.Add(new XElement("Record",
+                    new XAttribute("Timestamp", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                    new XElement("InitialCount", initialCount),
+                    new XElement("FinalCount", finalCount),
+                    new XElement("Modified", modified),
+                    new XElement("Deleted", deleted),
+                    new XElement("Created", created)));
+
+                xdoc.Save(filePath);
+            }
+            catch (Exception ex)
+            {
+
             }
         }
 
