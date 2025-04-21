@@ -1,0 +1,43 @@
+﻿<Window x:Class="FerrumAddin.FBS.LayoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:FerrumAddin.FBS"
+        mc:Ignorable="d"
+        Title="FBS Layout Generator" Height="400" Width="600" WindowStartupLocation="CenterScreen">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <!-- Inputs for generation settings -->
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock VerticalAlignment="Center" Text="Generate variants:"/>
+            <TextBox x:Name="VariantsCountBox" Width="50" Margin="5,0,15,0" Text="10"/>
+            <TextBlock VerticalAlignment="Center" Text="Keep best:"/>
+            <TextBox x:Name="BestCountBox" Width="50" Margin="5,0,0,0" Text="3"/>
+        </StackPanel>
+        <!-- Wall selection -->
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,0,0,10">
+            <Button x:Name="SelectWallsButton" Width="120" Content="Select Walls" Click="SelectWalls_Click"/>
+            <TextBlock x:Name="SelectedWallsLabel" VerticalAlignment="Center" Margin="10,0,0,0" Text="No walls selected"/>
+        </StackPanel>
+        <!-- Variants table -->
+        <DataGrid x:Name="VariantsGrid" Grid.Row="2" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Single">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Blocks" Binding="{Binding TotalBlocks}" Width="*"/>
+                <DataGridTextColumn Header="Errors" Binding="{Binding ErrorCount}" Width="*"/>
+                <DataGridTextColumn Header="Warnings" Binding="{Binding WarningCount}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+        <!-- Action buttons -->
+        <StackPanel Orientation="Horizontal" Grid.Row="3" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="GenerateButton" Width="100" Content="Generate" Click="Generate_Click" Margin="0,0,5,0"/>
+            <Button x:Name="PlaceButton" Width="100" Content="Place Selected" Click="PlaceSelected_Click" Margin="0,0,5,0"/>
+            <Button x:Name="ShowIssuesButton" Width="130" Content="Show Errors/Warnings" Click="ShowIssues_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -93,6 +93,17 @@
     <Compile Include="App.cs" />
     <Compile Include="CommandMepName.cs" />
     <Compile Include="Config\ConfiguratorShow.cs" />
+    <Compile Include="FBS\BlockPlacer.cs" />
+    <Compile Include="FBS\EventHandler.cs" />
+    <Compile Include="FBS\FBSLayoutCommand.cs" />
+    <Compile Include="FBS\LayoutGenerator.cs" />
+    <Compile Include="FBS\LayoutWindow.xaml.cs">
+      <DependentUpon>LayoutWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="FBS\Models.cs" />
+    <Compile Include="FM\ChooseTypesWindow.xaml.cs">
+      <DependentUpon>ChooseTypesWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="FM\ComparisonWindow.xaml.cs">
       <DependentUpon>ComparisonWindow.xaml</DependentUpon>
     </Compile>
@@ -156,6 +167,14 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <Page Include="FBS\LayoutWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="FM\ChooseTypesWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="FM\ComparisonWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>

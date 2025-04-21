@@ -27,6 +27,7 @@ using Autodesk.Revit.ApplicationServices;
 using Transform = Autodesk.Revit.DB.Transform;
 using System.Runtime.InteropServices;
 using Autodesk.Revit.DB.Events;
+using FerrumAddin.FM;
 #endregion
 
 namespace FerrumAddin
@@ -254,6 +255,9 @@ namespace FerrumAddin
 
             PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandGrillageCreator");
             panelKR.AddItem(GrillageCreator);
+
+            PushButtonData FBSCreator = new PushButtonData("FBSCreator", "Раскладка ФБС", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FBS.FBSLayoutCommand");
+            panelKR.AddItem(FBSCreator);
 
 
             panelControl = a.CreateRibbonPanel(tabName, "Управление");
@@ -899,7 +903,38 @@ namespace FerrumAddin
             }
             App.AllowLoad = true;
             List<Document> documents = new List<Document>();
-            
+            List<MenuItem> typeMenuIems = new List<MenuItem>();
+            foreach (MenuItem item in list)
+            {
+                if (item.Path.EndsWith("rfa") && File.Exists(item.Path.Remove(item.Path.Length-3, 3) + "txt"))
+                {
+                    typeMenuIems.Add(item);
+                }
+            }
+            list = (List<MenuItem>)list.Except(typeMenuIems).ToList();
+            if (typeMenuIems.Count > 0)
+            {
+                ChooseTypesWindow window = new ChooseTypesWindow(typeMenuIems);
+                window.ShowDialog();
+
+                if (window.DialogResult == true)
+                {
+                    Dictionary<string, List<string>> selectedTypes = ChooseTypesWindow.selectedTypes;
+                    foreach (var fam in selectedTypes.Keys)
+                    {
+                        foreach (var type in selectedTypes[fam])
+                        {
+                            using (Transaction tx = new Transaction(docToCopy))
+                            {
+                                tx.Start("Загрузка типа семейства" + fam + "-" + type);
+                                docToCopy.LoadFamilySymbol(typeMenuIems.Where(x => x.Name == fam).FirstOrDefault().Path, type);
+                                tx.Commit();
+                            }
+                        }
+                    }
+
+                }
+            }
             foreach (MenuItem tab in list)
             {
                 bool isFirstOptionChecked = FamilyManagerWindow.IsFirstOptionChecked();
