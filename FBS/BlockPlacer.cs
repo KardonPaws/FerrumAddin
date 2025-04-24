@@ -17,6 +17,12 @@ namespace FerrumAddin.FBS
                 .Cast<ViewFamilyType>()
                 .First(vf => vf.ViewFamily == ViewFamily.Section);
 
+            FamilySymbol tagSym = new FilteredElementCollector(doc)
+            .OfClass(typeof(FamilySymbol))
+            .OfCategory(BuiltInCategory.OST_StructuralFramingTags)
+            .Cast<FamilySymbol>()
+            .FirstOrDefault(fs => fs.Family.Name == "ADSK_Марка_Балка" && fs.Name == "Экземпляр_ADSK_Позиция");
+
             View viewTemplate = new FilteredElementCollector(doc).OfClass(typeof(View)).
                     Cast<View>().Where(v => v.IsTemplate && v.Name.Equals("4_К_ФБС_развертки")).FirstOrDefault();
 
@@ -113,6 +119,15 @@ namespace FerrumAddin.FBS
                         Line axis = Line.CreateBound(pt, pt + XYZ.BasisZ);
                         ElementTransformUtils.RotateElement(doc, inst.Id, axis, ang);
                         inst.LookupParameter("ADSK_Группирование").Set("ФБС");
+                        inst.LookupParameter("ADSK_Позиция").Set(Math.Round(block.Length / 100.0).ToString());
+                        IndependentTag tag = IndependentTag.Create(
+                            doc,
+                            tagSym.Id,
+                            views[block.Wall],
+                            new Reference(inst),
+                            false,
+                            TagOrientation.Horizontal,
+                            (inst.Location as LocationPoint).Point + 0.2 * XYZ.BasisZ);
                     }
                 }
 
@@ -122,6 +137,7 @@ namespace FerrumAddin.FBS
             variant.IsPlaced = true;
         }
 
+        public static Dictionary<WallInfo, ElementId> views = new Dictionary<WallInfo, ElementId>();
         // В CreateSectionViewsForVariant передаём wallsInVariant в GenerateSectionName
         private static void CreateSectionViewsForVariant(
     LayoutVariant variant,
@@ -140,8 +156,10 @@ namespace FerrumAddin.FBS
                 BoundingBoxXYZ box = GetSectionBox(wall);
                 // box теперь валидный
                 ViewSection vs = ViewSection.CreateSection(doc, sectionType.Id, box);
+
                 vs.ViewTemplateId = viewTemplate.Id;
                 vs.Name = name;
+                views.Add(wall, vs.Id);
             }
         }
 
