@@ -15,10 +15,10 @@ namespace FerrumAddin.FBS
         public XYZ StartPoint { get; set; }
         public XYZ EndPoint { get; set; }
         public XYZ Direction { get; set; }
-        public double Length { get; set; }       // in mm
-        public double Thickness { get; set; }    // in mm
-        public double Height { get; set; }       // in mm
-        public double BaseElevation { get; set; } // base elevation in feet
+        public double Length { get; set; }       // мм
+        public double Thickness { get; set; }    // мм
+        public double Height { get; set; }       // мм
+        public double BaseElevation { get; set; } // координата Z
         public List<OpeningInfo> Openings { get; set; } = new List<OpeningInfo>();
 
         // Сторонние соседи (с сохранением информации для угловых соединений)
@@ -61,7 +61,7 @@ namespace FerrumAddin.FBS
         public WallInfo Wall { get; set; }
         public int Row { get; set; }
         public double ZCoord { get; set; }
-        public double Length { get; set; }  // in mm
+        public double Length { get; set; }  // мм
         public double Start { get; set; }   // начало блока вдоль стены (мм)
         public double End { get; set; }     // конец блока вдоль стены (мм)
         public ElementId PlacedElementId { get; set; } = ElementId.InvalidElementId;

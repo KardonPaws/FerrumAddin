@@ -20,29 +20,11 @@ namespace FerrumAddin.FBS
         public SelectWallsHandler SelectHandler { get; set; }
         public ExternalEvent PlaceLayoutEvent { get; set; }
         public PlaceLayoutHandler PlaceHandler { get; set; }
-        public ExternalEvent ShowIssuesEvent { get; set; }
-        public ShowIssuesHandler ShowIssuesHandler { get; set; }
         public List<WallInfo> _selectedWalls;
         public List<LayoutVariant> _variants;
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            //UIDocument uidoc = commandData.Application.ActiveUIDocument;
-            //Document doc = uidoc.Document;
-            //IList<Reference> refs = uidoc.Selection.PickObjects(ObjectType.Element, new WallSelectionFilter_(), "Select foundation walls");
-            //List<Line> wallInfos = new List<Line>();
-            //foreach (Reference r in refs)
-            //{
-            //    Wall wall = doc.GetElement(r) as Wall;
-            //    if (wall == null) continue;
-            //    // Gather wall geometry and parameters
-            //    LocationCurve locCurve = wall.Location as LocationCurve;
-            //    XYZ start = locCurve.Curve.GetEndPoint(0);
-            //    XYZ end = locCurve.Curve.GetEndPoint(1);
-            //    wallInfos.Add(locCurve.Curve as Line);
-            //}
-            //CreateModelLines(doc, wallInfos);
-            //LayoutWindow window = new LayoutWindow(commandData.Application);
-            //window.Show();
+
             SelectWallsHandler handler = new SelectWallsHandler();
             handler.SelectWalls(commandData.Application, this);
             _variants = LayoutGenerator.GenerateVariants(_selectedWalls, 1, 1);

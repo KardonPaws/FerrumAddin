@@ -176,7 +176,7 @@ namespace FerrumAddin.FBS
                     if (leftBound >= rightBound)
                         continue;
 
-                    // Обрабатываем проёмы из окон/дверей и longitudinal-соединений
+                    // Обрабатываем проёмы из окон/дверей
                     List<(double start, double end)> openings = new List<(double, double)>();
                     foreach (var op in wall.Openings)
                     {
@@ -187,7 +187,7 @@ namespace FerrumAddin.FBS
                             openings.Add((opStart, opEnd));
                         }
                     }
-                    // Добавляем longitudinal проёмы для соединённых стен (если есть соединения и ряд первый)
+                    // Добавляем проёмы для перпендикулярных соединённых стен
                     if (wall.ConnectedWalls.Count > 0)
                     {
                         foreach (var neighbor in wall.ConnectedWalls)
@@ -344,7 +344,7 @@ namespace FerrumAddin.FBS
                                 variant.JointsByWall[wall][localRow].Add(j);
                             }
                         }
-                    } // end foreach fill-segment
+                    }
 
                     // Проверка вертикальных швов между рядами
                     if (localRow > 1 &&
@@ -361,8 +361,8 @@ namespace FerrumAddin.FBS
                             }
                         }
                     }
-                } // end foreach wall
-            } // end for each row
+                }
+            }
             return variant;
         }
 

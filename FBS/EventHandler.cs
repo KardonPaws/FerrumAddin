@@ -27,7 +27,7 @@ namespace FerrumAddin.FBS
             Document doc = uidoc.Document;
             try
             {
-                IList<Reference> refs = uidoc.Selection.PickObjects(ObjectType.Element, new WallSelectionFilter(), "Select foundation walls");
+                IList<Reference> refs = uidoc.Selection.PickObjects(ObjectType.Element, new WallSelectionFilter(), "Выберете стены");
                 if (refs == null) return;
                 List<WallInfo> wallInfos = new List<WallInfo>();
                 foreach (Reference r in refs)
@@ -38,9 +38,9 @@ namespace FerrumAddin.FBS
                     LocationCurve locCurve = wall.Location as LocationCurve;
                     XYZ start = locCurve.Curve.GetEndPoint(0);
                     XYZ end = locCurve.Curve.GetEndPoint(1);
-                    double length = locCurve.Curve.Length * 304.8;   // feet to mm
-                    double thickness = wall.Width * 304.8;          // feet to mm
-                    // Wall height and base elevation
+                    double length = locCurve.Curve.Length * 304.8;   // мм
+                    double thickness = wall.Width * 304.8;          // мм
+                    // Высота и бт
                     double baseElev = wall.get_BoundingBox(null).Min.Z;
                     double height;
                     Parameter heightParam = wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM);
@@ -52,7 +52,7 @@ namespace FerrumAddin.FBS
                     {
                         height = (wall.get_BoundingBox(null).Max.Z - wall.get_BoundingBox(null).Min.Z) * 304.8;
                     }
-                    // Find openings (doors/windows) hosted in this wall
+                    // Отверстия
                     List<OpeningInfo> openings = new List<OpeningInfo>();
                     IEnumerable<FamilyInstance> hostedInserts = new FilteredElementCollector(doc)
                         .WhereElementIsNotElementType()
@@ -62,7 +62,7 @@ namespace FerrumAddin.FBS
                         .Where(fi => fi.Host.Id == wall.Id);
                     foreach (FamilyInstance fi in hostedInserts)
                     {
-                        // Determine opening location along wall
+                        // Положение отверстия
                         XYZ insPoint;
                         if (fi.Location is LocationPoint lp)
                         {
@@ -77,14 +77,14 @@ namespace FerrumAddin.FBS
                         XYZ vec = insPoint - start;
                         double distAlongWall = vec.DotProduct(wallDir);  // in feet
                         double openingCenterMm = distAlongWall * 304.8;
-                        // Opening width (if available via parameter)
+                        // Ширина отверстия
                         double openWidthFt = 0;
                         Parameter widthParam = fi.get_Parameter(BuiltInParameter.WINDOW_WIDTH) ?? fi.get_Parameter(BuiltInParameter.DOOR_WIDTH);
                         if (widthParam != null && widthParam.HasValue)
                         {
                             openWidthFt = widthParam.AsDouble();
                         }
-                        // Compute opening span in mm
+                        // размеры отверстия
                         double openWidthMm = openWidthFt * 304.8;
                         double openStart = openingCenterMm - openWidthMm / 2;
                         double openEnd = openingCenterMm + openWidthMm / 2;
@@ -107,12 +107,11 @@ namespace FerrumAddin.FBS
 
                     wallInfos.Add(info);
                 }
-                // Return selected walls info to the main window
                 _window._selectedWalls = wallInfos;
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException)
             {
-                // User cancelled selection
+                // отмена
             }
         }
         public string GetName() => "SelectWallsHandler";
@@ -133,26 +132,5 @@ namespace FerrumAddin.FBS
             BlockPlacer.PlaceVariant(VariantToPlace, doc);
         }
         public string GetName() => "PlaceLayoutHandler";
-    }
-
-    public class ShowIssuesHandler : IExternalEventHandler
-    {
-        public LayoutVariant VariantToShow { get; set; }
-        public void Execute(UIApplication app)
-        {
-            if (VariantToShow == null || !VariantToShow.IsPlaced) return;
-            UIDocument uidoc = app.ActiveUIDocument;
-            // Highlight all blocks of the variant (for simplicity, since specific issue blocks are not flagged separately)
-            HashSet<ElementId> issueIds = new HashSet<ElementId>();
-            foreach (BlockPlacement block in VariantToShow.Blocks)
-            {
-                if (block.PlacedElementId != ElementId.InvalidElementId)
-                {
-                    issueIds.Add(block.PlacedElementId);
-                }
-            }
-            uidoc.Selection.SetElementIds(issueIds.ToList());
-        }
-        public string GetName() => "ShowIssuesHandler";
     }
 }
