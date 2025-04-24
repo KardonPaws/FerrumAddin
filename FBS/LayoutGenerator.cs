@@ -100,7 +100,7 @@ namespace FerrumAddin.FBS
             {
                 w.coordZList.Clear();
 
-                double baseMm = w.BaseElevation * 304.8;
+                double baseMm = Math.Round(w.BaseElevation * 304.8);
                 double height = w.Height;
 
                 bool first = hasFirst300[w];
@@ -194,7 +194,7 @@ namespace FerrumAddin.FBS
                         {
                             double absDot = Math.Abs(wall.Direction.Normalize()
                                                                          .DotProduct(neighbor.Direction.Normalize()));
-                            if (Math.Abs(absDot - 1.0) > 1e-3) continue;
+                            if (Math.Abs(absDot) > 1e-3) continue;
                             bool isAngular = false;
                             if (wall.LeftNeighbor == neighbor)
                             {
@@ -210,17 +210,26 @@ namespace FerrumAddin.FBS
                             }
                             if (isAngular)
                                 continue;
-
-                            if ((row % 2 == 1 && neighbor.Id.Value < wall.Id.Value) || (row % 2 == 0 && neighbor.Id.Value > wall.Id.Value))
-                                continue;
-                            // Вычисляем проекции начала и конца соседа на ось стены
-                            XYZ dir = wall.Direction.Normalize();
-                            double proj1 = (neighbor.StartPoint - wall.StartPoint - (neighbor.Thickness / 304.8 * dir / 2)).DotProduct(dir) * 304.8;
-                            double proj2 = (neighbor.EndPoint - wall.StartPoint + (neighbor.Thickness / 304.8 * dir / 2)).DotProduct(dir) * 304.8;
-                            double openStart = Math.Max(0, Math.Min(proj1, proj2));
-                            double openEnd = Math.Min(wall.Length, Math.Max(proj1, proj2));
-                            if (openEnd > openStart)
-                                openings.Add((openStart, openEnd));
+                            List<double> Z = wall.coordZList.Intersect(neighbor.coordZList).ToList();
+                            try
+                            {
+                                double rowWall = wall.coordZList[localRow - 1];
+                                int actualRow = Z.IndexOf(rowWall) + 1;
+                                if (actualRow == 0)
+                                    continue;
+                                if ((actualRow % 2 == 1 && neighbor.Id.Value < wall.Id.Value) || (actualRow % 2 == 0 && neighbor.Id.Value > wall.Id.Value))
+                                    continue;
+                                // Вычисляем проекции начала и конца соседа на ось стены
+                                XYZ dir = wall.Direction.Normalize();
+                                double proj1 = (neighbor.StartPoint - wall.StartPoint - (neighbor.Thickness / 304.8 * dir / 2)).DotProduct(dir) * 304.8;
+                                double proj2 = (neighbor.EndPoint - wall.StartPoint + (neighbor.Thickness / 304.8 * dir / 2)).DotProduct(dir) * 304.8;
+                                double openStart = Math.Max(0, Math.Min(proj1, proj2));
+                                double openEnd = Math.Min(wall.Length, Math.Max(proj1, proj2));
+                                if (openEnd > openStart)
+                                    openings.Add((openStart, openEnd));
+                            }
+                            catch
+                            { }
                         }
                     }
 
@@ -247,7 +256,8 @@ namespace FerrumAddin.FBS
                         while (rightCursor - leftCursor >= AllowedBlockLengths.Min())
                         {
                             double available = rightCursor - leftCursor;
-                            List<int> possibleBlocks = AllowedBlockLengths.Where(len => len <= available)
+                            List<int> possibleBlocks = ((row == 1 && wall.first300) || (row == wall.coordZList.Count() && wall.last300))? new List<int>() { 1200 } :
+                                AllowedBlockLengths.Where(len => len <= available)
                                                                            .OrderByDescending(len => len)
                                                                            .ToList();
                             int chosenBlockLen = -1;

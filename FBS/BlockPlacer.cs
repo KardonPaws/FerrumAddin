@@ -17,6 +17,9 @@ namespace FerrumAddin.FBS
                 .Cast<ViewFamilyType>()
                 .First(vf => vf.ViewFamily == ViewFamily.Section);
 
+            View viewTemplate = new FilteredElementCollector(doc).OfClass(typeof(View)).
+                    Cast<View>().Where(v => v.IsTemplate && v.Name.Equals("4_К_ФБС_развертки")).FirstOrDefault();
+
             // Получить все оси (Grid) в модели
             List<Grid> allGrids = new FilteredElementCollector(doc)
                 .OfClass(typeof(Grid))
@@ -35,7 +38,7 @@ namespace FerrumAddin.FBS
                 tx.Start();
 
                 // 1) Создать разрезы по каждо́й стене, в которой есть блоки
-                CreateSectionViewsForVariant(variant, doc, sectionType, allGrids, existingNames);
+                CreateSectionViewsForVariant(variant, doc, sectionType, allGrids, existingNames, viewTemplate);
 
                 // 2) Активировать семейства и размещать блоки
                 Dictionary<string, FamilySymbol> symbolCache = new Dictionary<string, FamilySymbol>();
@@ -124,7 +127,8 @@ namespace FerrumAddin.FBS
     Document doc,
     ViewFamilyType sectionType,
     List<Grid> allGrids,
-    HashSet<string> existingNames)
+    HashSet<string> existingNames,
+    View viewTemplate)
         {
             var wallsInVariant = variant.Blocks.Select(b => b.Wall).Distinct();
             foreach (var wall in wallsInVariant)
@@ -135,6 +139,7 @@ namespace FerrumAddin.FBS
                 BoundingBoxXYZ box = GetSectionBox(wall);
                 // box теперь валидный
                 ViewSection vs = ViewSection.CreateSection(doc, sectionType.Id, box);
+                vs.ViewTemplateId = viewTemplate.Id;
                 vs.Name = name;
             }
         }
@@ -167,12 +172,12 @@ namespace FerrumAddin.FBS
 
             if (wall.Direction.Y == 0)
             {
-                min = new XYZ(-halfLength-0.5, - 1.0, 0);
+                min = new XYZ(-halfLength-0.5, - 2.0, 0);
                 max = new XYZ(halfLength, topZ + 1.0, halfDepth);
             }
             else
             {
-                min = new XYZ(-halfLength-0.5, - 1.0, 0);
+                min = new XYZ(-halfLength-0.5, - 2.0, 0);
                 max = new XYZ(halfLength, topZ + 1.0, halfDepth);
             }
 
