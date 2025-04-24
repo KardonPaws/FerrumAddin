@@ -32,6 +32,9 @@ namespace FerrumAddin.FBS
         // Новый список всех соединённых стен
         public List<WallInfo> ConnectedWalls { get; set; } = new List<WallInfo>();
         public int RowOffset { get; set; }
+        public List<double> coordZList { get; set; } = new List<double>();
+        public bool first300 = false;
+        public bool last300 = false;
     }
 
     // Описание проёма (дверь/окно) вдоль стены, определённое стартовым и конечным расстоянием (в мм)
@@ -57,6 +60,7 @@ namespace FerrumAddin.FBS
     {
         public WallInfo Wall { get; set; }
         public int Row { get; set; }
+        public double ZCoord { get; set; }
         public double Length { get; set; }  // in mm
         public double Start { get; set; }   // начало блока вдоль стены (мм)
         public double End { get; set; }     // конец блока вдоль стены (мм)

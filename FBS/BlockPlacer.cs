@@ -42,15 +42,19 @@ namespace FerrumAddin.FBS
                 foreach (BlockPlacement block in variant.Blocks)
                 {
                     string familyName;
+                    
                     if (block.IsGapFill)
                     {
                         familyName = "Кирпичная заделка (керамический кирпич)";
                     }
                     else
                     {
+                        int heightDecimeters = 6;
+                        if ((block.Row == 1 && block.Wall.first300) || (block.Row == block.Wall.coordZList.Count() && block.Wall.last300))
+                            heightDecimeters = 3;
                         int lengthDecimeters = (int)Math.Round(block.Length / 100.0);
                         int thicknessDecimeters = (int)Math.Round(block.Wall.Thickness / 100.0);
-                        familyName = $"ФБС{lengthDecimeters}.{thicknessDecimeters}.6";
+                        familyName = $"ФБС{lengthDecimeters}.{thicknessDecimeters}.{heightDecimeters}";
                     }
 
                     if (!symbolCache.TryGetValue(familyName, out FamilySymbol symbol))
@@ -69,8 +73,10 @@ namespace FerrumAddin.FBS
                     XYZ wallDir = block.Wall.Direction;
                     XYZ pt = wallStart + wallDir * centerDistFt;
 
-                    double zOff = (block.Row - 1) * (600.0 / 304.8);
-                    pt = new XYZ(pt.X, pt.Y, block.Wall.BaseElevation + zOff);
+                    double firstRowZ = block.Wall.first300 && block.Row != 1 ? -300 / 304.8 : 0;
+
+                    double zOff = (block.Row - 1) * (600 / 304.8);
+                    pt = new XYZ(pt.X, pt.Y, block.Wall.BaseElevation + zOff + firstRowZ);
 
                     FamilyInstance inst = doc.Create.NewFamilyInstance(pt, symbol, StructuralType.NonStructural);                      
                     block.PlacedElementId = inst.Id;
@@ -79,8 +85,12 @@ namespace FerrumAddin.FBS
                     {
                         double lenFt = block.Length / 304.8;
                         double thkFt = block.Wall.Thickness / 304.8;
+                        double heightFt = 600 / 304.8;
+                        if ((block.Row == 1 && block.Wall.first300) || (block.Row == block.Wall.coordZList.Count() && block.Wall.last300))
+                            heightFt = 300 / 304.8;
                         inst.LookupParameter("Б")?.Set(lenFt);
                         inst.LookupParameter("А")?.Set(thkFt);
+                        inst.LookupParameter("С")?.Set(heightFt);
                         inst.LookupParameter("ADSK_Группирование").Set("ФБСм");
 
                         XYZ xAxis = XYZ.BasisY;

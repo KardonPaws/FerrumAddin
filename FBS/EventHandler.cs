@@ -99,11 +99,19 @@ namespace FerrumAddin.FBS
                         Direction = (end - start).Normalize(),
                         Length = length,
                         Thickness = thickness,
-                        Height = height,
+                        Height = Math.Round(height),
                         BaseElevation = baseElev,
                         Openings = openings,
                         line = locCurve.Curve as Line
                     };
+                    int rowCount = (int)Math.Round(info.Height / 600.0);
+                    double baseElevMm = Math.Round(info.BaseElevation * 304.8);
+                    for (int row = 1; row <= rowCount; row++)
+                    {
+                        // первый ряд на BaseElevation, последующие — через 600 мм
+                        double zMm = baseElevMm + (row - 1) * 600.0;
+                        info.coordZList.Add(zMm);
+                    }
                     wallInfos.Add(info);
                 }
                 // Return selected walls info to the main window

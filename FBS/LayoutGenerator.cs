@@ -19,10 +19,10 @@ namespace FerrumAddin.FBS
         public static List<LayoutVariant> GenerateVariants(List<WallInfo> walls, int generateCount, int keepCount)
         {
             SetupWallConnections(walls);
+            ComputeCoordZLists(walls);
             List<LayoutVariant> bestVariants = new List<LayoutVariant>();
             int produced = 0;
-            Random rand = new Random();
-            foreach (LayoutVariant variant in GenerateVariantsStream(walls, rand))
+            foreach (LayoutVariant variant in GenerateVariantsStream(walls))
             {
                 if (bestVariants.Count < keepCount)
                     bestVariants.Add(variant);
@@ -47,21 +47,116 @@ namespace FerrumAddin.FBS
                                 .ToList();
         }
 
-        private static IEnumerable<LayoutVariant> GenerateVariantsStream(List<WallInfo> walls, Random rand)
+        private static void ComputeCoordZLists(List<WallInfo> walls)
         {
-            while (true)
-                yield return GenerateSingleVariant(walls, rand);
+            // помощник для сравнения с точностью
+            const double eps = 1e-6;
+
+            // 1) Сортируем стены по базовой отметке (в мм)
+            var sorted = walls
+                .OrderBy(w => w.BaseElevation * 304.8)
+                .ToList();
+
+            // 2) Для каждой стены вычисляем, будет ли у неё первый ряд в +300 мм
+            //    — если у какого-то соседа базовая отметка = моя +300,
+            //      или сосед с той же отметкой уже имеет first300 = true.
+            var hasFirst300 = new Dictionary<WallInfo, bool>();
+            foreach (var w in sorted)
+            {
+                double myBase = w.BaseElevation * 304.8;
+                bool first300 = false;
+
+                // условие 1: сосед стоит ровно на +300 мм
+                foreach (var nb in w.ConnectedWalls)
+                {
+                    double nbBase = nb.BaseElevation * 304.8;
+                    if (Math.Abs(nbBase - (myBase + 300.0)) < eps)
+                    {
+                        first300 = true;
+                        break;
+                    }
+                }
+                if (!first300)
+                {
+                    // условие 2: сосед на той же отметке уже получил first300
+                    foreach (var nb in w.ConnectedWalls)
+                    {
+                        double nbBase = nb.BaseElevation * 304.8;
+                        if (Math.Abs(nbBase - myBase) < eps
+                            && hasFirst300.TryGetValue(nb, out bool nbFirst)
+                            && nbFirst)
+                        {
+                            first300 = true;
+                            break;
+                        }
+                    }
+                }
+
+                hasFirst300[w] = first300;
+            }
+
+            // 3) Теперь для каждой стены строим полный список coordZList
+            foreach (var w in walls)
+            {
+                w.coordZList.Clear();
+
+                double baseMm = w.BaseElevation * 304.8;
+                double height = w.Height;
+
+                bool first = hasFirst300[w];
+
+                // 3.1) Если первый 300-мм ряд, добавляем его
+                if (first)
+                {
+                    w.coordZList.Add(baseMm);
+                    w.first300 = true;
+                }
+
+                // 3.2) Добавляем все «полные» ряды 600 мм, начиная от base+ (first?300:0)
+                double z = baseMm + (first ? 300.0 : 0.0);
+                while (z + 600 <= baseMm + height + eps)
+                {
+                    w.coordZList.Add(z);
+                    z += 600.0;
+                }
+
+                // 3.3) Если первого 300-мм ряда не было, проверяем условие для «последнего» 300-мм ряда
+                //     высота = 600*x + rem, где rem∈(300,600)
+                if (!first)
+                {
+                    int fullRows = (int)(height / 600.0);
+                    double rem = height - fullRows * 600.0;
+                    if (rem >= 300.0 - eps && rem < 600.0 - eps)
+                    {
+                        w.coordZList.Add(baseMm + fullRows * 600.0 + 300.0);
+                        w.last300 = true;
+                    }
+                }
+
+                // 3.4) Сортируем и убираем дубли
+                w.coordZList = w.coordZList
+                    .Distinct()
+                    .OrderBy(val => val)
+                    .ToList();
+            }
         }
 
-        private static LayoutVariant GenerateSingleVariant(List<WallInfo> walls, Random rand)
+        private static IEnumerable<LayoutVariant> GenerateVariantsStream(List<WallInfo> walls)
+        {
+            while (true)
+                yield return GenerateSingleVariant(walls);
+        }
+
+        private static LayoutVariant GenerateSingleVariant(List<WallInfo> walls)
         {
             LayoutVariant variant = new LayoutVariant();
-            int maxBaseRows = walls.Max(w => (int)Math.Round(w.Height / 600.0));
+            foreach (WallInfo wall in walls)
+            {
+                int maxBaseRows = wall.coordZList.Count();
 
             for (int row = 1; row <= maxBaseRows; row++)
             {
-                foreach (WallInfo wall in walls)
-                {
+                
                     int localRow = row;
 
                     // Базовые границы – физические границы стены
@@ -71,8 +166,8 @@ namespace FerrumAddin.FBS
                     double overshootRight = (wall.RightNeighbor == null) ? DefaultOvershoot : 0;
 
                     // Вычисляем смещения для левой и правой сторон, если сосед есть
-                    double deltaLeft = ComputeLeftBoundary(wall, localRow, rand);
-                    double deltaRight = ComputeRightBoundary(wall, localRow, rand);
+                    double deltaLeft = ComputeLeftBoundary(wall, localRow);
+                    double deltaRight = ComputeRightBoundary(wall, localRow);
 
                     double leftBound = baseLeft + deltaLeft;
                     double rightBound = baseRight + deltaRight;
@@ -97,6 +192,9 @@ namespace FerrumAddin.FBS
                     {
                         foreach (var neighbor in wall.ConnectedWalls)
                         {
+                            double absDot = Math.Abs(wall.Direction.Normalize()
+                                                                         .DotProduct(neighbor.Direction.Normalize()));
+                            if (Math.Abs(absDot - 1.0) > 1e-3) continue;
                             bool isAngular = false;
                             if (wall.LeftNeighbor == neighbor)
                             {
@@ -213,8 +311,7 @@ namespace FerrumAddin.FBS
                         double gap = rightCursor - leftCursor;
                         if (gap > 1e-6)
                         {
-                            if (gap > 750)
-                                variant.WarningCount++;
+                          
                             segmentJoints.Add(leftCursor);
                             variant.Blocks.Add(new BlockPlacement
                             {
@@ -259,8 +356,34 @@ namespace FerrumAddin.FBS
             return variant;
         }
 
-        private static double ComputeLeftBoundary(WallInfo wall, int localRow, Random rand)
+        private static double ComputeLeftBoundary(WallInfo wall, int localRow)
         {
+            double tolFt = LayoutGenerator.CornerThreshold / 304.8;
+            var longitudinalNeighbor = wall.ConnectedWalls
+                .FirstOrDefault(n =>
+                {
+                    // коллинеарность направлений
+                    double absDot = Math.Abs(wall.Direction.Normalize()
+                                             .DotProduct(n.Direction.Normalize()));
+                    if (Math.Abs(absDot - 1.0) > 1e-3) return false;
+                    // пересечение в начале
+                    return n.line.GetEndPoint(0).DistanceTo(wall.StartPoint) < tolFt
+                        || n.line.GetEndPoint(1).DistanceTo(wall.StartPoint) < tolFt;
+                });
+            if (longitudinalNeighbor != null)
+            {
+                // полный сдвиг = толщина соседа (мм)
+                List<double> Zlong = wall.coordZList.Intersect(longitudinalNeighbor.coordZList).ToList();
+                double rowWallLong = wall.coordZList[localRow - 1];
+                int actualRowLong = Zlong.IndexOf(rowWallLong) + 1;
+                if (actualRowLong == 0)
+                    return 0;
+                double shift = longitudinalNeighbor.Thickness;
+                return (actualRowLong % 2 != 0)
+                    ? (wall.Id.Value > longitudinalNeighbor.Id.Value ? -shift : shift)
+                    : (wall.Id.Value > longitudinalNeighbor.Id.Value ? shift: -shift);
+            }
+
             if (wall.LeftNeighbor == null)
                 return 0;
 
@@ -272,33 +395,66 @@ namespace FerrumAddin.FBS
             // Используем сравнение ID – более высокий ID считается приоритетным
             bool highPriority = wall.Id.Value > wall.LeftNeighbor.Id.Value;
 
-            if (isAngular)
+            List<double> Z = wall.coordZList.Intersect(wall.LeftNeighbor.coordZList).ToList();
+            try
             {
-                if (highPriority)
+                double rowWall = wall.coordZList[localRow - 1];
+                int actualRow = Z.IndexOf(rowWall) + 1;
+                if (isAngular)
                 {
-                    return (localRow % 2 != 0) ? wall.LeftNeighbor.Thickness / 2.0 : -wall.LeftNeighbor.Thickness / 2.0;
+                    if (highPriority)
+                    {
+                        return (actualRow % 2 != 0) ? wall.LeftNeighbor.Thickness / 2.0 : -wall.LeftNeighbor.Thickness / 2.0;
+                    }
+                    else
+                    {
+                        return (actualRow % 2 != 0) ? -wall.LeftNeighbor.Thickness / 2.0 : wall.LeftNeighbor.Thickness / 2.0;
+                    }
                 }
-                else
+                else // продольное соединение
                 {
-                    return (localRow % 2 != 0) ? -wall.LeftNeighbor.Thickness / 2.0 : wall.LeftNeighbor.Thickness / 2.0;
+                    if (highPriority)
+                    {
+                        return (actualRow % 2 != 0) ? -wall.LeftNeighbor.Thickness / 2.0 : 0.0;
+                    }
+                    else
+                    {
+                        return (actualRow % 2 != 0) ? wall.LeftNeighbor.Thickness / 2.0 : 0.0;
+                    }
                 }
             }
-            else // продольное соединение
+            catch
             {
-                if (highPriority)
-                {
-                    return (localRow % 2 != 0) ? -wall.LeftNeighbor.Thickness / 2.0 : 0.0;
-                }
-                else
-                {
-                    return (localRow % 2 != 0) ? wall.LeftNeighbor.Thickness / 2.0 : 0.0;
-                }
-            }
+                return 0;
+            }    
         }
 
 
-        private static double ComputeRightBoundary(WallInfo wall, int localRow, Random rand)
+        private static double ComputeRightBoundary(WallInfo wall, int localRow)
         {
+            double tolFt = LayoutGenerator.CornerThreshold / 304.8;
+            var longitudinalNeighbor = wall.ConnectedWalls
+                .FirstOrDefault(n =>
+                {
+                    double absDot = Math.Abs(wall.Direction.Normalize()
+                                             .DotProduct(n.Direction.Normalize()));
+                    if (Math.Abs(absDot - 1.0) > 1e-3) return false;
+                    return n.line.GetEndPoint(0).DistanceTo(wall.EndPoint) < tolFt
+                        || n.line.GetEndPoint(1).DistanceTo(wall.EndPoint) < tolFt;
+                });
+            if (longitudinalNeighbor != null)
+            {
+                List<double> Zlong = wall.coordZList.Intersect(longitudinalNeighbor.coordZList).ToList();
+                double rowWallLong = wall.coordZList[localRow - 1];
+                int actualRowLong = Zlong.IndexOf(rowWallLong) + 1;
+                if (actualRowLong == 0)
+                    return 0;
+                double shift = longitudinalNeighbor.Thickness;
+                return (actualRowLong % 2 != 0)
+                    ? (wall.Id.Value > longitudinalNeighbor.Id.Value ? shift : -shift)
+                    : (wall.Id.Value > longitudinalNeighbor.Id.Value ? -shift : shift);
+            }
+
             if (wall.RightNeighbor == null)
                 return 0;
 
@@ -306,28 +462,38 @@ namespace FerrumAddin.FBS
             double d2 = wall.EndPoint.DistanceTo(wall.RightNeighbor.EndPoint) * 304.8;
             bool isAngular = (d1 < LayoutGenerator.CornerThreshold || d2 < LayoutGenerator.CornerThreshold);
             bool highPriority = wall.Id.Value > wall.RightNeighbor.Id.Value;
-
-            if (isAngular)
+            List<double> Z = wall.coordZList.Intersect(wall.RightNeighbor.coordZList).ToList();
+            try
             {
-                if (highPriority)
+                double rowWall = wall.coordZList[localRow - 1];
+                int actualRow = Z.IndexOf(rowWall) + 1;
+
+                if (isAngular)
                 {
-                    return (localRow % 2 != 0) ? -wall.RightNeighbor.Thickness / 2.0 : wall.RightNeighbor.Thickness / 2.0;
+                    if (highPriority)
+                    {
+                        return (actualRow % 2 != 0) ? -wall.RightNeighbor.Thickness / 2.0 : wall.RightNeighbor.Thickness / 2.0;
+                    }
+                    else
+                    {
+                        return (actualRow % 2 != 0) ? wall.RightNeighbor.Thickness / 2.0 : -wall.RightNeighbor.Thickness / 2.0;
+                    }
                 }
-                else
+                else // продольное соединение
                 {
-                    return (localRow % 2 != 0) ? wall.RightNeighbor.Thickness / 2.0 : -wall.RightNeighbor.Thickness / 2.0;
+                    if (highPriority)
+                    {
+                        return (actualRow % 2 != 0) ? wall.RightNeighbor.Thickness / 2.0 : 0.0;
+                    }
+                    else
+                    {
+                        return (actualRow % 2 != 0) ? -wall.RightNeighbor.Thickness / 2.0 : 0.0;
+                    }
                 }
             }
-            else // продольное соединение
+            catch
             {
-                if (highPriority)
-                {
-                    return (localRow % 2 != 0) ? wall.RightNeighbor.Thickness / 2.0 : 0.0;
-                }
-                else
-                {
-                    return (localRow % 2 != 0) ? -wall.RightNeighbor.Thickness / 2.0 : 0.0;
-                }
+                return 0;
             }
         }
 
@@ -352,19 +518,19 @@ namespace FerrumAddin.FBS
         // Обновлённый метод установки соединений между стенами
         private static void SetupWallConnections(List<WallInfo> walls)
         {
-            // 1. Сбросить информацию по соседям для каждой стены.
-            foreach (WallInfo wall in walls)
+            // 1. Сброс исходных данных
+            foreach (var w in walls)
             {
-                wall.LeftNeighbor = null;
-                wall.RightNeighbor = null;
-                wall.ConnectedWalls.Clear();
+                w.LeftNeighbor = null;
+                w.RightNeighbor = null;
+                w.ConnectedWalls.Clear();
             }
 
-            // Задаём допуск: 10 мм в миллиметрах и переводим его в футы (Revit использует футы)
-            double tol_mm = 10.0;
-            double tol_ft = tol_mm / 304.8;
+            double tolMm = 10.0;
+            double tolFt = tolMm / 304.8;
+            const double colinearTolerance = 1e-3; // для проверки |dot|-1 ≈ 0
 
-            // 2. Перебираем каждую пару стен и определяем пересечение их линий.
+            // 2. Определяем все соединения
             for (int i = 0; i < walls.Count; i++)
             {
                 WallInfo wallA = walls[i];
@@ -372,40 +538,48 @@ namespace FerrumAddin.FBS
                 {
                     WallInfo wallB = walls[j];
 
-                    // Пытаемся вычислить пересечение линий стен.
-                    IntersectionResultArray results = null;
-                    SetComparisonResult intersectRes = wallA.line.Intersect(wallB.line, out results);
+                    // Любой тип пересечения, не только Overlap
+                    IntersectionResultArray results;
+                    SetComparisonResult comp = wallA.line.Intersect(wallB.line, out results);
 
-                    // Если пересечение найдено
-                    if (intersectRes == SetComparisonResult.Overlap)
+                    if (comp != SetComparisonResult.Disjoint && results != null && results.Size > 0)
                     {
-                        // Получаем точку пересечения (берём первый результат)
-                        XYZ intersectPt = results.get_Item(0).XYZPoint;
-
-                        // Проверяем, совпадает ли точка пересечения с концами линии стен.
-                        bool A0Match = wallA.line.GetEndPoint(0).DistanceTo(intersectPt) < tol_ft;
-                        bool A1Match = wallA.line.GetEndPoint(1).DistanceTo(intersectPt) < tol_ft;
-                        bool B0Match = wallB.line.GetEndPoint(0).DistanceTo(intersectPt) < tol_ft;
-                        bool B1Match = wallB.line.GetEndPoint(1).DistanceTo(intersectPt) < tol_ft;
-
-                        // Если хотя бы один из концов совпадает – считаем, что соединение определяется как угловое.
-                        if (A0Match || A1Match || B0Match || B1Match)
+                        // Собираем уникальные точки пересечения
+                        var pts = new List<XYZ>();
+                        for (int k = 0; k < results.Size; k++)
                         {
-                            // Для стены A: если её первый конец совпадает, назначаем как LeftNeighbor; если второй – как RightNeighbor.
-                            if (A0Match && wallA.LeftNeighbor == null)
-                                wallA.LeftNeighbor = wallB;
-                            if (A1Match && wallA.RightNeighbor == null)
-                                wallA.RightNeighbor = wallB;
-                            // Аналогично для стены B.
-                            if (B0Match && wallB.LeftNeighbor == null)
-                                wallB.LeftNeighbor = wallA;
-                            if (B1Match && wallB.RightNeighbor == null)
-                                wallB.RightNeighbor = wallA;
+                            XYZ p = results.get_Item(k).XYZPoint;
+                            if (!pts.Any(x => x.DistanceTo(p) < tolFt))
+                                pts.Add(p);
                         }
-                        // Если пересечение произошло не на концах (то есть внутри линии) – не назначаем соседей,
-                        // но всё равно добавляем связь.
 
-                        // В любом случае добавляем стены друг в друга в список соединённых.
+                        // Вычисляем, коллинеарны ли стены (одинаковый “модуль” направления)
+                        XYZ dirA = wallA.line.Direction.Normalize();
+                        XYZ dirB = wallB.line.Direction.Normalize();
+                        double absDot = Math.Abs(dirA.DotProduct(dirB));
+                        bool isColinear = Math.Abs(absDot - 1.0) < colinearTolerance;
+
+                        // Пробегаем по всем точкам пересечения
+                        foreach (var pt in pts)
+                        {
+                            bool A0 = wallA.line.GetEndPoint(0).DistanceTo(pt) < tolFt;
+                            bool A1 = wallA.line.GetEndPoint(1).DistanceTo(pt) < tolFt;
+                            bool B0 = wallB.line.GetEndPoint(0).DistanceTo(pt) < tolFt;
+                            bool B1 = wallB.line.GetEndPoint(1).DistanceTo(pt) < tolFt;
+
+                            // Угловые соседи — только если соединение НЕ коллинеарное
+                            if (!isColinear)
+                            {
+                                if (A0 && wallA.LeftNeighbor == null) wallA.LeftNeighbor = wallB;
+                                if (A1 && wallA.RightNeighbor == null) wallA.RightNeighbor = wallB;
+                                if (B0 && wallB.LeftNeighbor == null) wallB.LeftNeighbor = wallA;
+                                if (B1 && wallB.RightNeighbor == null) wallB.RightNeighbor = wallA;
+                            }
+                            // Коллинеарные (продольные) пойдут в ConnectedWalls,
+                            // но не станут Left/RightNeighbor
+                        }
+
+                        // Всегда добавляем связь в общий список независимо от типа
                         if (!wallA.ConnectedWalls.Contains(wallB))
                             wallA.ConnectedWalls.Add(wallB);
                         if (!wallB.ConnectedWalls.Contains(wallA))
@@ -414,37 +588,35 @@ namespace FerrumAddin.FBS
                 }
             }
 
-            // 3. Назначаем приоритеты соседей по ID и вычисляем RowOffset.
-            foreach (WallInfo wall in walls)
+            // 3. Назначаем приоритеты и вычисляем угловые параметры
+            foreach (var w in walls)
             {
-                // Назначаем приоритеты для угловых соединений (сравнивая ID: меньший ID — приоритет)
-                if (wall.LeftNeighbor != null)
+                if (w.LeftNeighbor != null)
                 {
-                    wall.LeftPriority = wall.Id.Value < wall.LeftNeighbor.Id.Value;
-                    // Можно дополнительно вычислить, насколько соединение перпендикулярно (здесь оставляем прежнюю логику)
-                    double dot = Math.Abs(wall.line.Direction.Normalize().DotProduct(wall.LeftNeighbor.line.Direction.Normalize()));
-                    wall.LeftNeighborAngleIsPerpendicular = dot < 0.15;
+                    w.LeftPriority = w.Id.Value < w.LeftNeighbor.Id.Value;
+                    w.LeftNeighborAngleIsPerpendicular =
+                        Math.Abs(w.line.Direction.Normalize()
+                                 .DotProduct(w.LeftNeighbor.line.Direction.Normalize())) < 0.15;
                 }
-                if (wall.RightNeighbor != null)
+                if (w.RightNeighbor != null)
                 {
-                    wall.RightPriority = wall.Id.Value < wall.RightNeighbor.Id.Value;
-                    double dot = Math.Abs(wall.line.Direction.Normalize().DotProduct(wall.RightNeighbor.line.Direction.Normalize()));
-                    wall.RightNeighborAngleIsPerpendicular = dot < 0.15;
+                    w.RightPriority = w.Id.Value < w.RightNeighbor.Id.Value;
+                    w.RightNeighborAngleIsPerpendicular =
+                        Math.Abs(w.line.Direction.Normalize()
+                                 .DotProduct(w.RightNeighbor.line.Direction.Normalize())) < 0.15;
                 }
             }
 
-            // 4. Вычисляем RowOffset для каждой стены: позиция стены в отсортированной группе ConnectedWalls.
-            foreach (WallInfo wall in walls)
+            // 4. Вычисляем RowOffset (позицию в группе соединённых стен)
+            foreach (var w in walls)
             {
-                List<WallInfo> group = new List<WallInfo>(wall.ConnectedWalls);
-                if (!group.Contains(wall))
-                    group.Add(wall);
-                group = group.Distinct().ToList();
-                group.Sort((w1, w2) => w1.Id.Value.CompareTo(w2.Id.Value));
-                wall.RowOffset = group.IndexOf(wall);
+                var group = new List<WallInfo>(w.ConnectedWalls) { w };
+                group = group.Distinct()
+                             .OrderBy(x => x.Id.Value)
+                             .ToList();
+                w.RowOffset = group.IndexOf(w);
             }
         }
-
 
     }
 }
