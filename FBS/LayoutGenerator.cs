@@ -182,9 +182,11 @@ namespace FerrumAddin.FBS
                     {
                         if (op.End > leftBound && op.Start < rightBound)
                         {
-                            double opStart = Math.Max(op.Start, leftBound);
-                            double opEnd = Math.Min(op.End, rightBound);
+                            double opStart = op.Start < 900 ? leftBound : Math.Max(op.Start, leftBound);
+                            double opEnd = rightBound - op.End < 900 ? rightBound : Math.Min(op.End, rightBound);
                             openings.Add((opStart, opEnd));
+
+
                         }
                     }
                     // Добавляем проёмы для перпендикулярных соединённых стен
@@ -225,6 +227,19 @@ namespace FerrumAddin.FBS
                                 double proj2 = (neighbor.EndPoint - wall.StartPoint + (neighbor.Thickness / 304.8 * dir / 2)).DotProduct(dir) * 304.8;
                                 double openStart = Math.Max(0, Math.Min(proj1, proj2));
                                 double openEnd = Math.Min(wall.Length, Math.Max(proj1, proj2));
+
+                                XYZ neighborPoint = wall.line.Distance(neighbor.StartPoint) < wall.line.Distance(neighbor.EndPoint) ? neighbor.StartPoint : neighbor.EndPoint;
+                                if (neighborPoint == neighbor.StartPoint)
+                                {
+                                    if (neighbor.Openings.Count() > 0 && neighbor.Openings.First().Start < 900)
+                                        continue;
+                                }
+                                else
+                                {
+                                    if (neighbor.Openings.Count() > 0 && neighbor.Length - neighbor.Openings.Last().End < 900)
+                                        continue;
+                                }
+
                                 if (openEnd > openStart)
                                     openings.Add((openStart, openEnd));
                             }
@@ -425,11 +440,11 @@ namespace FerrumAddin.FBS
                 {
                     if (highPriority)
                     {
-                        return (actualRow % 2 != 0) ? -wall.LeftNeighbor.Thickness / 2.0 : 0.0;
+                        return (actualRow % 2 != 0) ? -wall.LeftNeighbor.Thickness / 2.0 : wall.LeftNeighbor.Thickness / 2.0;
                     }
                     else
                     {
-                        return (actualRow % 2 != 0) ? wall.LeftNeighbor.Thickness / 2.0 : 0.0;
+                        return (actualRow % 2 != 0) ? wall.LeftNeighbor.Thickness / 2.0 : -wall.LeftNeighbor.Thickness / 2.0;
                     }
                 }
             }
@@ -493,11 +508,11 @@ namespace FerrumAddin.FBS
                 {
                     if (highPriority)
                     {
-                        return (actualRow % 2 != 0) ? wall.RightNeighbor.Thickness / 2.0 : 0.0;
+                        return (actualRow % 2 != 0) ? wall.RightNeighbor.Thickness / 2.0 : -wall.RightNeighbor.Thickness / 2.0;
                     }
                     else
                     {
-                        return (actualRow % 2 != 0) ? -wall.RightNeighbor.Thickness / 2.0 : 0.0;
+                        return (actualRow % 2 != 0) ? -wall.RightNeighbor.Thickness / 2.0 : wall.RightNeighbor.Thickness / 2.0;
                     }
                 }
             }
