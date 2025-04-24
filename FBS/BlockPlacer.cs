@@ -91,12 +91,13 @@ namespace FerrumAddin.FBS
                         double heightFt = 600 / 304.8;
                         if ((block.Row == 1 && block.Wall.first300) || (block.Row == block.Wall.coordZList.Count() && block.Wall.last300))
                             heightFt = 300 / 304.8;
-                        inst.LookupParameter("Б")?.Set(lenFt);
-                        inst.LookupParameter("А")?.Set(thkFt);
+                        inst.LookupParameter("Б")?.Set(thkFt);
+                        inst.LookupParameter("А")?.Set(lenFt);
                         inst.LookupParameter("С")?.Set(heightFt);
                         inst.LookupParameter("ADSK_Группирование").Set("ФБСм");
+                        inst.LookupParameter("Вырезы").Set(0);
 
-                        XYZ xAxis = XYZ.BasisY;
+                        XYZ xAxis = XYZ.BasisX;
                         double dot = wallDir.Normalize().DotProduct(xAxis);
                         double ang = Math.Acos(Math.Max(-1, Math.Min(1, dot)));
                         if (xAxis.CrossProduct(wallDir.Normalize()).Z < 0) ang = -ang;
