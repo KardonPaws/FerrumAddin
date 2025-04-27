@@ -37,25 +37,18 @@ namespace FerrumAddin
 
 
             List<ElementId> windowsAndDoorsSelectionIds = sel.GetElementIds().ToList();
-            List<FamilyInstance> windowsAndDoorsList = new List<FamilyInstance>();
+            List<Element> windowsAndDoorsList = new List<Element>();
             windowsAndDoorsList = GetWindowsAndDoorsFromCurrentSelection(doc, windowsAndDoorsSelectionIds);
 
             if (windowsAndDoorsList.Count == 0)
             {
 
-                FilteredElementCollector filter = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType();
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType());
 
-                foreach (Element el in filter)
-                {
-                    windowsAndDoorsList.Add(el as FamilyInstance);
-                }
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType());
 
-                filter = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType();
-
-                foreach (Element el in filter)
-                {
-                    windowsAndDoorsList.Add(el as FamilyInstance);
-                }
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
+                    .Where(x =>x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).ToList());
             }
             List<ParentElement> list = GroupWindowsAndDoors(windowsAndDoorsList, doc);
             List<Family> lintelFamilysList = new FilteredElementCollector(doc)
@@ -79,9 +72,11 @@ namespace FerrumAddin
            
             return Result.Succeeded;
         }
-        private List<ParentElement> GroupWindowsAndDoors(List<FamilyInstance> windowsAndDoorsList, Document doc)
+        private List<ParentElement> GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc)
         {
-            var groupedElements = windowsAndDoorsList
+            List<FamilyInstance> windowsAndDoors = windowsAndDoorsList.Where(x => x is FamilyInstance).Select(x => x as FamilyInstance).ToList();
+            List<Wall> curtains = windowsAndDoorsList.Except(windowsAndDoors).Select(x => x as Wall).ToList();
+            var groupedElements = windowsAndDoors
                 .GroupBy(el => new
                 {
                     el.Symbol.FamilyName, // Имя семейства
@@ -112,24 +107,71 @@ namespace FerrumAddin
                         )
                 })
                 .ToList();
-
+            List<Wall> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().Where(x => x is Wall && (x as Wall).WallType.Kind != WallKind.Curtain).Select(x => x as Wall).ToList();
+            groupedElements.AddRange(curtains.GroupBy(el => new
+            {
+                el.Name,
+                Width = Math.Round(el.LookupParameter("Длина").AsDouble() * 304.8)
+            })
+            .OrderBy(group => group.Key.Name)
+            .ThenBy(group => group.Key.Width)
+            .Select(group => new ParentElement
+            {
+                Name = group.Key.Name,
+                TypeName = "Витраж",
+                Width = group.Key?.Width.ToString(),
+                Walls = walls
+        // группируем по WallType.Id, а не по самому объекту WallType
+        .GroupBy(w => w.WallType.Id)
+        .Select(wg => new
+        {
+            WallTypeId = wg.Key,
+            // для каждой стены этого типа собираем все вставки из текущей группы vitrazh
+            Elements = wg
+                .SelectMany(host =>
+                {
+                    var inserts = (host as HostObject)
+                        .FindInserts(false, false, true, false);
+                    // из vg берем только те элементы, чьи Id встретились в inserts
+                    return group.Where(curtain => inserts.Contains(curtain.Id));
+                })
+                // устраняем дубли по Id
+                .GroupBy(el => el.Id)
+                .Select(g2 => g2.First())
+                .Cast<Element>()
+                .ToList()
+        })
+        // отбрасываем wall-типы, где не нашлось ни одной вставки
+        .Where(x => x.Elements.Any())
+        // строим окончательный словарь: ключ — реальный WallType, значение — список Element
+        .ToDictionary(
+            x => doc.GetElement(x.WallTypeId) as WallType,
+            x => x.Elements)
+            })
+        );
             return groupedElements;
         }
 
 
 
 
-        private static List<FamilyInstance> GetWindowsAndDoorsFromCurrentSelection(Document doc, List<ElementId> selIds)
+        private static List<Element> GetWindowsAndDoorsFromCurrentSelection(Document doc, List<ElementId> selIds)
         {
-            List<FamilyInstance> tempLintelsList = new List<FamilyInstance>();
+            List<Element> tempLintelsList = new List<Element>();
             foreach (ElementId lintelId in selIds)
             {
-                if (doc.GetElement(lintelId) is FamilyInstance
-                    && null != doc.GetElement(lintelId).Category
-                    && (doc.GetElement(lintelId).Category.Id.IntegerValue.Equals((int)BuiltInCategory.OST_Windows)
-                    || doc.GetElement(lintelId).Category.Id.IntegerValue.Equals((int)BuiltInCategory.OST_Doors)))
+                Element el = doc.GetElement(lintelId);
+                if (el is FamilyInstance
+                    && null != el.Category
+                    && el.Category.Id.Value.Equals((int)BuiltInCategory.OST_Windows)
+                    || el.Category.Id.Value.Equals((int)BuiltInCategory.OST_Doors))
                 {
-                    tempLintelsList.Add(doc.GetElement(lintelId) as FamilyInstance);
+                    tempLintelsList.Add(el);
+                }
+                if (doc.GetElement(lintelId) is Wall
+                    && (el as Wall).WallType.Kind == WallKind.Curtain)
+                {
+                    tempLintelsList.Add(el);
                 }
             }
             return tempLintelsList;
@@ -918,23 +960,56 @@ namespace FerrumAddin
                             {
                                 if (doc.GetElement(id) != null)
                                 doc.Delete(id);
-                            }    
-                            double height = element.LookupParameter("ADSK_Размер_Высота").AsDouble();
-                            XYZ locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
+                            }
+
+                            double height = 0;
+                            XYZ locationPoint = null;
+                            XYZ translation = null;
+                            if (element is Wall)
+                            {
+                                var bounding = element.get_BoundingBox(doc.ActiveView);
+                                height = bounding.Max.Z - bounding.Min.Z ;
+                                Line c = (element.Location as LocationCurve).Curve as Line;
+                                locationPoint = (c.GetEndPoint(0) + c.GetEndPoint(1))/2 - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
+                            }
+                            else
+                            { 
+                                height = element.LookupParameter("ADSK_Размер_Высота").AsDouble();
+                                locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
+
+                            }
 
                             // Создаем экземпляр перемычки
                             newLintel = doc.Create.NewFamilyInstance(locationPoint, selectedType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
-                            XYZ translation = (element as FamilyInstance).FacingOrientation * wallElements.Key.Width/2;
-
-                            // Проверяем ориентацию и выполняем поворот, если необходимо
-                            if (!(element as FamilyInstance).FacingOrientation.IsAlmostEqualTo(newLintel.FacingOrientation))
+                            if (element is Wall)
                             {
-                                Line rotateAxis = Line.CreateBound((newLintel.Location as LocationPoint).Point, (newLintel.Location as LocationPoint).Point + 1 * XYZ.BasisZ);
-                                double u1 = (element as FamilyInstance).FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
-                                double u2 = newLintel.FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
-                                double rotateAngle = (u2 - u1);
+                                translation = (element as Wall).Orientation * wallElements.Key.Width / 2;
 
-                                ElementTransformUtils.RotateElement(doc, newLintel.Id, rotateAxis, rotateAngle);
+                                // Проверяем ориентацию и выполняем поворот, если необходимо
+                                if (!(element as Wall).Orientation.IsAlmostEqualTo(newLintel.FacingOrientation))
+                                {
+                                    Line rotateAxis = Line.CreateBound((newLintel.Location as LocationPoint).Point, (newLintel.Location as LocationPoint).Point + 1 * XYZ.BasisZ);
+                                    double u1 = (element as Wall).Orientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                    double u2 = newLintel.FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                    double rotateAngle = (u2 - u1);
+
+                                    ElementTransformUtils.RotateElement(doc, newLintel.Id, rotateAxis, rotateAngle);
+                                }
+                            }
+                            else
+                            {
+                                translation = (element as FamilyInstance).FacingOrientation * wallElements.Key.Width / 2;
+
+                                // Проверяем ориентацию и выполняем поворот, если необходимо
+                                if (!(element as FamilyInstance).FacingOrientation.IsAlmostEqualTo(newLintel.FacingOrientation))
+                                {
+                                    Line rotateAxis = Line.CreateBound((newLintel.Location as LocationPoint).Point, (newLintel.Location as LocationPoint).Point + 1 * XYZ.BasisZ);
+                                    double u1 = (element as FamilyInstance).FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                    double u2 = newLintel.FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                    double rotateAngle = (u2 - u1);
+
+                                    ElementTransformUtils.RotateElement(doc, newLintel.Id, rotateAxis, rotateAngle);
+                                }
                             }
                             ElementTransformUtils.MoveElement(doc, newLintel.Id, translation);
                             newLintel.LookupParameter("ADSK_Группирование").Set("ПР");
