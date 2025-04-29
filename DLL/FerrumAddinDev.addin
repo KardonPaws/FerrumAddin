@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+	<AddIn Type="Command">
+		<Text>Command FerrumAddinDev</Text>
+		<Description>Some description for FerrumAddinDev</Description>
+		<Assembly>FerrumAddinDev.dll</Assembly>
+		<FullClassName>FerrumAddinDev.Command</FullClassName>
+		<ClientId>2F636456-4A6C-4B84-8D54-1E39A7105814</ClientId>
+		<VendorId>com.typepad.thebuildingcoder</VendorId>
+		<VendorDescription>The Building Coder, http://thebuildingcoder.typepad.com</VendorDescription>
+	</AddIn>
+	<AddIn Type="Application">
+		<Name>Application FerrumAddinDev</Name>
+		<Assembly>FerrumAddinDev.dll</Assembly>
+		<FullClassName>FerrumAddinDev.App</FullClassName>
+		<ClientId>9F0A531E-ED96-4A99-992F-0CEE41F0D73C</ClientId>
+		<VendorId>com.typepad.thebuildingcoder</VendorId>
+		<VendorDescription>The Building Coder, http://thebuildingcoder.typepad.com</VendorDescription>
+	</AddIn>
+</RevitAddIns>
