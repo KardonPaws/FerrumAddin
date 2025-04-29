@@ -291,6 +291,7 @@ namespace FerrumAddinDev
                 else
                 {
                     a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
+                    a.ControlledApplication.ElementTypeDuplicating += ControlledApplication_ElementTypeDuplicating;
                 }
                
                 a.ControlledApplication.DocumentOpening += ControlledApplication_DocumentOpening;
@@ -315,6 +316,43 @@ namespace FerrumAddinDev
             CleanOldLogFiles();
 
             return Result.Succeeded;
+        }
+
+        public Result OnShutdown(UIControlledApplication a)
+        {
+            try
+            {
+                a.ControlledApplication.FamilyLoadingIntoDocument -= ControlledApplication_FamilyLoadingIntoDocument;
+                a.ControlledApplication.ElementTypeDuplicating -= ControlledApplication_ElementTypeDuplicating;
+            }
+            catch
+            {
+
+            }
+
+            a.ControlledApplication.DocumentOpening -= ControlledApplication_DocumentOpening;
+            a.ControlledApplication.DocumentOpened -= ControlledApplication_DocumentOpened;
+            a.ControlledApplication.DocumentClosing -= ControlledApplication_DocumentClosing;
+
+            a.ControlledApplication.DocumentSynchronizingWithCentral -= ControlledApplication_DocumentSynchronizingWithCentral;
+            a.ControlledApplication.DocumentSynchronizedWithCentral -= ControlledApplication_DocumentSynchronizedWithCentral;
+
+            a.ControlledApplication.DocumentChanged -= ControlledApplication_DocumentChanged;
+
+            a.ViewActivated -= A_ViewActivated;
+
+            Process process = Process.GetCurrentProcess();
+            var updaterProcess = Process.Start(new ProcessStartInfo(downloadDir + "\\Updater.exe", process.Id.ToString()));
+            return Result.Succeeded;
+        }
+
+        private void ControlledApplication_ElementTypeDuplicating(object sender, ElementTypeDuplicatingEventArgs e)
+        {
+            if (!e.Document.IsFamilyDocument)
+            {
+                e.Cancel();
+                TaskDialog.Show("Ошибка", "Запрет дублирования типов, загрузите тип через менеджер семейств");
+            }
         }
 
         public void CleanOldLogFiles()
@@ -859,16 +897,7 @@ namespace FerrumAddinDev
                     panelControl.Visible = false;
                     break;
             }
-        }
-
-        
-
-        public Result OnShutdown(UIControlledApplication a)
-        {
-            Process process = Process.GetCurrentProcess();
-            var updaterProcess = Process.Start(new ProcessStartInfo(downloadDir + "\\Updater.exe", process.Id.ToString()));
-            return Result.Succeeded;
-        }
+        } 
     }
 
     public class LoadEvent : IExternalEventHandler
