@@ -23,7 +23,7 @@ using Autodesk.Revit.UI;
 using Autodesk.Revit.Creation;
 using Document = Autodesk.Revit.DB.Document;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     /// <summary>
     /// Логика взаимодействия для Window1.xaml

@@ -7,8 +7,8 @@
     <ProjectGuid>{36C29E80-E243-47CB-85D0-3299F79019CE}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>FerrumAddin</RootNamespace>
-    <AssemblyName>FerrumAddin</AssemblyName>
+    <RootNamespace>FerrumAddinDev</RootNamespace>
+    <AssemblyName>FerrumAddinDev</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
@@ -155,7 +155,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="FerrumAddin.addin" />
+    <None Include="FerrumAddinDev.addin" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Properties\Resources.resx">
@@ -228,7 +228,7 @@
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"
 if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)$(OutputPath)*.dll" "$(AppData)\Autodesk\REVIT\Addins\2024"
-copy "$(ProjectDir)\FerrumAddin.addin" "$(ProjectDir)\DLL"
-copy "$(ProjectDir)$(OutputPath)\FerrumAddin.dll" "$(ProjectDir)\DLL"</PostBuildEvent>
+copy "$(ProjectDir)\FerrumAddinDev.addin" "$(ProjectDir)\DLL"
+copy "$(ProjectDir)$(OutputPath)\FerrumAddinDev.dll" "$(ProjectDir)\DLL"</PostBuildEvent>
   </PropertyGroup>
 </Project>

@@ -1,14 +1,14 @@
-﻿<Window x:Class="FerrumAddin.GrillageCreator.WindowGrillageCreator"
+﻿<Window x:Class="FerrumAddinDev.GrillageCreator.WindowGrillageCreator"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:FerrumAddin.GrillageCreator"
+        xmlns:local="clr-namespace:FerrumAddinDev.GrillageCreator"
         mc:Ignorable="d"
         Title="WindowGrillageCreator" Height="auto" Width="auto" ResizeMode="NoResize" SizeToContent="WidthAndHeight" Closing="Window_Closing">
     <Grid Height="450" Margin="0,10,0,0">
         <!-- Фон окна -->
-        <Image HorizontalAlignment="Left" Height="403" VerticalAlignment="Top" Width="540" Margin="10,10,10,10" Source="/FerrumAddin;component/GrillageCreator/GrillageCreatorBackground.png"/>
+        <Image HorizontalAlignment="Left" Height="403" VerticalAlignment="Top" Width="540" Margin="10,10,10,10" Source="/FerrumAddinDev;component/GrillageCreator/GrillageCreatorBackground.png"/>
         <!-- Выбор способа задания количества арматуры -->
         <!--<GroupBox HorizontalAlignment="Right" VerticalAlignment="Top" BorderBrush="#FF3F4040" Margin="0,5,5,0" >
             <StackPanel Margin="5,5,5,5">

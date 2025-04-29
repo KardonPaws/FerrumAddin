@@ -7,17 +7,17 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace FerrumAddin.FM
+namespace FerrumAddinDev.FM
 {
     public partial class ChooseTypesWindow : Window, INotifyPropertyChanged
     {
         // Словарь: ключ = Name MenuItem, значение = DataView для этого item.Path
         public Dictionary<string, DataView> Types { get; set; }
 
-        public List<FerrumAddin.MenuItem> MenuItems { get; }
+        public List<FerrumAddinDev.MenuItem> MenuItems { get; }
 
-        private FerrumAddin.MenuItem _selectedMenuItem;
-        public FerrumAddin.MenuItem SelectedMenuItem
+        private FerrumAddinDev.MenuItem _selectedMenuItem;
+        public FerrumAddinDev.MenuItem SelectedMenuItem
         {
             get => _selectedMenuItem;
             set
@@ -39,7 +39,7 @@ namespace FerrumAddin.FM
             set { _currentView = value; OnPropertyChanged(nameof(CurrentView)); }
         }
 
-        public ChooseTypesWindow(List<FerrumAddin.MenuItem> menuItems)
+        public ChooseTypesWindow(List<FerrumAddinDev.MenuItem> menuItems)
         {
             InitializeComponent();
             MenuItems = menuItems;
@@ -47,7 +47,7 @@ namespace FerrumAddin.FM
             DataContext = this;
         }
 
-        private Dictionary<string, DataView> LoadCsvViews(List<FerrumAddin.MenuItem> menuItems)
+        private Dictionary<string, DataView> LoadCsvViews(List<FerrumAddinDev.MenuItem> menuItems)
         {
             var dict = new Dictionary<string, DataView>();
 

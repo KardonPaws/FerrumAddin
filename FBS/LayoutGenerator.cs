@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FerrumAddin.FBS
+namespace FerrumAddinDev.FBS
 {
     public class LayoutGenerator
     {

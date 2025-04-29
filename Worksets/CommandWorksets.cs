@@ -9,7 +9,7 @@ using System.IO;
 using System.Xml;
 #endregion
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
 
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
@@ -31,7 +31,7 @@ namespace FerrumAddin
                 Debug.WriteLine("File os not workshared document");
                 return Result.Failed; ;
             }
-            FerrumAddin.Worksets.Workset workset = new Worksets.Workset();
+            FerrumAddinDev.Worksets.Workset workset = new Worksets.Workset();
             workset.ShowDialog();
             //считываю список рабочих наборов
 

@@ -8,7 +8,7 @@ using System.IO;
 using Path = System.IO.Path;
 using System.Linq;
 
-namespace FerrumAddin.Stats
+namespace FerrumAddinDev.Stats
 {
     /// <summary>
     /// Логика взаимодействия для StatsWindow.xaml

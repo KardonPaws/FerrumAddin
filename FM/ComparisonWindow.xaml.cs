@@ -22,7 +22,7 @@ using System.Xml.Linq;
 using Document = Autodesk.Revit.DB.Document;
 using Transform = Autodesk.Revit.DB.Transform;
 
-namespace FerrumAddin.FM
+namespace FerrumAddinDev.FM
 {
     public partial class ComparisonWindow : Window, INotifyPropertyChanged
     {

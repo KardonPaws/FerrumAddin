@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FerrumAddin.FBS
+namespace FerrumAddinDev.FBS
 {
     // Информация о стене, необходимая для генерации раскладки
     public class WallInfo

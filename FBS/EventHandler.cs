@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FerrumAddin.FBS
+namespace FerrumAddinDev.FBS
 {
     // Selection filter to allow only wall elements
     public class WallSelectionFilter : ISelectionFilter

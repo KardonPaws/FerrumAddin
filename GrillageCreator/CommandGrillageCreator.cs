@@ -6,7 +6,7 @@ using System.Linq;
 using Autodesk.Revit.UI.Selection;
 using System;
 using System.Net;
-using FerrumAddin.GrillageCreator;
+using FerrumAddinDev.GrillageCreator;
 using System.Windows.Controls;
 using System.Windows.Forms;
 using System.Windows;
@@ -15,7 +15,7 @@ using System.Security.Cryptography;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using Rebar = Autodesk.Revit.DB.Structure.Rebar;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     [Transaction(TransactionMode.Manual)]
     public class CommandGrillageCreator : IExternalCommand

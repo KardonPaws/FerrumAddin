@@ -11,7 +11,7 @@ using System.Windows.Forms;
 using Autodesk.Revit.UI.Selection;
 using System.Linq;
 
-namespace FerrumAddin.FBS
+namespace FerrumAddinDev.FBS
 {
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     public class FBSLayoutCommand : IExternalCommand

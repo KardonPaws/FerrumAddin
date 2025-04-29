@@ -1,8 +1,8 @@
-﻿<Window x:Class="FerrumAddin.LintelCreator.LintelCreatorForm2"
+﻿<Window x:Class="FerrumAddinDev.LintelCreator.LintelCreatorForm2"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Простановка перемычек" MinHeight="350" MinWidth="600"
-        xmlns:local="clr-namespace:FerrumAddin.LintelCreator"
+        xmlns:local="clr-namespace:FerrumAddinDev.LintelCreator"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         mc:Ignorable="d" WindowStartupLocation="CenterOwner">

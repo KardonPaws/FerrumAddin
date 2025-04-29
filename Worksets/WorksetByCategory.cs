@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     [Serializable]
     public class WorksetByCategory : WorksetBy

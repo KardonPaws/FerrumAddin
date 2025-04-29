@@ -27,10 +27,10 @@ using Autodesk.Revit.ApplicationServices;
 using Transform = Autodesk.Revit.DB.Transform;
 using System.Runtime.InteropServices;
 using Autodesk.Revit.DB.Events;
-using FerrumAddin.FM;
+using FerrumAddinDev.FM;
 #endregion
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     public class App : IExternalApplication
     {
@@ -74,7 +74,7 @@ namespace FerrumAddin
         public static string downloadDir;
         private static readonly string[] fileUrls =
         {
-        "https://raw.githubusercontent.com/KardonPaws/FerrumAddin/master/DLL/FerrumAddin.dll"
+        "https://raw.githubusercontent.com/KardonPaws/FerrumAddin/master/DLL/FerrumAddinDev.dll"
     };
         private static async Task CheckForUpdates()
         {
@@ -205,11 +205,11 @@ namespace FerrumAddin
             TabPath = frmTabPath.Attribute("Path").Value;
             root.Save(xmlFilePath);
 
-            string tabName = "Железно";
+            string tabName = "Железно-разработка";
 
             a.CreateRibbonTab(tabName);
             RibbonPanel panelFerrum = a.CreateRibbonPanel(tabName, "Железно");
-            PushButtonData conf = new PushButtonData("frmConfig", "Настройки", Assembly.GetExecutingAssembly().Location, "FerrumAddin.ConfiguratorShow");
+            PushButtonData conf = new PushButtonData("frmConfig", "Настройки", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.ConfiguratorShow");
             conf.Image = Convert(Properties.Resources.ferrum);
             conf.LargeImage = Convert(Properties.Resources.ferrum);
             ComboBoxData comboBoxData = new ComboBoxData("ChangeRazd");
@@ -226,13 +226,13 @@ namespace FerrumAddin
             cb.CurrentChanged += Cb_CurrentChanged;
 
 
-            PushButtonData FamilyManager = new PushButtonData("frmManager", "Менеджер\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FamilyManagerShow");
+            PushButtonData FamilyManager = new PushButtonData("frmManager", "Менеджер\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.FamilyManagerShow");
             FamilyManager.Image = Convert(Properties.Resources.FamilyManager);
             FamilyManager.LargeImage = Convert(Properties.Resources.FamilyManager);
 
             panelFerrum.AddItem(FamilyManager);
 
-            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FM.ComparisonWindowShow");
+            PushButtonData Comparison = new PushButtonData("frmComparison", "Сопоставление\nсемейств", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.FM.ComparisonWindowShow");
             Comparison.Image = Convert(Properties.Resources.FamilyManager);
             Comparison.LargeImage = Convert(Properties.Resources.FamilyManager);          
 
@@ -242,7 +242,7 @@ namespace FerrumAddin
             panelMEP = a.CreateRibbonPanel(tabName, "ВИС");
             panelMEP.Visible = false;
 
-            PushButtonData MEPName = new PushButtonData("mepName", "Наименование труб|воздуховодов", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandMepName");
+            PushButtonData MEPName = new PushButtonData("mepName", "Наименование труб|воздуховодов", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.CommandMepName");
 
             panelMEP.AddItem(MEPName);
 
@@ -250,30 +250,30 @@ namespace FerrumAddin
             panelKR = a.CreateRibbonPanel(tabName, "КР");
             panelKR.Visible = false;
 
-            PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandLintelCreator2");
+            PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.CommandLintelCreator2");
             panelKR.AddItem(LintelCreator);
 
-            PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandGrillageCreator");
+            PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.CommandGrillageCreator");
             panelKR.AddItem(GrillageCreator);
 
-            PushButtonData FBSCreator = new PushButtonData("FBSCreator", "Раскладка ФБС", Assembly.GetExecutingAssembly().Location, "FerrumAddin.FBS.FBSLayoutCommand");
+            PushButtonData FBSCreator = new PushButtonData("FBSCreator", "Раскладка ФБС", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.FBS.FBSLayoutCommand");
             panelKR.AddItem(FBSCreator);
 
 
             panelControl = a.CreateRibbonPanel(tabName, "Управление");
             panelControl.Visible = false;
 
-            PushButtonData LinkFiles = new PushButtonData("LinkedFiles", "Управление связями", Assembly.GetExecutingAssembly().Location, "FerrumAddin.LinkedFilesCommand");
+            PushButtonData LinkFiles = new PushButtonData("LinkedFiles", "Управление связями", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.LinkedFilesCommand");
             panelControl.AddItem(LinkFiles);
 
-            var CommandWorksets = new PushButtonData("Распределение элементов\nпо рабочим наборам", "Распределение элементов\nпо рабочим наборам", Assembly.GetExecutingAssembly().Location, "FerrumAddin.CommandWorksets");
+            var CommandWorksets = new PushButtonData("Распределение элементов\nпо рабочим наборам", "Распределение элементов\nпо рабочим наборам", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.CommandWorksets");
             var ComandWorksets = panelControl.AddItem(CommandWorksets) as PushButton;
             ComandWorksets.Enabled = true;
             ContextualHelp helpComand = new ContextualHelp(ContextualHelpType.Url, "https://docs.google.com/document/d/1XSpM4HcRagr0BNgYW2WUo8hMjI7oEH93g94kwdJLwC0/edit?usp=sharing");
             ComandWorksets.SetContextualHelp(helpComand);
             ComandWorksets.ToolTip = "В соответсвии с выбранным xml файлом разносит элементы по рабочим наборам, в случае, если рабочего набора не существует - создает новый рабочий набор.";
 
-            var CommandStats = new PushButtonData("Статистика", "Статистика", Assembly.GetExecutingAssembly().Location, "FerrumAddin.StatsShow");
+            var CommandStats = new PushButtonData("Статистика", "Статистика", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.StatsShow");
             var ComandStats = panelControl.AddItem(CommandStats) as PushButton;
             ComandStats.Enabled = true;
 

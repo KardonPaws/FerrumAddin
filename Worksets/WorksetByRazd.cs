@@ -1,7 +1,7 @@
 ﻿
 using System;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     [Serializable]
     public class WorksetByRazd

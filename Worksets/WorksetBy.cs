@@ -5,7 +5,7 @@ using System.Linq;
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     public abstract class WorksetBy
     {

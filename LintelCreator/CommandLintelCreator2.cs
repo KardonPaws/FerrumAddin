@@ -1,8 +1,8 @@
 ﻿using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
-using FerrumAddin.FM;
-using FerrumAddin.LintelCreator;
+using FerrumAddinDev.FM;
+using FerrumAddinDev.LintelCreator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -11,7 +11,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     class CommandLintelCreator2 : IExternalCommand

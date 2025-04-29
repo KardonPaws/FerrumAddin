@@ -12,7 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
-namespace FerrumAddin.Worksets
+namespace FerrumAddinDev.Worksets
 {
     /// <summary>
     /// Логика взаимодействия для Workset.xaml

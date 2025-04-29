@@ -2,14 +2,14 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
-using FerrumAddin.Stats;
+using FerrumAddinDev.Stats;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
 
     [Transaction(TransactionMode.Manual)]

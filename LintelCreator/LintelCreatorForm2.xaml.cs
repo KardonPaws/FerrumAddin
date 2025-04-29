@@ -19,7 +19,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace FerrumAddin.LintelCreator
+namespace FerrumAddinDev.LintelCreator
 {
     /// <summary>
     /// Логика взаимодействия для LintelCreatorForm2.xaml

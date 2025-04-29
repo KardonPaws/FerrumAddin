@@ -12,7 +12,7 @@ using System.Windows.Forms;
 using Application = Autodesk.Revit.ApplicationServices.Application;
 #endregion
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     [Transaction(TransactionMode.Manual)]
     public class CommandMepName: IExternalCommand

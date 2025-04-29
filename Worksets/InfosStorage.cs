@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     [Serializable]
     public class InfosStorage

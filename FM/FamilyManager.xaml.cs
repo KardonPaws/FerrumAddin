@@ -32,7 +32,7 @@ using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using TabControl = System.Windows.Controls.TabControl;
 using TextBox = System.Windows.Controls.TextBox;
 
-namespace FerrumAddin
+namespace FerrumAddinDev
 {
     public partial class FamilyManagerWindow : Page, IDockablePaneProvider
     {

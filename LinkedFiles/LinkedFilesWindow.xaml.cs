@@ -12,7 +12,7 @@ using MessageBox = System.Windows.MessageBox;
 using View = Autodesk.Revit.DB.View;
 using Window = System.Windows.Window;
 
-namespace FerrumAddin.LinkedFiles
+namespace FerrumAddinDev.LinkedFiles
 {
     public partial class LinkedFilesWindow : Window
     {

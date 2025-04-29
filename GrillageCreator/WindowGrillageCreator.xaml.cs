@@ -16,7 +16,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Xml.Serialization;
 
-namespace FerrumAddin.GrillageCreator
+namespace FerrumAddinDev.GrillageCreator
 {
     /// <summary>
     /// Логика взаимодействия для WindowGrillageCreator.xaml
