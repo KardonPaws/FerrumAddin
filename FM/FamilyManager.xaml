@@ -87,7 +87,7 @@
                 Background="White"
                 Width="{Binding ActualWidth, ElementName=CategoryFilterButton}">
                     <StackPanel>
-                        <CheckBox x:Name="allItems" Content="Все" Checked="allItems_Checked" Unchecked="allItems_Checked"/>
+                        <CheckBox x:Name="allItems" Content="Все" Checked="allItems_Checked" Unchecked="allItems_Checked" Margin="5,5,5,0"/>
                         <ItemsControl ItemsSource="{Binding CategoryFilters}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
