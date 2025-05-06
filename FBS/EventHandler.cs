@@ -65,15 +65,17 @@ namespace FerrumAddinDev.FBS
                     {
                         // Положение отверстия
                         XYZ insPoint;
+                        BoundingBoxXYZ bb = fi.get_BoundingBox(null);
                         if (fi.Location is LocationPoint lp)
                         {
                             insPoint = lp.Point;
                         }
                         else
                         {
-                            BoundingBoxXYZ bb = fi.get_BoundingBox(null);
                             insPoint = (bb.Min + bb.Max) / 2;
                         }
+                        double startz = (bb.Min.Z) * 304.8;
+                        double endz = (bb.Max.Z) * 304.8;
                         XYZ wallDir = (end - start).Normalize();
                         XYZ vec = insPoint - start;
                         double distAlongWall = vec.DotProduct(wallDir);  // in feet
@@ -89,7 +91,7 @@ namespace FerrumAddinDev.FBS
                         double openWidthMm = openWidthFt * 304.8;
                         double openStart = openingCenterMm - openWidthMm / 2;
                         double openEnd = openingCenterMm + openWidthMm / 2;
-                        openings.Add(new OpeningInfo { Start = openStart, End = openEnd });
+                        openings.Add(new OpeningInfo { Start = openStart, End = openEnd, StartZ = startz, EndZ = endz });
                     }
                     openings = openings.OrderBy(op => op.Start).ToList();
                     WallInfo info = new WallInfo

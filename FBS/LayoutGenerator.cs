@@ -180,7 +180,7 @@ namespace FerrumAddinDev.FBS
                     List<(double start, double end)> openings = new List<(double, double)>();
                     foreach (var op in wall.Openings)
                     {
-                        if (op.End > leftBound && op.Start < rightBound)
+                        if (op.End > leftBound && op.Start < rightBound && (op.StartZ < wall.coordZList[row-1] + (row == maxBaseRows ? 0 :(wall.coordZList[row] - wall.coordZList[row - 1])) && op.EndZ > wall.coordZList[row-1]))
                         {
                             double opStart = op.Start < 900 ? leftBound : Math.Max(op.Start, leftBound);
                             double opEnd = rightBound - op.End < 900 ? rightBound : Math.Min(op.End, rightBound);

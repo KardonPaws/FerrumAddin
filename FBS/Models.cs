@@ -42,6 +42,8 @@ namespace FerrumAddinDev.FBS
     {
         public double Start { get; set; }
         public double End { get; set; }
+        public double StartZ {  get; set; }
+        public double EndZ { get; set; }
     }
 
     // Представляет полное решение раскладки (вариант) для всех выбранных стен
