@@ -101,8 +101,14 @@ namespace FerrumAddinDev.FBS
                         inst.LookupParameter("А")?.Set(lenFt);
                         inst.LookupParameter("С")?.Set(heightFt);
                         inst.LookupParameter("ADSK_Группирование").Set("ФБСм");
-                        inst.LookupParameter("Вырезы").Set(0);
+                        try
+                        {
+                            inst.LookupParameter("Вырезы").Set(0);
+                        }
+                        catch
+                        {
 
+                        }
                         XYZ xAxis = XYZ.BasisX;
                         double dot = wallDir.Normalize().DotProduct(xAxis);
                         double ang = Math.Acos(Math.Max(-1, Math.Min(1, dot)));

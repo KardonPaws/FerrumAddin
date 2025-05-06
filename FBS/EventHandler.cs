@@ -59,6 +59,7 @@ namespace FerrumAddinDev.FBS
                         .OfType<FamilyInstance>()
                         .Where(fi => fi.Category.Id.Value == (int)BuiltInCategory.OST_Doors
                                  || fi.Category.Id.Value == (int)BuiltInCategory.OST_Windows)
+                        .Where(fi => fi.Host != null)
                         .Where(fi => fi.Host.Id == wall.Id);
                     foreach (FamilyInstance fi in hostedInserts)
                     {
