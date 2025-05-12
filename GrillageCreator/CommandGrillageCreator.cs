@@ -24,7 +24,7 @@ namespace FerrumAddinDev
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             List<Element> rebarTypes = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).Where(x => x.Name.StartsWith("к")).ToList();
-            List<Element> rebarTypesHorizontal = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).Where(x => x.LookupParameter("Комментарии к типоразмеру").AsString().Contains("основная")).ToList();
+            List<Element> rebarTypesHorizontal = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).Where(x => x.LookupParameter("Комментарии к типоразмеру").AsString() != null && x.LookupParameter("Комментарии к типоразмеру").AsString().Contains("основная")).ToList();
 
 
             createGrillage = ExternalEvent.Create(new CreateGrillage());
@@ -42,7 +42,7 @@ namespace FerrumAddinDev
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
             List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Where(x => x.Name.StartsWith("к")).ToList();
-            List<Element> rebarTypesHorizontal = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Where(x => x.LookupParameter("Комментарии к типоразмеру").AsString().Contains("основная")).ToList();
+            List<Element> rebarTypesHorizontal = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Where(x => x.LookupParameter("Комментарии к типоразмеру").AsString() != null && x.LookupParameter("Комментарии к типоразмеру").AsString().Contains("основная")).ToList();
             List<Element> rearCoverTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarCoverType)).ToList();
             // Получаем выбранный элемент (перекрытие)
             List<Reference> elements = (List<Reference>)uiDoc.Selection.PickObjects(ObjectType.Element);
@@ -98,7 +98,8 @@ namespace FerrumAddinDev
                         List<Line> centerLines = ComputeCenterLines(allCurves);
                         centerLines = ExtendLinesToConnect(centerLines, modLength);
                         centerLines = ExtendCenterLines(centerLines, modLength);
-
+                        CreateModelLines(doc, centerLines);
+                            
                         Dictionary<Line, List<Line>> dictTop = new Dictionary<Line, List<Line>>();
                         Dictionary<Line, List<Line>> dictBottom = new Dictionary<Line, List<Line>>();
 

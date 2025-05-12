@@ -118,6 +118,10 @@
     <Compile Include="LinkedFiles\LinkedFilesWindow.xaml.cs">
       <DependentUpon>LinkedFilesWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="LintelCreator - v2\CommandLintelCreator_v2.cs" />
+    <Compile Include="LintelCreator - v2\LintelCreatorForm_v2.xaml.cs">
+      <DependentUpon>LintelCreatorForm_v2.xaml</DependentUpon>
+    </Compile>
     <Compile Include="LintelCreator\AlphanumComparatorFastString.cs" />
     <Compile Include="LintelCreator\CommandLintelCreator2.cs" />
     <Compile Include="LintelCreator\LintelCreatorForm2.xaml.cs">
@@ -187,6 +191,10 @@
     <Page Include="LinkedFiles\LinkedFilesWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="LintelCreator - v2\LintelCreatorForm_v2.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
     </Page>
     <Page Include="LintelCreator\LintelCreatorForm2.xaml">
       <Generator>MSBuild:Compile</Generator>
