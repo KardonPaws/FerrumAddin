@@ -108,7 +108,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                         )
                 })
                 .ToList();
-            List<Wall> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().Where(x => x is Wall && (x as Wall).WallType.Kind != WallKind.Curtain).Select(x => x as Wall).ToList();
+            List<Wall> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StructuralFraming).WhereElementIsNotElementType().Where(x => x is Wall && (x as Wall).WallType.Kind != WallKind.Curtain).Select(x => x as Wall).ToList();
             groupedElements.AddRange(curtains.GroupBy(el => new
             {
                 el.Name,
@@ -151,7 +151,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             })
         );
             var floors = new FilteredElementCollector(doc)
-        .OfCategory(BuiltInCategory.OST_Floors)
+        .OfCategory(BuiltInCategory.OST_StructuralFraming)
         .WhereElementIsNotElementType()
         //.Cast<Floor>()
         .ToList();
@@ -176,16 +176,17 @@ namespace FerrumAddinDev.LintelCreator_v2
                     // крайние точки вверху
                     var min = bb.Min;
                     var max = bb.Max;
+                    XYZ orient = inst.FacingOrientation;
                     var center = new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
-                    var leftPt = new XYZ(min.X, center.Y, max.Z);
-                    var rightPt = new XYZ(max.X, center.Y, max.Z);
+                    var leftPt = center - Math.Abs(orient.DotProduct(center - bb.Min)) * orient;
+                    var rightPt = center + Math.Abs(orient.DotProduct(bb.Max - center)) * orient;
 
                     // порог — ширина проёма в модели
-                    double threshold = max.X - min.X;
+                    double threshold = Convert.ToDouble(parent.Width) / 304.8;
 
                     bool leftSup = false;
                     bool rightSup = false;
-
+                    
                     // ищем плиты, надёжно «прикрывающие» эти точки
                     foreach (var fl in floors)
                     {

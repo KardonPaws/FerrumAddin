@@ -334,7 +334,7 @@ namespace FerrumAddinDev.FBS
                             leftTurn = !leftTurn;
                         }
                         double gap = rightCursor - leftCursor;
-                        if (gap > 1e-6)
+                        if (gap > 69)
                         {
                           
                             segmentJoints.Add(leftCursor);
