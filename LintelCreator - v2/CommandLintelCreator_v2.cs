@@ -150,12 +150,20 @@ namespace FerrumAddinDev.LintelCreator_v2
             x => x.Elements)
             })
         );
-            var floors = new FilteredElementCollector(doc)
+            var floors_ = new FilteredElementCollector(doc)
         .OfCategory(BuiltInCategory.OST_StructuralFraming)
         .WhereElementIsNotElementType()
         //.Cast<Floor>()
         .ToList();
-
+            List<Element> floors = new List<Element>();
+            foreach (var floor in floors_)
+            {
+                double par = doc.GetElement(floor.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                if ((311 <= par && par < 312) || (317 <= par && par < 318))
+                {
+                    floors.Add(floor);
+                }
+            }    
             // для каждой группы вычисляем SupportType/SupportDirection
             foreach (var parent in groupedElements)
             {
