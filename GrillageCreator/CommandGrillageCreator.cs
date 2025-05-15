@@ -101,9 +101,6 @@ namespace FerrumAddinDev
                     List<Line> centerLines = ComputeCenterLines(allCurves);
                     centerLines = ExtendLinesToConnect(centerLines, modLength);
                     centerLines = ExtendCenterLines(centerLines, modLength);
-                    CreateModelLines(d, centerLines);
-
-                    //CreateModelLines(doc, centerLines);
 
                     Dictionary<Line, List<Line>> dictTop = new Dictionary<Line, List<Line>>();
                     Dictionary<Line, List<Line>> dictBottom = new Dictionary<Line, List<Line>>();
