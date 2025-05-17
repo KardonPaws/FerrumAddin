@@ -198,7 +198,24 @@ namespace FerrumAddinDev.LintelCreator_v2
                     // ищем плиты, надёжно «прикрывающие» эти точки
                     foreach (var fl in floors)
                     {
-                        var fbb = fl.get_BoundingBox(null);
+                        Solid solid = null;
+                        double vol = -1;
+                        var geom = fl.get_Geometry(new Options());
+                        foreach (var g in geom)
+                        {
+                            var ig = (g as GeometryInstance).GetInstanceGeometry();
+                            foreach (var s in ig)
+                            {
+                                if (s is Solid && (s as Solid).Volume > vol)
+                                {
+                                    solid = s as Solid;
+                                    vol = (s as Solid).Volume;
+                                }
+                            }
+                        }
+                        var fbb = solid.GetBoundingBox();
+                        fbb.Min = fbb.Min + solid.ComputeCentroid();
+                        fbb.Max = fbb.Max + solid.ComputeCentroid();
                         if (fbb == null) continue;
 
                         // проверяем XY-проекцию

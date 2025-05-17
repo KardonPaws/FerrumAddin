@@ -48,6 +48,7 @@ namespace FerrumAddinDev
             List<Element> rearCoverTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarCoverType)).ToList();
             // Получаем выбранный элемент (перекрытие)
             List<Reference> elements = (List<Reference>)uiDoc.Selection.PickObjects(ObjectType.Element);
+            corners = new List<XYZ>();
 
             if (elements == null)
             {
@@ -344,7 +345,8 @@ namespace FerrumAddinDev
             }
         }
         List<XYZ> corners = new List<XYZ>();
-        private void CreateCornersBetweenLines(Document doc,
+        private void CreateCornersBetweenLines(
+    Document doc,
     List<Line> lines1,
     List<Line> lines2,
     XYZ centerIntersection,
@@ -352,26 +354,35 @@ namespace FerrumAddinDev
     Element host)
         {
             int minCount = Math.Min(lines1.Count, lines2.Count);
+            const double tol = 1e-6; // точность сравнения координат
 
             for (int i = 0; i < minCount; i++)
             {
-                //int reverseIndex = lines2.Count - 1 - i;
-                //if (reverseIndex < 0) break;
-
                 Line line1 = lines1[i];
                 Line line2 = lines2[i];
 
-                // Находим точку пересечения линий
+                // точка пересечения линий
                 XYZ intersection = GetIntersectionPoint(line1, line2);
-                if (intersection == null) continue;
+                if (intersection == null)
+                    continue;
 
-                // Определяем правильные направления для уголков
-                XYZ dir1 = GetCorrectDirection(line1, intersection);
-                XYZ dir2 = GetCorrectDirection(line2, intersection);
-                if (!corners.Any(x=>x.IsAlmostEqualTo(intersection)))
+                // отсекаем почти совпадающие точки
+                if (corners.Any(c => c.DistanceTo(intersection) < tol))
+                    continue;
+
+                // находим все уже добавленные углы, у которых X или Y совпадает
+                var aligned = corners
+                    .Where(c => Math.Abs(c.X - intersection.X) < tol
+                             || Math.Abs(c.Y - intersection.Y) < tol);
+
+                // если среди них нет ни одного, или все они на расстоянии > modLength — добавляем новый
+                if (!aligned.Any()
+                    || aligned.All(c => c.DistanceTo(intersection) > (modLength*2.5)))
                 {
                     corners.Add(intersection);
-                    // Создаем уголок с учетом направлений
+
+                    XYZ dir1 = GetCorrectDirection(line1, intersection);
+                    XYZ dir2 = GetCorrectDirection(line2, intersection);
                     CreateCornerRebar(doc, line1, line2, intersection, dir1, dir2, barType, host);
                 }
             }
@@ -572,6 +583,8 @@ namespace FerrumAddinDev
                     if (AreLinesPerpendicularToBoth(intersectingLines, lineDirection))
                         return point + lineDirection * extensionValue;
                     break;
+                default:
+                    return point;
 
                     // Для 3+ пересечений ничего не делаем
             }
@@ -693,16 +706,14 @@ namespace FerrumAddinDev
                     {
                         // Дотягиваем линии до середины
                         XYZ midPoint = (closestPointCurrent + closestPointOther) / 2;
-                        
+
                         int sortedByDir1 = sortedByDirection.IndexOf(sortedLines[i]);
                         int sortedByDir2 = sortedByDirection.IndexOf(otherLine);
-                        
                         sortedLines[i] = Line.CreateBound(startCurrent, midPoint);
                         sortedLines[sortedLines.IndexOf(otherLine)] = Line.CreateBound(midPoint, endOther);
                         sortedByDirection[sortedByDir1] = sortedLines[i];
                         sortedByDirection[sortedByDir2] = Line.CreateBound(midPoint, endOther);
 
-                        break;
                     }
 
                     // Если направление разное, и расстояние равно sqrt(2) * modLength
@@ -720,6 +731,7 @@ namespace FerrumAddinDev
                         sortedLines[sortedLines.IndexOf(otherLine)] = Line.CreateBound(closestPointOther + extensionVector2, endOther);
                         sortedByDirection[sortedByDir1] = sortedLines[i];
                         sortedByDirection[sortedByDir2] = Line.CreateBound(closestPointOther + extensionVector2, endOther);
+
                     }
 
                     // Если направление разное, и расстояние равно modLength
@@ -789,6 +801,7 @@ namespace FerrumAddinDev
         public double modLength;
 
         // Метод для вычисления средних линий
+        // БАГ - паралелльные линии с нужными проекциями, но далеко, проверять пересекает ли их общая нормаль кого-то из профиля кроме них
         private List<Line> ComputeCenterLines(List<Line> sideCurves)
         {
             List<Line> centerLines = new List<Line>();
@@ -816,7 +829,7 @@ namespace FerrumAddinDev
                                 // Создаем среднюю линию
                                 Line centerLine = CreateCenterLine(line1, line2);
                                 // Проверяем, что линии полностью внутри контура
-                                if (IsLineInsideBoundary(centerLine, sideCurves))
+                                if (IsLineInsideBoundary(centerLine, sideCurves) && LinesNormalDoesntIntersectProfile(line1, line2, sideCurves, centerLine))
                                 {
                                     // Проверяем, что средняя линия еще не была добавлена
                                     if (!IsLineAlreadyAdded(centerLine, centerLines))
@@ -846,6 +859,40 @@ namespace FerrumAddinDev
 
             return filteredCenterLines;
         }
+
+        private bool LinesNormalDoesntIntersectProfile(Line line1, Line line2, List<Line> profile, Line center)
+        {            
+            XYZ mid = (center.GetEndPoint(0) + center.GetEndPoint(1)) / 2;
+            XYZ ProjectOntoLine(XYZ pt, Line ln)
+            {
+                XYZ p0 = ln.GetEndPoint(0);
+                XYZ dir = (ln.GetEndPoint(1) - p0).Normalize();
+                double t = (pt - p0).DotProduct(dir);
+                t = Math.Max(0.0, Math.Min(t, ln.Length));
+                return p0 + dir * t;
+            }
+
+            XYZ foot1 = ProjectOntoLine(mid, line1);
+            XYZ foot2 = ProjectOntoLine(mid, line2);
+
+            Line normal1 = Line.CreateBound(mid, foot1);
+            Line normal2 = Line.CreateBound(mid, foot2);
+
+            foreach (var normal in new[] { normal1, normal2 })
+            {
+                foreach (var edge in profile)
+                {
+                    if (edge == line1 || edge == line2)
+                        continue;
+                    IntersectionResultArray results;
+                    normal.Intersect(edge, out results);
+                    if (results != null && results.Size > 0)
+                        return false;  
+                }
+            }
+            return true;
+        }
+
 
         private double GetProjectionLength(Line line1, Line line2)
         {
@@ -948,7 +995,7 @@ namespace FerrumAddinDev
                     if (DoLinesIntersect(ray, boundaryLine))
                     {
                         XYZ intersectionPoint = GetIntersectionPoint(ray, boundaryLine);
-                        double distance = Math.Round(startPoint.DistanceTo(intersectionPoint),8);
+                        double distance = startPoint.DistanceTo(intersectionPoint);
 
                         if (distance < minDistance)
                         {
@@ -1105,7 +1152,6 @@ namespace FerrumAddinDev
             if (Math.Abs(dir1.Y) < 1e-6 && Math.Abs(dir2.Y) < 1e-6)
             {
                 // Линии направлены вдоль оси X
-                // Ищем точки с равными Y
                 points = points.OrderBy(x => x.X).ToList();
                 XYZ midStart = new XYZ(points[1].X, (start1.Y + start2.Y) / 2, start1.Z);
                 XYZ midEnd = new XYZ(points[2].X, (end1.Y + end2.Y) / 2, start1.Z);
@@ -1116,7 +1162,6 @@ namespace FerrumAddinDev
             else if (Math.Abs(dir1.X) < 1e-6 && Math.Abs(dir2.X) < 1e-6)
             {
                 // Линии направлены вдоль оси Y
-                // Ищем точки с равными X
                 points = points.OrderBy(x => x.Y).ToList();             
                     XYZ midStart = new XYZ((start1.X + start2.X) / 2, points[1].Y, start1.Z);
                 XYZ midEnd = new XYZ((end1.X + end2.X) / 2, points[2].Y, start1.Z);

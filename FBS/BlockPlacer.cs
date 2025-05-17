@@ -4,6 +4,7 @@ using Autodesk.Revit.DB.Architecture;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace FerrumAddinDev.FBS
 {
@@ -42,7 +43,7 @@ namespace FerrumAddinDev.FBS
             using (Transaction tx = new Transaction(doc, "Размещение блоков ФБС"))
             {
                 tx.Start();
-
+                List<Element> blocks = new List<Element>();
                 // 1) Создать разрезы по каждо́й стене, в которой есть блоки
                 CreateSectionViewsForVariant(variant, doc, sectionType, allGrids, existingNames, viewTemplate);
 
@@ -87,7 +88,9 @@ namespace FerrumAddinDev.FBS
                     double zOff = (block.Row - 1) * (600 / 304.8);
                     pt = new XYZ(pt.X, pt.Y, block.Wall.BaseElevation + zOff + firstRowZ);
 
-                    FamilyInstance inst = doc.Create.NewFamilyInstance(pt, symbol, StructuralType.NonStructural);                      
+                    FamilyInstance inst = doc.Create.NewFamilyInstance(pt, symbol, StructuralType.NonStructural);    
+                    if (familyName != "Кирпичная заделка (керамический кирпич)")
+                        blocks.Add(inst);
                     block.PlacedElementId = inst.Id;
 
                     if (block.IsGapFill)
@@ -125,7 +128,7 @@ namespace FerrumAddinDev.FBS
                         Line axis = Line.CreateBound(pt, pt + XYZ.BasisZ);
                         ElementTransformUtils.RotateElement(doc, inst.Id, axis, ang);
                         inst.LookupParameter("ADSK_Группирование").Set("ФБС");
-                        inst.LookupParameter("ADSK_Позиция").Set(Math.Round(block.Length / 100.0).ToString());
+                        //inst.LookupParameter("ADSK_Позиция").Set(Math.Round(block.Length / 100.0).ToString());
                         IndependentTag tag = IndependentTag.Create(
                             doc,
                             tagSym.Id,
@@ -136,7 +139,23 @@ namespace FerrumAddinDev.FBS
                             (inst.Location as LocationPoint).Point + 0.2 * XYZ.BasisZ);
                     }
                 }
-
+                var listBlocks = blocks.GroupBy(b => b.Name).OrderBy(g =>
+                {
+                    var m = Regex.Match(g.Key, @"ФБС(\d+)\.(\d+)\.(\d+)");
+                    int a = int.Parse(m.Groups[1].Value);
+                    int b = int.Parse(m.Groups[2].Value);
+                    int c = int.Parse(m.Groups[3].Value);
+                    return (a, b, c);
+                }).ToList();
+                int i = 1;
+                foreach (var block in listBlocks)
+                {
+                    foreach (var b in block)
+                    {
+                        b.LookupParameter("ADSK_Позиция").Set(i.ToString());
+                    }
+                    i++;
+                }
                 tx.Commit();
             }
 
