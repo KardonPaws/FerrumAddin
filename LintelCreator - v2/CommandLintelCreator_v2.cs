@@ -44,9 +44,9 @@ namespace FerrumAddinDev.LintelCreator_v2
             if (windowsAndDoorsList.Count == 0)
             {
 
-                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType());
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x=> (x as FamilyInstance).SuperComponent == null));
 
-                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType());
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null));
 
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x =>x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).ToList());
@@ -75,188 +75,164 @@ namespace FerrumAddinDev.LintelCreator_v2
         }
         private List<ParentElement> GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc)
         {
-            List<FamilyInstance> windowsAndDoors = windowsAndDoorsList.Where(x => x is FamilyInstance).Select(x => x as FamilyInstance).ToList();
-            List<Wall> curtains = windowsAndDoorsList.Except(windowsAndDoors).Select(x => x as Wall).ToList();
-            var groupedElements = windowsAndDoors
-                .GroupBy(el => new
+            // Разделяем на экземпляры семейств и витражи
+            var windowsAndDoors = windowsAndDoorsList.OfType<FamilyInstance>().ToList();
+            var curtains = windowsAndDoorsList.Except(windowsAndDoors).OfType<Wall>().ToList();
+
+            // Подготавливаем список плит перекрытия для вычисления опор
+            var floors = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                .WhereElementIsNotElementType()
+                .ToList()
+                .Where(f =>
                 {
-                    el.Symbol.FamilyName, // Имя семейства
-                    el.Symbol.Name,       // Имя типа
-                    Width = el.LookupParameter("ADSK_Размер_Ширина")?.AsValueString()
-                })
-                .OrderBy(group => group.Key.FamilyName)  // Сортировка по имени семейства
-                .ThenBy(group => group.Key.Name)         // Сортировка по имени типа
-                .ThenBy(group => group.Key.Width)
-                .Select(group => new ParentElement
-                {
-                    Name = group.Key.FamilyName,
-                    TypeName = group.Key.Name,
-                    Width = group.First().LookupParameter("ADSK_Размер_Ширина")?.AsValueString(),
-                    Walls = group
-                        .Where(el => el.Host is Wall)
-                        .GroupBy(el =>
-                        {
-                            var wall = el.Host as Wall;
-                            return wall?.GetTypeId();
-                        })
-                        .Where(wallGroup => wallGroup.Key != null)
-                        .ToDictionary(
-                            wallGroup => doc.GetElement(wallGroup.Key) as WallType,
-                            wallGroup => wallGroup
-                                .Cast<Element>()
-                                .ToList()
-                        )
+                    var code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                    return (311 <= code && code < 312) || (317 <= code && code < 318);
                 })
                 .ToList();
-            List<Wall> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StructuralFraming).WhereElementIsNotElementType().Where(x => x is Wall && (x as Wall).WallType.Kind != WallKind.Curtain).Select(x => x as Wall).ToList();
-            groupedElements.AddRange(curtains.GroupBy(el => new
+
+            // Вычисляем SupportType и SupportDirection для каждого элемента (окон/дверей и витражей)
+            var supportInfo = new Dictionary<Element, (int SupportType, XYZ Direction)>();
+            foreach (var el in windowsAndDoors.Cast<Element>().Concat(curtains))
             {
-                el.Name,
-                Width = Math.Round(el.LookupParameter("Длина").AsDouble() * 304.8)
-            })
-            .OrderBy(group => group.Key.Name)
-            .ThenBy(group => group.Key.Width)
-            .Select(group => new ParentElement
-            {
-                Name = group.Key.Name,
-                TypeName = "Витраж",
-                Width = group.Key?.Width.ToString(),
-                Walls = walls
-        // группируем по WallType.Id, а не по самому объекту WallType
-        .GroupBy(w => w.WallType.Id)
-        .Select(wg => new
-        {
-            WallTypeId = wg.Key,
-            // для каждой стены этого типа собираем все вставки из текущей группы vitrazh
-            Elements = wg
-                .SelectMany(host =>
+                var bb = el.get_BoundingBox(null);
+                if (bb == null)
                 {
-                    var inserts = (host as HostObject)
-                        .FindInserts(false, false, true, false);
-                    // из vg берем только те элементы, чьи Id встретились в inserts
-                    return group.Where(curtain => inserts.Contains(curtain.Id));
-                })
-                // устраняем дубли по Id
-                .GroupBy(el => el.Id)
-                .Select(g2 => g2.First())
-                .Cast<Element>()
-                .ToList()
-        })
-        // отбрасываем wall-типы, где не нашлось ни одной вставки
-        .Where(x => x.Elements.Any())
-        // строим окончательный словарь: ключ — реальный WallType, значение — список Element
-        .ToDictionary(
-            x => doc.GetElement(x.WallTypeId) as WallType,
-            x => x.Elements)
-            })
-        );
-            var floors_ = new FilteredElementCollector(doc)
-        .OfCategory(BuiltInCategory.OST_StructuralFraming)
-        .WhereElementIsNotElementType()
-        //.Cast<Floor>()
-        .ToList();
-            List<Element> floors = new List<Element>();
-            foreach (var floor in floors_)
-            {
-                double par = doc.GetElement(floor.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
-                if ((311 <= par && par < 312) || (317 <= par && par < 318))
-                {
-                    floors.Add(floor);
+                    supportInfo[el] = (0, XYZ.Zero);
+                    continue;
                 }
-            }    
-            // для каждой группы вычисляем SupportType/SupportDirection
-            foreach (var parent in groupedElements)
-            {
-                parent.SupportType = 0;
-                parent.SupportDirection = new Dictionary<Element, XYZ>();
 
-                // проходим по всем экземплярам в этой группе (во всех стенах)
-                var allInstances = parent.Walls
-                    .SelectMany(kv => kv.Value)
-                    .OfType<FamilyInstance>()
-                    .ToList();
-
-                foreach (var inst in allInstances)
+                var min = bb.Min;
+                var max = bb.Max;
+                var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);
+                var center = new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
+                var leftPt = center - Math.Abs(orient.DotProduct(center - min)) * orient;
+                var rightPt = center + Math.Abs(orient.DotProduct(max - center)) * orient;
+                double threshold = 0;
+                if (el is FamilyInstance inst)
                 {
-                    var bb = inst.get_BoundingBox(null);
-                    if (bb == null) continue;
+                    threshold = Convert.ToDouble(inst.LookupParameter("ADSK_Размер_Ширина")?.AsValueString() ?? "0") / 304.8;
+                }
+                else if (el is Wall wall)
+                {
+                    threshold = wall.LookupParameter("Длина").AsDouble();
+                }
 
-                    // крайние точки вверху
-                    var min = bb.Min;
-                    var max = bb.Max;
-                    XYZ orient = inst.FacingOrientation;
-                    var center = new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
-                    var leftPt = center - Math.Abs(orient.DotProduct(center - bb.Min)) * orient;
-                    var rightPt = center + Math.Abs(orient.DotProduct(bb.Max - center)) * orient;
+                bool leftSup = false, rightSup = false;
+                foreach (var fl in floors)
+                {
+                    var opts = new Options { ComputeReferences = false };
+                    var geom = fl.get_Geometry(opts);
+                    var solid = geom
+                        .OfType<GeometryInstance>()
+                        .SelectMany(gi => gi.GetInstanceGeometry().OfType<Solid>())
+                        .OrderByDescending(s => s.Volume)
+                        .FirstOrDefault();
+                    if (solid == null) continue;
 
-                    // порог — ширина проёма в модели
-                    double threshold = Convert.ToDouble(parent.Width) / 304.8;
+                    var fbb = solid.GetBoundingBox();
+                    var idx = solid.ComputeCentroid();
+                    fbb.Min += idx;
+                    fbb.Max += idx;
 
-                    bool leftSup = false;
-                    bool rightSup = false;
-                    
-                    // ищем плиты, надёжно «прикрывающие» эти точки
-                    foreach (var fl in floors)
-                    {
-                        Solid solid = null;
-                        double vol = -1;
-                        var geom = fl.get_Geometry(new Options());
-                        foreach (var g in geom)
-                        {
-                            var ig = (g as GeometryInstance).GetInstanceGeometry();
-                            foreach (var s in ig)
-                            {
-                                if (s is Solid && (s as Solid).Volume > vol)
-                                {
-                                    solid = s as Solid;
-                                    vol = (s as Solid).Volume;
-                                }
-                            }
-                        }
-                        var fbb = solid.GetBoundingBox();
-                        fbb.Min = fbb.Min + solid.ComputeCentroid();
-                        fbb.Max = fbb.Max + solid.ComputeCentroid();
-                        if (fbb == null) continue;
-
-                        // проверяем XY-проекцию
-                        if (leftPt.X >= fbb.Min.X && leftPt.X <= fbb.Max.X
+                    if (leftPt.X >= fbb.Min.X && leftPt.X <= fbb.Max.X
                          && leftPt.Y >= fbb.Min.Y && leftPt.Y <= fbb.Max.Y)
-                        {
-                            double dz = fbb.Min.Z - leftPt.Z;
-                            if (dz >= 0 && dz <= threshold) leftSup = true;
-                        }
-
-                        if (rightPt.X >= fbb.Min.X && rightPt.X <= fbb.Max.X
-                         && rightPt.Y >= fbb.Min.Y && rightPt.Y <= fbb.Max.Y)
-                        {
-                            double dz = fbb.Min.Z - rightPt.Z;
-                            if (dz >= 0 && dz <= threshold) rightSup = true;
-                        }
-
-                        if (leftSup && rightSup) break;
-                    }
-
-                    int supType = 0;
-                    if (leftSup && rightSup) supType = 2;
-                    else if (leftSup || rightSup) supType = 1;
-
-                    // сохраняем максимальное для группы
-                    parent.SupportType = Math.Max(parent.SupportType, supType);
-
-                    // если ровно одна опора, запомним направление
-                    if (supType == 1)
                     {
-                        var supportPt = leftSup ? leftPt : rightPt;
-                        var dir = (supportPt - center).Normalize();
-                        parent.SupportDirection[inst] = dir;
+                        double dz = fbb.Min.Z - leftPt.Z;
+                        if (dz >= 0 && dz <= threshold) leftSup = true;
                     }
+
+                    if (rightPt.X >= fbb.Min.X && rightPt.X <= fbb.Max.X
+                     && rightPt.Y >= fbb.Min.Y && rightPt.Y <= fbb.Max.Y)
+                    {
+                        double dz = fbb.Min.Z - rightPt.Z;
+                        if (dz >= 0 && dz <= threshold) rightSup = true;
+                    }
+                    if (leftSup && rightSup) break;
                 }
+
+                int supType = leftSup && rightSup ? 2 : (leftSup || rightSup ? 1 : 0);
+                XYZ dir = XYZ.Zero;
+                if (supType == 1)
+                {
+                    var supportPt = leftSup ? leftPt : rightPt;
+                    dir = (supportPt - center).Normalize();
+                }
+                supportInfo[el] = (supType, dir);
             }
-            return groupedElements;
+
+            // Группировка по имени, типу, ширине и SupportType для окон/дверей
+            var windowGroups = windowsAndDoors
+                .GroupBy(el => new
+                {
+                    el.Symbol.FamilyName,
+                    el.Symbol.Name,
+                    Width = el.LookupParameter("ADSK_Размер_Ширина").AsValueString(),
+                    supportInfo[el].SupportType
+                })
+                .Select(g => new ParentElement
+                {
+                    Name = g.Key.FamilyName,
+                    TypeName = g.Key.Name,
+                    Width = g.Key.Width,
+                    SupportType = g.Key.SupportType,
+                    Walls = g
+                        .Where(el => el.Host is Wall)
+                        .GroupBy(el => (el.Host as Wall)?.GetTypeId())
+                        .Where(wg => wg.Key != null)
+                        .ToDictionary(
+                            wg => doc.GetElement(wg.Key) as WallType,
+                            wg => wg.Cast<Element>().ToList()
+                        ),
+                    SupportDirection = g.ToDictionary(
+                        el => (Element)el,
+                        el => supportInfo[el].Direction
+                    )
+                });
+
+            // Группировка витражей по имени, ширине и SupportType
+            var curtainGroups = curtains
+                .GroupBy(el => new
+                {
+                    el.Name,
+                    Width = Math.Round(el.LookupParameter("Длина").AsDouble() * 304.8).ToString(),
+                    supportInfo[el].SupportType
+                })
+                .Select(g => new ParentElement
+                {
+                    Name = g.Key.Name,
+                    TypeName = "Витраж",
+                    Width = g.Key.Width,
+                    SupportType = g.Key.SupportType,
+                    Walls = g
+                        .GroupBy(el => el.WallType.Id)
+                        .ToDictionary(
+                            wg => doc.GetElement(wg.Key) as WallType,
+                            wg => wg.Cast<Element>().ToList()
+                        ),
+                    SupportDirection = g.ToDictionary(
+                        el => (Element)el,
+                        el => supportInfo[el].Direction
+                    )
+                });
+
+            // Объединяем все группы и возвращаем итоговый список
+            return windowGroups
+                .Concat(curtainGroups)
+                .OrderBy(p => p.Name)
+                .ThenBy(p => p.TypeName)
+                .ThenBy(p => p.Width)
+                .ThenBy(p => p.SupportType)
+                .ToList();
         }
 
-
-
+        // Вспомогательный компаратор для удаления дубликатов по ElementId
+        public class ElementIdEqualityComparer : IEqualityComparer<Element>
+        {
+            public static readonly ElementIdEqualityComparer Instance = new ElementIdEqualityComparer();
+            public bool Equals(Element x, Element y) => x.Id == y.Id;
+            public int GetHashCode(Element obj) => obj.Id.GetHashCode();
+        }
 
         private static List<Element> GetWindowsAndDoorsFromCurrentSelection(Document doc, List<ElementId> selIds)
         {

@@ -91,6 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App.cs" />
+    <Compile Include="ColumnSections\CreateColumnSections.cs" />
     <Compile Include="CommandMepName.cs" />
     <Compile Include="Config\ConfiguratorShow.cs" />
     <Compile Include="FBS\BlockPlacer.cs" />
@@ -232,6 +233,7 @@
   <ItemGroup>
     <Resource Include="Worksets\Worksets_Sample.xml" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"
