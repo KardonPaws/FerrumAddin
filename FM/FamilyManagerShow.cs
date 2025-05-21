@@ -19,7 +19,7 @@ namespace FerrumAddinDev
             try
             {
                 // dockable window id
-                DockablePaneId id = new DockablePaneId(new Guid("{68D44FAC-CF09-46B2-9544-D5A3F809373C}"));
+                DockablePaneId id = new DockablePaneId(new Guid("{3496B5BA-F8C4-403D-AF7E-B95D25F15CED}"));
                 DockablePane dockableWindow = commandData.Application.GetDockablePane(id);
                 dockableWindow.Show();
             }
