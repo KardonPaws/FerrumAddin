@@ -283,7 +283,7 @@ namespace FerrumAddinDev
             DockablePaneId id = new DockablePaneId(new Guid("{3496B5BA-F8C4-403D-AF7E-B95D25F15CED}"));
             try
             {
-                a.RegisterDockablePane(id, "Менеджер семейств Железно",
+                a.RegisterDockablePane(id, "Менеджер семейств Железно_Тест",
                         dockableWindow as IDockablePaneProvider);
                 if ((admins.Count != 0 && admins.Contains(name)) || AlwaysLoad == true)
                 {

@@ -290,15 +290,11 @@ namespace FerrumAddinDev.LintelCreator_v2
         public bool IsBrick85Checked { get; set; }
         public bool IsPartitionChecked { get; set; }
 
-        public bool IsNoSupportChecked { get; set; }
-        public bool IsOneSideSupportChecked { get; set; }
-        public bool IsTwoSidesSupportChecked { get; set; }
-
         public bool HasSupportPads { get; set; }
 
         public bool IsMetalChecked { get; set; }
         public bool IsReinforcedConcreteChecked { get; set; }
-        
+        public bool AllSupports { get; set; }
 
         public void FilterFamiliesAndTypes()
         {
@@ -357,10 +353,13 @@ namespace FerrumAddinDev.LintelCreator_v2
                             hasTwoSupports = support.Any(char.IsUpper) && parts[parts.Count() - 1].Any(char.IsUpper);
                         }
 
-                        if (SelectedParentElement.SupportType == 0 && (hasOneSupport || hasTwoSupports)) return false;
-                        if (SelectedParentElement.SupportType == 1 && !hasOneSupport) return false;
-                        if (SelectedParentElement.SupportType == 2 && !hasTwoSupports) return false;
-
+                        if (!AllSupports)
+                        {
+                            if (SelectedParentElement.SupportType == 0 && (hasOneSupport || hasTwoSupports)) return false;
+                            if (SelectedParentElement.SupportType == 1 && !hasOneSupport) return false;
+                            if (SelectedParentElement.SupportType == 2 && !hasTwoSupports) return false;
+                        }
+                        
                         // 5. Наличие опорных подушек
                         if (HasSupportPads)
                         {

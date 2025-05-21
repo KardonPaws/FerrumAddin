@@ -25,10 +25,7 @@
             <TreeView.ItemTemplate>
                 <HierarchicalDataTemplate DataType="{x:Type local:ParentElement}" ItemsSource="{Binding Walls}">
                     <StackPanel>
-                        <WrapPanel Orientation="Vertical">
-                            <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                            <TextBlock Text="{Binding TypeName}"/>
-                        </WrapPanel>
+                        <Line Stroke="Black" X1="0" X2="300" Stretch="Fill"/>
                         <WrapPanel Orientation="Horizontal">
                             <TextBlock Text="Ширина проема " FontStyle="Italic"/>
                             <TextBlock Text="{Binding Width}" FontStyle="Italic"/>
@@ -38,7 +35,6 @@
                             <TextBlock Text="Опирание " FontStyle="Italic"/>
                             <TextBlock Text="{Binding SupportType}" FontStyle="Italic"/>
                         </WrapPanel>
-                        <Line Stroke="Black" X1="0" X2="300" Stretch="Fill"/>
                     </StackPanel>
                     <HierarchicalDataTemplate.ItemTemplate>
                         <DataTemplate>
@@ -54,7 +50,7 @@
 
         <!-- Второй столбец -->
         <Border BorderBrush="Black" Grid.Column="1" Background="Black" Margin="5">
-            <StackPanel Margin="1" Background="White">
+            <StackPanel Margin="1,3,1,1" Background="White">
                 <TextBlock Text="Фильтры" FontWeight="Bold" Margin="0,0,0,5"/>
 
                 <!-- Настройка толщины стены -->
@@ -70,6 +66,9 @@
                 <TextBlock Text="Материал перемычки" FontWeight="Bold" Margin="0,0,0,5"/>
                 <RadioButton Content="Металлическая" GroupName="LintelMaterial" IsChecked="{Binding IsMetalChecked}" Margin="0,0,0,5" Checked="RadioButton_Checked"/>
                 <RadioButton Content="Железобетонная" GroupName="LintelMaterial" IsChecked="{Binding IsReinforcedConcreteChecked}" Checked="RadioButton_Checked"/>
+
+                <TextBlock Text="Опирание" FontWeight="Bold" Margin="0,0,0,5"/>
+                <CheckBox Content="Не учитывать опирание" Margin="0,5,0,5" IsChecked="{Binding AllSupports}"/>
             </StackPanel>
         </Border>
 
