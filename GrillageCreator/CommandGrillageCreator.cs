@@ -101,6 +101,7 @@ namespace FerrumAddinDev
                     // Вычисляем средние линии для боковых граней
                     List<Line> centerLines = ComputeCenterLines(allCurves);
                     centerLines = ExtendLinesToConnect(centerLines, modLength);
+                    CreateModelLines(doc, centerLines);
                     centerLines = ExtendCenterLines(centerLines, modLength);
 
                     Dictionary<Line, List<Line>> dictTop = new Dictionary<Line, List<Line>>();
@@ -631,7 +632,7 @@ namespace FerrumAddinDev
                 // 1. То же направление.
                 // 2. Обратное направление.
                 // 3. Другие направления.
-                var sortedByDirection = sortedLines
+                var sortedByDirection = sortedLines.Except(new List<Line>() { currentLine })
                     .Where(line => line != null)
                     .OrderBy(line =>
                     {
@@ -641,7 +642,7 @@ namespace FerrumAddinDev
                         return 2; // Другие направления
                     })
                     .ToList();
-
+                sortedByDirection.Insert(0, currentLine);
                 // Проходим по отсортированному списку
                 for (int j = 0; j < sortedByDirection.Count; j++)
                 {
@@ -707,11 +708,11 @@ namespace FerrumAddinDev
                         // Дотягиваем линии до середины
                         XYZ midPoint = (closestPointCurrent + closestPointOther) / 2;
 
-                        int sortedByDir1 = sortedByDirection.IndexOf(sortedLines[i]);
+                        int sortedByDir1 = 0;
                         int sortedByDir2 = sortedByDirection.IndexOf(otherLine);
                         sortedLines[i] = Line.CreateBound(startCurrent, midPoint);
                         sortedLines[sortedLines.IndexOf(otherLine)] = Line.CreateBound(midPoint, endOther);
-                        sortedByDirection[sortedByDir1] = sortedLines[i];
+                        sortedByDirection[sortedByDir1] = Line.CreateBound(startCurrent, midPoint);
                         sortedByDirection[sortedByDir2] = Line.CreateBound(midPoint, endOther);
 
                     }
@@ -724,12 +725,12 @@ namespace FerrumAddinDev
                         XYZ extensionVector1 = (closestPointCurrent - startCurrent).Normalize() * modLength;
                         XYZ extensionVector2 = (closestPointOther - endOther).Normalize() * modLength;
 
-                        int sortedByDir1 = sortedByDirection.IndexOf(sortedLines[i]);
+                        int sortedByDir1 = 0;
                         int sortedByDir2 = sortedByDirection.IndexOf(otherLine);
 
                         sortedLines[i] = Line.CreateBound(startCurrent, closestPointCurrent + extensionVector1);
                         sortedLines[sortedLines.IndexOf(otherLine)] = Line.CreateBound(closestPointOther + extensionVector2, endOther);
-                        sortedByDirection[sortedByDir1] = sortedLines[i];
+                        sortedByDirection[sortedByDir1] = Line.CreateBound(startCurrent, closestPointCurrent + extensionVector1);
                         sortedByDirection[sortedByDir2] = Line.CreateBound(closestPointOther + extensionVector2, endOther);
 
                     }
@@ -738,22 +739,22 @@ namespace FerrumAddinDev
                     if (!otherDir.IsAlmostEqualTo(currentDir) && !otherDir.IsAlmostEqualTo(-currentDir) &&
                         Math.Abs(distance - modLength) < 1e-6)
                     {
-                        if (sortedLines.Any(x => x != currentLine && (x.GetEndPoint(0).IsAlmostEqualTo(closestPointCurrent) || x.GetEndPoint(1).IsAlmostEqualTo(closestPointCurrent))))
-                        {
+
                             int sortedByDir2 = sortedByDirection.IndexOf(otherLine);
 
                             // Дотягиваем линии, чтобы конечные точки совпали
-                            sortedLines[sortedLines.IndexOf(otherLine)] = Line.CreateBound(closestPointCurrent, endOther);
-                            sortedByDirection[sortedByDir2] = Line.CreateBound(closestPointCurrent, endOther);
-                        }
-                        else
-                        {
-                            int sortedByDir1 = sortedByDirection.IndexOf(sortedLines[i]);
+                            if (Line.CreateBound(closestPointCurrent, endOther).Direction.IsAlmostEqualTo(otherDir) || Line.CreateBound(closestPointCurrent, endOther).Direction.IsAlmostEqualTo(-otherDir))
+                            {
+                                sortedLines[sortedLines.IndexOf(otherLine)] = Line.CreateBound(closestPointCurrent, endOther);
+                                sortedByDirection[sortedByDir2] = Line.CreateBound(closestPointCurrent, endOther);
+                            }
+                            else
+                            {
+                                sortedLines[i] = Line.CreateBound(startCurrent, closestPointOther);
+                                sortedByDirection[0] = Line.CreateBound(startCurrent, closestPointOther);
+                            }
+                        
 
-                            // Дотягиваем линии, чтобы конечные точки совпали
-                            sortedLines[sortedLines.IndexOf(currentLine)] = Line.CreateBound(startCurrent, closestPointOther);
-                            sortedByDirection[sortedByDir1] = Line.CreateBound(startCurrent, closestPointOther);
-                        }
                         break;
                     }
                 }
@@ -829,7 +830,7 @@ namespace FerrumAddinDev
                                 // Создаем среднюю линию
                                 Line centerLine = CreateCenterLine(line1, line2);
                                 // Проверяем, что линии полностью внутри контура
-                                if (IsLineInsideBoundary(centerLine, sideCurves) && LinesNormalDoesntIntersectProfile(line1, line2, sideCurves, centerLine))
+                                if (IsLineInsideBoundary(centerLine, sideCurves) && LinesNormalDoesntIntersectProfile(line1, line2, sideCurves, centerLine) && (centerLine.Direction.IsAlmostEqualTo(line1.Direction) || centerLine.Direction.IsAlmostEqualTo(line1.Direction.Negate())))
                                 {
                                     // Проверяем, что средняя линия еще не была добавлена
                                     if (!IsLineAlreadyAdded(centerLine, centerLines))

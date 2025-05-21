@@ -10,6 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Controls;
+using System.Windows.Forms;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 
 namespace FerrumAddinDev.LintelCreator_v2
@@ -101,13 +102,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                     supportInfo[el] = (0, XYZ.Zero);
                     continue;
                 }
-
                 var min = bb.Min;
                 var max = bb.Max;
+                XYZ wallCenter;
+
+                
                 var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);
-                var center = new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
-                var leftPt = center - Math.Abs(orient.DotProduct(center - min)) * orient;
-                var rightPt = center + Math.Abs(orient.DotProduct(max - center)) * orient;
+                var center = el is FamilyInstance? (el.Location as LocationPoint).Point + (max.Z-min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
+                var leftPt = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2 - 1e-6) * orient : center - Math.Abs(orient.DotProduct(center - min)) * orient;
+                var rightPt = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2 + 1e-6) * orient : center + Math.Abs(orient.DotProduct(max - center)) * orient;
                 double threshold = 0;
                 if (el is FamilyInstance inst)
                 {
@@ -135,15 +138,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                     fbb.Min += idx;
                     fbb.Max += idx;
 
-                    if (leftPt.X >= fbb.Min.X && leftPt.X <= fbb.Max.X
-                         && leftPt.Y >= fbb.Min.Y && leftPt.Y <= fbb.Max.Y)
+                    if (leftPt.X > fbb.Min.X && leftPt.X < fbb.Max.X
+                         && leftPt.Y > fbb.Min.Y && leftPt.Y < fbb.Max.Y)
                     {
                         double dz = fbb.Min.Z - leftPt.Z;
                         if (dz >= 0 && dz <= threshold) leftSup = true;
                     }
 
-                    if (rightPt.X >= fbb.Min.X && rightPt.X <= fbb.Max.X
-                     && rightPt.Y >= fbb.Min.Y && rightPt.Y <= fbb.Max.Y)
+                    if (rightPt.X > fbb.Min.X && rightPt.X < fbb.Max.X
+                     && rightPt.Y > fbb.Min.Y && rightPt.Y < fbb.Max.Y)
                     {
                         double dz = fbb.Min.Z - rightPt.Z;
                         if (dz >= 0 && dz <= threshold) rightSup = true;
