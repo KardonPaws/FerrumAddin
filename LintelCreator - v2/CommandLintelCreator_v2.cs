@@ -24,6 +24,8 @@ namespace FerrumAddinDev.LintelCreator_v2
         public static ExternalEvent createSectionsEvent;
         public static ExternalEvent tagLintelsEvent;
         public static ExternalEvent placeSectionsEvent;
+        public static Queue<LintelRequest> PendingRequests = new Queue<LintelRequest>();
+
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -930,6 +932,13 @@ namespace FerrumAddinDev.LintelCreator_v2
         }
     }
 
+    public class LintelRequest
+    {
+        public ParentElement ParentElement { get; set; }
+        public WallType WallType { get; set; }
+        public FamilySymbol LintelType { get; set; }
+    }
+
     public class LintelCreate : IExternalEventHandler
     {
         public void Execute(UIApplication app)
@@ -937,6 +946,18 @@ namespace FerrumAddinDev.LintelCreator_v2
             string output = "";
             Document doc = app.ActiveUIDocument.Document;
             UIDocument uidoc = app.ActiveUIDocument;
+
+            if (CommandLintelCreator_v2.PendingRequests.Count == 0)
+                return;
+
+            var req = CommandLintelCreator_v2.PendingRequests.Dequeue();
+            
+                   // подставляем его в ViewModel
+            var vm = LintelCreatorForm_v2.MainViewModel;
+            vm.SelectedParentElement = req.ParentElement;
+            vm.SelectedWallTypeName = req.WallType.Name;
+            vm.SelectedFamily = new FamilyWrapper(req.LintelType.Family, doc);
+            vm.SelectedType = req.LintelType;
 
             FilteredElementCollector levelCollector = new FilteredElementCollector(doc);
             var levels = levelCollector.OfClass(typeof(Level))
@@ -959,7 +980,6 @@ namespace FerrumAddinDev.LintelCreator_v2
                         trans.RollBack();
                         return;
                     }
-
                     // Получение выбранного семейства, типа и элемента
                     var selectedFamily = mainViewModel.SelectedFamily;
                     var selectedType = mainViewModel.SelectedType;
@@ -1009,24 +1029,25 @@ namespace FerrumAddinDev.LintelCreator_v2
                             XYZ maxPoint = bb.Max;
 
                             // Увеличиваем BoundingBox вверх для поиска перемычки
-                            XYZ searchMinPoint = new XYZ(minPoint.X, minPoint.Y, maxPoint.Z);
-                            XYZ searchMaxPoint = new XYZ(maxPoint.X, maxPoint.Y, maxPoint.Z + 100/304.8); // 100 мм вверх
+                            XYZ searchMinPoint = new XYZ(minPoint.X - 100 / 304.8, minPoint.Y - 100 / 304.8, maxPoint.Z - 500/304.8);
+                            XYZ searchMaxPoint = new XYZ(maxPoint.X + 100 / 304.8, maxPoint.Y + 100 / 304.8, maxPoint.Z + 100/304.8); // 100 мм вверх
 
                             Outline searchOutline = new Outline(searchMinPoint, searchMaxPoint);
                             BoundingBoxIntersectsFilter searchFilter = new BoundingBoxIntersectsFilter(searchOutline);
 
                             // Поиск существующих перемычек
-                            FilteredElementCollector lintelCollector = new FilteredElementCollector(doc)
+                            List<Element> lintelCollector = new FilteredElementCollector(doc)
                                 .OfClass(typeof(FamilyInstance))
-                                .WherePasses(searchFilter);
+                                .WherePasses(searchFilter).ToList();
                             List<ElementId> listToDel = new List<ElementId>();
                             // Если есть существующая перемычка, пропускаем создание новой
-                            if (lintelCollector.Any(x=>x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
-                            {
+
                                 if (LintelCreatorForm_v2.recreate)
                                 {
-                                    foreach (Element e in lintelCollector.Where(x=> x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
-                                    {
+                                    foreach (Element e in lintelCollector)
+                                {
+                                    string par = e.LookupParameter("ADSK_Группирование")?.AsString();
+                                    if (par == "ПР")
                                             listToDel.Add(e.Id);
                                     }
                                 }
@@ -1036,7 +1057,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     continue;
                                 }
                                 
-                            }
+                            
                             
                             foreach (ElementId id in listToDel.Distinct())
                             {
@@ -1112,7 +1133,6 @@ namespace FerrumAddinDev.LintelCreator_v2
                         }
                         break;
                     }
-
                     trans.Commit();
                 }
                 catch (Exception ex)
@@ -1123,6 +1143,8 @@ namespace FerrumAddinDev.LintelCreator_v2
             }
             if (output != null && output != "")
                 TaskDialog.Show("Отчет", output);
+            if (CommandLintelCreator_v2.PendingRequests.Count > 0)
+                CommandLintelCreator_v2.lintelCreateEvent.Raise();
         }
 
 

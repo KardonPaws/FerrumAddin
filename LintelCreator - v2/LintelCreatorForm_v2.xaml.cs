@@ -18,6 +18,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 
 namespace FerrumAddinDev.LintelCreator_v2
 {
@@ -44,6 +45,8 @@ namespace FerrumAddinDev.LintelCreator_v2
             };
             MainViewModel = DataContext as MainViewModel;
             selection = sel;
+            autoMode = false;
+            recreate = false;
         }
         public static Selection selection;
 
@@ -126,10 +129,48 @@ namespace FerrumAddinDev.LintelCreator_v2
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            if (MainViewModel.SelectedWallType != null)
+            var vm = MainViewModel;
+            // Ручной режим: создаём только для выбранного проёма
+            if (!autoMode)
+            {
+                if (vm.SelectedWallType != null)
+                {
+                    CommandLintelCreator_v2.lintelCreateEvent.Raise();
+                }
+                else
+                {
+                    TaskDialog.Show("Ошибка", "Выберите проем и тип стены для простановки перемычек");
+                }
+                return;
+            }
+
+            // Автоматический режим: проходим по всем ParentElement
+            foreach (var parent in vm.ElementList)
+            {
+                // Выбираем текущий элемент
+                vm.SelectedFamily = vm.SelectedFamily == null? vm.FilteredFamilies.FirstOrDefault() : vm.SelectedFamily;
+                vm.SelectedParentElement = parent;
+                // Берём первую стену из словаря Walls
+                foreach (var wallType in parent.Walls.Keys)
+                {
+                    vm.SelectedWallTypeName = wallType.Name;
+                    // Обновляем список типов семейств под этот проём
+                    vm.FilterFamiliesAndTypes();
+                    // Выбираем первое семейство и первый тип перемычки
+                    vm.SelectedType = vm.SelectedFamily?.Types.FirstOrDefault();
+                    if (vm.SelectedType == null) continue;
+                    CommandLintelCreator_v2.PendingRequests.Enqueue(new LintelRequest
+                    {
+                        ParentElement = parent,
+                        WallType = wallType,
+                        LintelType = vm.SelectedFamily?.Types.FirstOrDefault()
+                    });
+                }
+
+            }
+            // Запускаем ExternalEvent для создания перемычки
+            if (CommandLintelCreator_v2.PendingRequests.Any())
                 CommandLintelCreator_v2.lintelCreateEvent.Raise();
-            else
-                TaskDialog.Show("Ошибка", "Выберите проем и тип стены для простановки перемычек");
         }
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
@@ -178,10 +219,26 @@ namespace FerrumAddinDev.LintelCreator_v2
             }
         }
         public static bool recreate = false;
-
+        private void CheckBox_Checked_2(object sender, RoutedEventArgs e)
+        {
+            if (autoMode)
+            {
+                autoMode = false;
+            }
+            else
+            {
+                autoMode = true;
+            }
+        }
+        public static bool autoMode = false;
         private void Button_Click_5(object sender, RoutedEventArgs e)
         {
             CommandLintelCreator2.placeSectionsEvent.Raise();
+        }
+
+        private void CheckBox_Checked_3(object sender, RoutedEventArgs e)
+        {
+            MainViewModel.FilterFamiliesAndTypes();
         }
     }
 
@@ -379,7 +436,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     .ToList();
 
                 // Обновляем доступные типы
-                family.Types = new ObservableCollection<FamilySymbol>(filteredTypes);
+                SelectedFamily.Types = new ObservableCollection<FamilySymbol>(filteredTypes);
                 OnPropertyChanged(nameof(family.Types));
 
             }
