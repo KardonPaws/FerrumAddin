@@ -135,7 +135,18 @@ namespace FerrumAddinDev.LintelCreator_v2
             {
                 if (vm.SelectedWallType != null)
                 {
-                    CommandLintelCreator_v2.lintelCreateEvent.Raise();
+                    if (vm.SelectedType == null)
+                    {
+                        vm.SelectedType = vm.SelectedFamily?.Types.FirstOrDefault();
+                    }
+                    CommandLintelCreator_v2.PendingRequests.Enqueue(new LintelRequest
+                    {
+                        ParentElement = vm.SelectedParentElement,
+                        WallType = vm.SelectedWallType,
+                        LintelType = vm.SelectedType
+                    });
+                    if (CommandLintelCreator_v2.PendingRequests.Any())
+                        CommandLintelCreator_v2.lintelCreateEvent.Raise();
                 }
                 else
                 {

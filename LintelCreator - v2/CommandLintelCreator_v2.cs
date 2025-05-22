@@ -941,9 +941,9 @@ namespace FerrumAddinDev.LintelCreator_v2
 
     public class LintelCreate : IExternalEventHandler
     {
+        string output = "";
         public void Execute(UIApplication app)
         {
-            string output = "";
             Document doc = app.ActiveUIDocument.Document;
             UIDocument uidoc = app.ActiveUIDocument;
 
@@ -1141,10 +1141,17 @@ namespace FerrumAddinDev.LintelCreator_v2
                     trans.RollBack();
                 }
             }
-            if (output != null && output != "")
-                TaskDialog.Show("Отчет", output);
+
             if (CommandLintelCreator_v2.PendingRequests.Count > 0)
                 CommandLintelCreator_v2.lintelCreateEvent.Raise();
+            else
+            {
+                if (output == "")
+                    output = "Выполнено без ошибок";
+                TaskDialog.Show("Выполнено", output);
+                output = "";
+            }
+
         }
 
 
