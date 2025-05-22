@@ -158,7 +158,10 @@
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <Image Grid.Column="0" Width="50" Height="50" Source="{Binding ImagePath}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Image Grid.Column="0" 
+                                                       Width="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        Height="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                       Source="{Binding ImagePath}" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform"/>
 
                                                 <StackPanel Margin="10,0,0,0" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
                                                     <TextBlock Text="{Binding Name}" FontWeight="Bold"/>

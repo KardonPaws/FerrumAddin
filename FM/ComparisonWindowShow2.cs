@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace FerrumAddinDev.FM
@@ -24,7 +25,7 @@ namespace FerrumAddinDev.FM
             }
             catch (Exception ex)
             {
-                TaskDialog.Show("Info Message", ex.Message);
+                MessageBox.Show(ex.Message, "Info Message");
             }
             return Result.Succeeded;
         }
@@ -45,7 +46,7 @@ namespace FerrumAddinDev.FM
 
             if (SelectedFamilies.Count != SelectedMenuItems.Count)
             {
-                TaskDialog.Show("Внимание", "Количество выбранных элементов не совпадает");
+                MessageBox.Show("Количество выбранных элементов не совпадает", "Внимание");
                 return;
             }
 
@@ -134,7 +135,7 @@ namespace FerrumAddinDev.FM
 
             output = output == "" ? "Выполнено" : output;
             App.AllowLoad = false;
-            TaskDialog.Show("Отчет", output);
+            MessageBox.Show(output, "Отчет");
         }
 
         private void ApplyWallStructureParameters(Document sourceDoc, ElementType source, ElementType target)

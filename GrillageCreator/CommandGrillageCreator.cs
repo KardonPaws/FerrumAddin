@@ -14,6 +14,7 @@ using Autodesk.Revit.DB.Structure;
 using System.Security.Cryptography;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using Rebar = Autodesk.Revit.DB.Structure.Rebar;
+using MessageBox = System.Windows.MessageBox;
 
 namespace FerrumAddinDev
 {
@@ -81,7 +82,7 @@ namespace FerrumAddinDev
                     Parameter thicknessParam = element.LookupParameter("Толщина");
                     if (thicknessParam == null || thicknessParam.StorageType != StorageType.Double)
                     {
-                        TaskDialog.Show("Ошибка", "Не удалось получить параметр 'Толщина'.");
+                        MessageBox.Show("Не удалось получить параметр 'Толщина'.", "Ошибка");
                         return;
                     }
                     double thickness = thicknessParam.AsDouble();
@@ -770,7 +771,7 @@ namespace FerrumAddinDev
             Level level = doc.ActiveView.GenLevel;
             if (level == null)
             {
-                TaskDialog.Show("Ошибка", "Не удалось получить уровень для создания линий.");
+                MessageBox.Show("Не удалось получить уровень для создания линий.", "Ошибка");
                 return;
             }
 

@@ -150,7 +150,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 }
                 else
                 {
-                    TaskDialog.Show("Ошибка", "Выберите проем и тип стены для простановки перемычек");
+                    MessageBox.Show( "Выберите проем и тип стены для простановки перемычек", "Ошибка");
                 }
                 return;
             }

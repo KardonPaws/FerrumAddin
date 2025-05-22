@@ -51,12 +51,16 @@ namespace FerrumAddinDev
                 {
                     frmManger.IsChecked = isChecked;
                 }
-
+                XElement BP = root.Element("BigPicture");
+                if (BP != null && bool.TryParse(BP.Attribute("IsChecked")?.Value, out bool isCheckedBP))
+                {
+                    BigPicture.IsChecked = isCheckedBP;
+                }
 
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при загрузке состояния ToggleButton: {ex.Message}");
+                MessageBox.Show($"Ошибка при загрузке состояния ToggleButton: {ex.Message}", "Ошибка");
             }
         }
 
@@ -70,6 +74,15 @@ namespace FerrumAddinDev
                 root.Add(frmMangerElement);
             }
             frmMangerElement.SetAttributeValue("IsChecked", frmManger.IsChecked);
+            XElement BP = root.Element("BigPicture");
+            if (BP == null)
+            {
+                BP = new XElement("BigPicture");
+                root.Add(BP);
+            }
+            BP.SetAttributeValue("IsChecked", BigPicture.IsChecked);
+            App.BigPicture = (bool)BigPicture.IsChecked;
+            FamilyManagerWindow.mvm.Width = (bool)BigPicture.IsChecked ? 150 : 50;
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)

@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace FerrumAddinDev
 {
@@ -26,7 +27,7 @@ namespace FerrumAddinDev
             catch (Exception ex)
             {
                 // show error info dialog
-                TaskDialog.Show("Info Message", ex.Message);
+                MessageBox.Show(ex.Message, "Info Message");
             }
             // return result
             return Result.Succeeded;

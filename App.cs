@@ -19,7 +19,6 @@ using Autodesk.Revit.UI.Events;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using Autodesk.Windows;
-using TaskDialog = Autodesk.Revit.UI.TaskDialog;
 using System.Xml.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -28,6 +27,7 @@ using Transform = Autodesk.Revit.DB.Transform;
 using System.Runtime.InteropServices;
 using Autodesk.Revit.DB.Events;
 using FerrumAddinDev.FM;
+using System.Windows;
 #endregion
 
 namespace FerrumAddinDev
@@ -195,6 +195,16 @@ namespace FerrumAddinDev
                 frmMangerElement = new XElement("frmManger");
                 root.Add(frmMangerElement);
             }
+            XElement BP = root.Element("BigPicture");
+            if (BP == null)
+            {
+                BP = new XElement("BigPicture");
+                BP.SetAttributeValue("IsChecked", false);
+                BigPicture = false;
+                root.Add(BP);
+            }
+            BigPicture = BP.Attribute("IsChecked").Value == "false" ? false : true;
+            
             XElement frmTabPath = root.Element("TabPath");
             if (frmTabPath == null)
             {
@@ -351,7 +361,7 @@ namespace FerrumAddinDev
             if (!e.Document.IsFamilyDocument)
             {
                 e.Cancel();
-                TaskDialog.Show("Ошибка", "Запрет дублирования типов, загрузите тип через менеджер семейств");
+                MessageBox.Show("Запрет дублирования типов, загрузите тип через менеджер семейств", "Ошибка");
             }
         }
 
@@ -393,7 +403,7 @@ namespace FerrumAddinDev
             {
             }
         }
-
+        public static bool BigPicture;
         public static string xmlFilePath;
         public static string TabPath;
         public static string FamilyFolder;
@@ -862,7 +872,7 @@ namespace FerrumAddinDev
             else
             {
                 e.Cancel();
-                TaskDialog.Show("Запрет загрузки", "Загрузите семейство из менеджера семейств");
+                MessageBox.Show("Загрузите семейство из менеджера семейств", "Запрет загрузки");
             }
         }
 

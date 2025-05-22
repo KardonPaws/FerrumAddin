@@ -9,6 +9,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace FerrumAddinDev
@@ -187,7 +188,7 @@ namespace FerrumAddinDev
             ViewSheet activeSheet = doc.ActiveView as ViewSheet;
             if (activeSheet == null)
             {
-                TaskDialog.Show("Ошибка", "Активный вид не является листом.");
+                MessageBox.Show("Активный вид не является листом.", "Ошибка");
                 return;
             }
 
@@ -352,7 +353,7 @@ namespace FerrumAddinDev
                 }
                 catch (Exception ex)
                 {
-                    TaskDialog.Show("Ошибка", ex.Message);
+                    MessageBox.Show(ex.Message, "Ошибка");
                     trans.RollBack();
                 }
             }
@@ -450,7 +451,7 @@ namespace FerrumAddinDev
                 }
                 catch (Exception ex)
                 {
-                    TaskDialog.Show("Ошибка", ex.Message);
+                    MessageBox.Show(ex.Message, "Ошибка");
                     trans.RollBack();
                 }
             }
@@ -496,7 +497,7 @@ namespace FerrumAddinDev
 
                     if (sectionViewType == null)
                     {
-                        TaskDialog.Show("Ошибка", "Не найден разрез 'Номер вида'.");
+                        MessageBox.Show("Не найден разрез 'Номер вида'.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -508,7 +509,7 @@ namespace FerrumAddinDev
 
                     if (viewSection == null)
                     {
-                        TaskDialog.Show("Ошибка", "Не найден шаблон разреза '4_К_Пр'.");
+                        MessageBox.Show("Не найден шаблон разреза '4_К_Пр'.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -634,7 +635,7 @@ namespace FerrumAddinDev
                 }
                 catch (Exception ex)
                 {
-                    TaskDialog.Show("Ошибка", ex.Message);
+                    MessageBox.Show(ex.Message, "Ошибка");
                     trans.RollBack();
                 }
             }
@@ -654,7 +655,7 @@ namespace FerrumAddinDev
             UIDocument uidoc = app.ActiveUIDocument;
             if (doc.ActiveView.ViewType != ViewType.FloorPlan)
             {
-                TaskDialog.Show("Ошибка", "Перейдите на план этажа для создания разрезов");
+                MessageBox.Show("Перейдите на план этажа для создания разрезов", "Ошибка");
                 return;
             }
 
@@ -675,7 +676,7 @@ namespace FerrumAddinDev
 
                     if (lintelInstances.Count == 0)
                     {
-                        TaskDialog.Show("Ошибка", "Не найдено ни одной перемычки для маркировки.");
+                        MessageBox.Show("Не найдено ни одной перемычки для маркировки.","Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -696,20 +697,20 @@ namespace FerrumAddinDev
 
                     if (tagType == null)
                     {
-                        TaskDialog.Show("Ошибка", "Не найден тип марки 'Экземпляр_ADSK_Позиция' для семейства 'ADSK_Марка_Балка'.");
+                        MessageBox.Show("Не найден тип марки 'Экземпляр_ADSK_Позиция' для семейства 'ADSK_Марка_Балка'.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
                     if (tagType2 == null)
                     {
-                        TaskDialog.Show("Ошибка", "Не найден тип марки 'ADSK_Проектная_без всего' для семейства 'Высотные отметки'.");
+                        MessageBox.Show("Не найден тип марки 'ADSK_Проектная_без всего' для семейства 'Высотные отметки'.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
 
                     if (tagType2Vert == null)
                     {
-                        TaskDialog.Show("Ошибка", "Не найден тип марки 'ADSK_Проектная_без всего_(В)' для семейства 'Высотные отметки'.");
+                        MessageBox.Show("Не найден тип марки 'ADSK_Проектная_без всего_(В)' для семейства 'Высотные отметки'.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -769,7 +770,7 @@ namespace FerrumAddinDev
 
                         if (newTag == null)
                         {
-                            TaskDialog.Show("Ошибка", "Не удалось создать марку для перемычки.");
+                           MessageBox.Show("Не удалось создать марку для перемычки.", "Ошибка");
                             continue;
                         }
 
@@ -801,7 +802,7 @@ namespace FerrumAddinDev
                         );
                             if (newTag2 == null)
                             {
-                                TaskDialog.Show("Ошибка", "Не удалось создать высотную отметку для перемычки.");
+                                MessageBox.Show("Не удалось создать высотную отметку для перемычки.", "Ошибка");
                                 continue;
                             }
 
@@ -821,7 +822,7 @@ namespace FerrumAddinDev
                         );
                             if (newTag2 == null)
                             {
-                                TaskDialog.Show("Ошибка", "Не удалось создать высотную отметку для перемычки.");
+                                MessageBox.Show("Не удалось создать высотную отметку для перемычки.", "Ошибка");
                                 continue;
                             }
 
@@ -836,7 +837,7 @@ namespace FerrumAddinDev
                 }
                 catch (Exception ex)
                 {
-                    TaskDialog.Show("Ошибка", ex.Message);
+                    MessageBox.Show(ex.Message, "Ошибка"    );
                     trans.RollBack();
                 }
             }
@@ -873,7 +874,7 @@ namespace FerrumAddinDev
                     var mainViewModel = LintelCreatorForm2.MainViewModel;
                     if (mainViewModel == null)
                     {
-                        TaskDialog.Show("Ошибка", "Не удалось получить данные из окна.");
+                        MessageBox.Show("Не удалось получить данные из окна.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -885,7 +886,7 @@ namespace FerrumAddinDev
 
                     if (selectedFamily == null || selectedType == null || selectedParentElement == null)
                     {
-                        TaskDialog.Show("Ошибка", "Пожалуйста, выберите семейство, тип перемычки и элемент.");
+                        MessageBox.Show("Пожалуйста, выберите семейство, тип перемычки и элемент.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -901,7 +902,7 @@ namespace FerrumAddinDev
                     var selectedWallType = mainViewModel.SelectedWallTypeName;
                     if (selectedWallType == null || !selectedParentElement.Walls.Keys.Select(x=>x.Name).Contains(selectedWallType))
                     {
-                        TaskDialog.Show("Ошибка", "Пожалуйста, выберите тип стены через радиобокс.");
+                        MessageBox.Show("Пожалуйста, выберите тип стены через радиобокс.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -1024,12 +1025,12 @@ namespace FerrumAddinDev
                 }
                 catch (Exception ex)
                 {
-                    TaskDialog.Show("Ошибка", ex.Message);
+                    MessageBox.Show(ex.Message, "Ошибка");
                     trans.RollBack();
                 }
             }
             if (output != null && output != "")
-                TaskDialog.Show("Отчет", output);
+                MessageBox.Show(output, "Отчет");
         }
 
 

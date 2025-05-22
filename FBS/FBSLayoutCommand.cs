@@ -57,7 +57,7 @@ namespace FerrumAddinDev.FBS
             Level level = doc.ActiveView.GenLevel;
             if (level == null)
             {
-                TaskDialog.Show("Ошибка", "Не удалось получить уровень для создания линий.");
+                System.Windows.MessageBox.Show("Не удалось получить уровень для создания линий.", "Ошибка");
                 return;
             }
 

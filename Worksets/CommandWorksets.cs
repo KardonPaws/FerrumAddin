@@ -7,6 +7,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using System.IO;
 using System.Xml;
+using System.Windows;
 #endregion
 
 namespace FerrumAddinDev
@@ -327,7 +328,7 @@ namespace FerrumAddinDev
                     msg += s + "\n";
                 }
                 Debug.WriteLine("Empty worksets found: " + msg);
-                TaskDialog.Show("Отчёт", msg);
+                MessageBox.Show(msg, "Отчёт");
             }
             Debug.WriteLine("Finished");
             return Result.Succeeded;

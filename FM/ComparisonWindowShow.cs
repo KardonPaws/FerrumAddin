@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace FerrumAddinDev.FM
@@ -28,7 +29,7 @@ namespace FerrumAddinDev.FM
             catch (Exception ex)
             {
                 // show error info dialog
-                TaskDialog.Show("Info Message", ex.Message);
+                MessageBox.Show(ex.Message, "Info Message");
             }
             // return result
             return Result.Succeeded;
@@ -47,7 +48,7 @@ namespace FerrumAddinDev.FM
             App.AllowLoad = true;
             if (SelectedFamilies.Count() != SelectedMenuItems.Count())
             {
-                TaskDialog.Show("Внимание", "Количество выбранных элементов не совпадает");
+                MessageBox.Show( "Количество выбранных элементов не совпадает", "Внимание");
             }
             else
             {
@@ -248,7 +249,7 @@ namespace FerrumAddinDev.FM
             }
             App.AllowLoad = false;
             //App.application.DialogBoxShowing -= new EventHandler<DialogBoxShowingEventArgs>(App.a_DialogBoxShowing);
-            TaskDialog.Show("Отчет", output);
+            MessageBox.Show(output, "Отчет");
         }
 
         private object GetParameterValue(Parameter param)

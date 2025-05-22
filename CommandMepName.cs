@@ -194,7 +194,7 @@ namespace FerrumAddinDev
                 }
                 tx.Commit();        
             }
-            TaskDialog.Show("Отчет о выполнении", "Выполнено");
+            MessageBox.Show("Выполнено", "Отчет о выполнении");
             return Result.Succeeded;
         }
 

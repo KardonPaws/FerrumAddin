@@ -67,6 +67,7 @@ namespace FerrumAddinDev
         {
             mvm = new MainViewModel();
             Tabs.ItemsSource = mvm.TabItems;
+            this.DataContext = mvm;
         }
 
 
@@ -117,14 +118,15 @@ namespace FerrumAddinDev
 
 
         public string SearchText;
-
         public FamilyManagerWindow()
         {
             InitializeComponent();
             mvm = new MainViewModel();
             Tabs.ItemsSource = mvm.TabItems;
-            this.DataContext = this;
+            DataContext = mvm;
             Tabs.SelectionChanged += Tabs_SelectionChanged;
+            
+
         }
 
         private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -775,18 +777,40 @@ namespace FerrumAddinDev
     public class MainViewModel : INotifyPropertyChanged
     {
         public ObservableCollection<TabItemViewModel> TabItems { get; set; }
+        
+        private int _width;
+        public int Width
+        {
+            get => _width;
+            set
+            {
+                if (_width != value)
+                {
+                    _width = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         public MainViewModel()
         {
             TabItems = new ObservableCollection<TabItemViewModel>();
             LoadTabItemsFromXml(App.TabPath);
+            if (App.BigPicture)
+            {
+                Width = 150;
+            }
+            else
+            {
+                Width = 50;
+            }
         }
 
         private void LoadTabItemsFromXml(string filePath)
         {
             if (!File.Exists(filePath))
             {
-                TaskDialog.Show("Ошибка", "Не найден файл менеджера семейств");
+                System.Windows.MessageBox.Show("Не найден файл менеджера семейств", "Ошибка");
                 return; 
             }
 

@@ -129,7 +129,7 @@ namespace FerrumAddinDev.LintelCreator
             if (MainViewModel.SelectedWallType != null)
                 CommandLintelCreator2.lintelCreateEvent.Raise();
             else
-                TaskDialog.Show("Ошибка", "Выберите проем и тип стены для простановки перемычек");
+                MessageBox.Show("Выберите проем и тип стены для простановки перемычек", "Ошибка");
         }
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
