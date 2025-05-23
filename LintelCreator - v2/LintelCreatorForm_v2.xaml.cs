@@ -158,7 +158,12 @@ namespace FerrumAddinDev.LintelCreator_v2
             }
 
             // Автоматический режим: проходим по всем ParentElement
-            foreach (var parent in vm.openingsWithoutLintel)
+            List<ParentElement> listToWork = vm.openingsWithoutLintel.ToList();
+            if (recreate)
+            {
+                listToWork.AddRange(vm.openingsWithLintel);
+            }    
+            foreach (var parent in listToWork)
             {
                 // Выбираем текущий элемент
                 vm.SelectedFamily = vm.SelectedFamily == null? vm.FilteredFamilies.FirstOrDefault() : vm.SelectedFamily;

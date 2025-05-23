@@ -251,8 +251,23 @@ namespace FerrumAddinDev.LintelCreator_v2
             foreach (var parent in groupedElements)
             {
                 // создаём «пустые» оболочки, копируя метаданные, но не копируя Walls
-                var noLintelParent = new ParentElement { Name = parent.Name, TypeName = parent.TypeName, Width = parent.Width, Walls = new Dictionary<WallType, List<Element>>() };
-                var withLintelParent = new ParentElement { Name = parent.Name, TypeName = parent.TypeName, Width = parent.Width, Walls = new Dictionary<WallType, List<Element>>() };
+                var noLintelParent = new ParentElement { Name = parent.Name, 
+                    TypeName = parent.TypeName, 
+                    Width = parent.Width, 
+                    Walls = new Dictionary<WallType, List<Element>>(), 
+                    ChildElements = parent.ChildElements, 
+                    SupportDirection = parent.SupportDirection, 
+                    SupportType = parent.SupportType };
+                var withLintelParent = new ParentElement
+                {
+                    Name = parent.Name,
+                    TypeName = parent.TypeName,
+                    Width = parent.Width,
+                    Walls = new Dictionary<WallType, List<Element>>(),
+                    ChildElements = parent.ChildElements,
+                    SupportDirection = parent.SupportDirection,
+                    SupportType = parent.SupportType
+                };
 
                 foreach (var kv in parent.Walls)
                 {
@@ -1127,13 +1142,14 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 .WherePasses(searchFilter).ToList();
                             List<ElementId> listToDel = new List<ElementId>();
                             // Если есть существующая перемычка, пропускаем создание новой
-
+                            if (lintelCollector.Count() > 0 && lintelCollector.Any(x => x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
+                            {
                                 if (LintelCreatorForm_v2.recreate)
                                 {
                                     foreach (Element e in lintelCollector)
-                                {
-                                    string par = e.LookupParameter("ADSK_Группирование")?.AsString();
-                                    if (par == "ПР")
+                                    {
+                                        string par = e.LookupParameter("ADSK_Группирование")?.AsString();
+                                        if (par == "ПР")
                                             listToDel.Add(e.Id);
                                     }
                                 }
@@ -1142,6 +1158,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     output += "У элемента " + element.Id + " уже создана перемычка, создание пропущено\n";
                                     continue;
                                 }
+                            }
                                 
                             
                             
@@ -1216,8 +1233,10 @@ namespace FerrumAddinDev.LintelCreator_v2
                             int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
                             newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
                             newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
-                            vm.openingsWithoutLintel.Remove(selectedParentElement);
-                            vm.openingsWithLintel.Add(selectedParentElement);
+                            if (vm.openingsWithoutLintel.Contains(selectedParentElement))
+                                vm.openingsWithoutLintel.Remove(selectedParentElement);
+                            if (!vm.openingsWithLintel.Contains(selectedParentElement))
+                                vm.openingsWithLintel.Add(selectedParentElement);
                         }
                         break;
                     }
