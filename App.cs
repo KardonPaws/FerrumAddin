@@ -195,6 +195,7 @@ namespace FerrumAddinDev
                 frmMangerElement = new XElement("frmManger");
                 root.Add(frmMangerElement);
             }
+            // 23.95.25 - Новый функционал BigPicture для FM
             XElement BP = root.Element("BigPicture");
             if (BP == null)
             {

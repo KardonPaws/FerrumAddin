@@ -796,6 +796,7 @@ namespace FerrumAddinDev
         {
             TabItems = new ObservableCollection<TabItemViewModel>();
             LoadTabItemsFromXml(App.TabPath);
+           // 23.95.25 - Новый функционал BigPicture для FM
             if (App.BigPicture)
             {
                 Width = 150;

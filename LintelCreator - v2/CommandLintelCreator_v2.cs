@@ -26,11 +26,13 @@ namespace FerrumAddinDev.LintelCreator_v2
         public static ExternalEvent placeSectionsEvent;
         public static Queue<LintelRequest> PendingRequests = new Queue<LintelRequest>();
 
+        public static Document doc;
+        public static Selection sel;
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            Document doc = commandData.Application.ActiveUIDocument.Document;
-            Selection sel = commandData.Application.ActiveUIDocument.Selection;
+            doc = commandData.Application.ActiveUIDocument.Document;
+            sel = commandData.Application.ActiveUIDocument.Selection;
 
             lintelCreateEvent = ExternalEvent.Create(new LintelCreate());
             lintelNumerateEvent = ExternalEvent.Create(new LintelNumerate());
@@ -76,7 +78,26 @@ namespace FerrumAddinDev.LintelCreator_v2
            
             return Result.Succeeded;
         }
-        private void GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc, out List<ParentElement> openingsWithoutLintel, out List<ParentElement> openingsWithLintel)
+        public static List<List<ParentElement>> RefreshWindow()
+        {
+            List<ElementId> windowsAndDoorsSelectionIds = sel.GetElementIds().ToList();
+            List<Element> windowsAndDoorsList = new List<Element>();
+            windowsAndDoorsList = GetWindowsAndDoorsFromCurrentSelection(doc, windowsAndDoorsSelectionIds);
+
+            if (windowsAndDoorsList.Count == 0)
+            {
+
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null));
+
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null));
+
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
+                    .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).ToList());
+            }
+            GroupWindowsAndDoors(windowsAndDoorsList, doc, out var openingsWithoutLintel, out var openingsWithLintel);
+            return new List<List<ParentElement>> { openingsWithoutLintel, openingsWithLintel };
+        }
+        private static void GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc, out List<ParentElement> openingsWithoutLintel, out List<ParentElement> openingsWithLintel)
         {
             // Разделяем на экземпляры семейств и витражи
             var windowsAndDoors = windowsAndDoorsList.OfType<FamilyInstance>().ToList();
@@ -269,7 +290,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ToList();
         }
 
-        private bool ElementHasLintel(Element element, Document doc)
+        private static bool ElementHasLintel(Element element, Document doc)
         {
             var bb = element.get_BoundingBox(null);
             if (bb == null) return false;
@@ -1195,6 +1216,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                             int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
                             newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
                             newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
+                            vm.openingsWithoutLintel.Remove(selectedParentElement);
+                            vm.openingsWithLintel.Add(selectedParentElement);
                         }
                         break;
                     }

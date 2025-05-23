@@ -51,6 +51,7 @@ namespace FerrumAddinDev
                 {
                     frmManger.IsChecked = isChecked;
                 }
+               // 23.95.25 - Новый функционал BigPicture для FM
                 XElement BP = root.Element("BigPicture");
                 if (BP != null && bool.TryParse(BP.Attribute("IsChecked")?.Value, out bool isCheckedBP))
                 {
@@ -74,6 +75,7 @@ namespace FerrumAddinDev
                 root.Add(frmMangerElement);
             }
             frmMangerElement.SetAttributeValue("IsChecked", frmManger.IsChecked);
+           // 23.95.25 - Новый функционал BigPicture для FM
             XElement BP = root.Element("BigPicture");
             if (BP == null)
             {

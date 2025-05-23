@@ -253,6 +253,30 @@ namespace FerrumAddinDev.LintelCreator_v2
         {
             MainViewModel.FilterFamiliesAndTypes();
         }
+
+        private void Button_Click_6(object sender, RoutedEventArgs e)
+        {
+            List<List<ParentElement>> result = CommandLintelCreator_v2.RefreshWindow();
+
+            // 2. разбираем результат
+            var withoutLintel = result[0];
+            var withLintel = result[1];
+
+
+
+            var vm = MainViewModel;
+            vm.openingsWithoutLintel.Clear();
+            foreach (var e0 in withoutLintel)
+                vm.openingsWithoutLintel.Add(e0);
+
+            vm.openingsWithLintel.Clear();
+            foreach (var e1 in withLintel)
+                vm.openingsWithLintel.Add(e1);
+
+            // 4. уведомляем интерфейс
+            vm.OnPropertyChanged(nameof(vm.openingsWithoutLintel));
+            vm.OnPropertyChanged(nameof(vm.openingsWithLintel));
+        }
     }
 
     public class MainViewModel : INotifyPropertyChanged
@@ -464,7 +488,7 @@ namespace FerrumAddinDev.LintelCreator_v2
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        private void OnPropertyChanged(string propertyName)
+        public void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
