@@ -54,7 +54,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x =>x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).ToList());
             }
-            List<ParentElement> list = GroupWindowsAndDoors(windowsAndDoorsList, doc);
+            GroupWindowsAndDoors(windowsAndDoorsList, doc, out var openingsWithoutLintel, out var openingsWithLintel);
             List<Family> lintelFamilysList = new FilteredElementCollector(doc)
                 .OfClass(typeof(Family))
                 .Cast<Family>()
@@ -71,12 +71,12 @@ namespace FerrumAddinDev.LintelCreator_v2
                 return Result.Cancelled;
             }
 
-            LintelCreatorForm_v2 form = new LintelCreatorForm_v2(doc, sel, list, lintelFamilysList);
+            LintelCreatorForm_v2 form = new LintelCreatorForm_v2(doc, sel, openingsWithoutLintel, openingsWithLintel, lintelFamilysList);
             form.Show();
            
             return Result.Succeeded;
         }
-        private List<ParentElement> GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc)
+        private void GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc, out List<ParentElement> openingsWithoutLintel, out List<ParentElement> openingsWithLintel)
         {
             // Разделяем на экземпляры семейств и витражи
             var windowsAndDoors = windowsAndDoorsList.OfType<FamilyInstance>().ToList();
@@ -222,13 +222,78 @@ namespace FerrumAddinDev.LintelCreator_v2
                 });
 
             // Объединяем все группы и возвращаем итоговый список
-            return windowGroups
-                .Concat(curtainGroups)
+            var groupedElements = windowGroups.Concat(curtainGroups);
+                
+            openingsWithoutLintel = new List<ParentElement>();
+            openingsWithLintel = new List<ParentElement>();
+
+            foreach (var parent in groupedElements)
+            {
+                // создаём «пустые» оболочки, копируя метаданные, но не копируя Walls
+                var noLintelParent = new ParentElement { Name = parent.Name, TypeName = parent.TypeName, Width = parent.Width, Walls = new Dictionary<WallType, List<Element>>() };
+                var withLintelParent = new ParentElement { Name = parent.Name, TypeName = parent.TypeName, Width = parent.Width, Walls = new Dictionary<WallType, List<Element>>() };
+
+                foreach (var kv in parent.Walls)
+                {
+                    var wallType = kv.Key;
+                    var elems = kv.Value;
+
+                    // разделить элементы на два списка по наличию перемычки
+                    var without = elems.Where(el => !ElementHasLintel(el, doc)).ToList();
+                    var with = elems.Where(el => ElementHasLintel(el, doc)).ToList();
+
+                    if (without.Any())
+                        noLintelParent.Walls.Add(wallType, without);
+                    if (with.Any())
+                        withLintelParent.Walls.Add(wallType, with);
+                }
+
+                // Добавляем непустые группы в итоговые списки
+                if (noLintelParent.Walls.Any())
+                    openingsWithoutLintel.Add(noLintelParent);
+                if (withLintelParent.Walls.Any())
+                    openingsWithLintel.Add(withLintelParent);
+            }
+
+            openingsWithoutLintel = openingsWithoutLintel
                 .OrderBy(p => p.Name)
                 .ThenBy(p => p.TypeName)
                 .ThenBy(p => p.Width)
                 .ThenBy(p => p.SupportType)
                 .ToList();
+            openingsWithLintel = openingsWithLintel
+                .OrderBy(p => p.Name)
+                .ThenBy(p => p.TypeName)
+                .ThenBy(p => p.Width)
+                .ThenBy(p => p.SupportType)
+                .ToList();
+        }
+
+        private bool ElementHasLintel(Element element, Document doc)
+        {
+            var bb = element.get_BoundingBox(null);
+            if (bb == null) return false;
+
+            XYZ min = bb.Min;
+            XYZ max = bb.Max;
+
+            // создаём область немного ниже макс.Z и немного выше на 100 мм
+            double mm = 1.0 / 304.8;
+            XYZ searchMin = new XYZ(min.X - 100 * mm, min.Y - 100 * mm, max.Z - 500 * mm);
+            XYZ searchMax = new XYZ(max.X + 100 * mm, max.Y + 100 * mm, max.Z + 100 * mm);
+
+            var outline = new Outline(searchMin, searchMax);
+            var filter = new BoundingBoxIntersectsFilter(outline);
+
+            var found = new FilteredElementCollector(doc)
+                .OfClass(typeof(FamilyInstance))
+                .WherePasses(filter)
+                .ToElements();
+
+            // параметр "ADSK_Группирование" == "ПР" обозначает уже созданную перемычку
+            return found
+                .OfType<Element>()
+                .Any(e => e.LookupParameter("ADSK_Группирование")?.AsString() == "ПР");
         }
 
         // Вспомогательный компаратор для удаления дубликатов по ElementId

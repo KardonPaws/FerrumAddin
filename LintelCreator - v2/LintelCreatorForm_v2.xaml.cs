@@ -30,7 +30,7 @@ namespace FerrumAddinDev.LintelCreator_v2
         List<ParentElement> ElementList;
         public static MainViewModel MainViewModel;
 
-        public LintelCreatorForm_v2(Document doc, Selection sel, List<ParentElement> list, List<Family> families)
+        public LintelCreatorForm_v2(Document doc, Selection sel, List<ParentElement> openingsWithoutLintel, List<ParentElement> openingsWithLintel, List<Family> families)
         {
             InitializeComponent();
 
@@ -41,7 +41,9 @@ namespace FerrumAddinDev.LintelCreator_v2
             DataContext = new MainViewModel
             {
                 FilteredFamilies = new ObservableCollection<FamilyWrapper>(familyWrappers),
-                ElementList = new ObservableCollection<ParentElement>(list.Where(x=>x.Walls.Count()>0))
+                openingsWithoutLintel = new ObservableCollection<ParentElement>(openingsWithoutLintel.Where(x=>x.Walls.Count()>0)),
+                openingsWithLintel = new ObservableCollection<ParentElement>(openingsWithLintel.Where(x => x.Walls.Count() > 0))
+
             };
             MainViewModel = DataContext as MainViewModel;
             selection = sel;
@@ -156,7 +158,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             }
 
             // Автоматический режим: проходим по всем ParentElement
-            foreach (var parent in vm.ElementList)
+            foreach (var parent in vm.openingsWithoutLintel)
             {
                 // Выбираем текущий элемент
                 vm.SelectedFamily = vm.SelectedFamily == null? vm.FilteredFamilies.FirstOrDefault() : vm.SelectedFamily;
@@ -262,7 +264,8 @@ namespace FerrumAddinDev.LintelCreator_v2
         private string _selectedWallTypeName;
 
         // Список элементов из TreeView
-        public ObservableCollection<ParentElement> ElementList { get; set; }
+        public ObservableCollection<ParentElement> openingsWithoutLintel { get; set; }
+        public ObservableCollection<ParentElement> openingsWithLintel { get; set; }
 
         // Список отфильтрованных семейств
         public ObservableCollection<FamilyWrapper> FilteredFamilies
@@ -366,6 +369,8 @@ namespace FerrumAddinDev.LintelCreator_v2
 
         public void FilterFamiliesAndTypes()
         {
+            if (SelectedFamily == null)
+                return;
             if (FilteredFamilies == null || FilteredFamilies.Count == 0)
                 return;
 
