@@ -94,7 +94,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f =>
                     {
-                        var code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                        double code;
+                        try
+                        {
+                            code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                        }
+                        catch
+                        {
+                            code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+
+                        }
                         return code != 211.002;
                     }).ToList());
             }
@@ -114,7 +123,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ToList()
                 .Where(f =>
                 {
-                    var code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                    double code;
+                    try
+                    {
+                        code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                    }
+                    catch
+                    {
+                        code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+
+                    }
                     return (311 <= code && code < 312) || (317 <= code && code < 318);
                 })
                 .ToList();
