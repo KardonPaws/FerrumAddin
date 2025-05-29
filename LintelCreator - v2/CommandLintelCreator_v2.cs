@@ -52,9 +52,22 @@ namespace FerrumAddinDev.LintelCreator_v2
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x=> (x as FamilyInstance).SuperComponent == null).Where(x=>((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
 
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
-
+                // 29.05.25 - исключен тип 211.002
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
-                    .Where(x =>x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).ToList());
+                    .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f =>
+                    {
+                        double code;
+                        try
+                        {
+                            code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                        }
+                        catch
+                        {
+                            code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+
+                        }
+                        return code != 211.002;
+                    }).ToList());
             }
             GroupWindowsAndDoors(windowsAndDoorsList, doc, out var openingsWithoutLintel, out var openingsWithLintel);
             List<Family> lintelFamilysList = new FilteredElementCollector(doc)
@@ -91,6 +104,7 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null));
 
+                // 29.05.25 - исключен тип 211.002
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f =>
                     {
@@ -123,6 +137,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ToList()
                 .Where(f =>
                 {
+                    // 29.05.25 - добавлен второй параметр, если первого нет
                     double code;
                     try
                     {
