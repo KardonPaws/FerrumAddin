@@ -270,6 +270,9 @@ namespace FerrumAddinDev
             PushButtonData FBSCreator = new PushButtonData("FBSCreator", "Раскладка ФБС", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.FBS.FBSLayoutCommand");
             panelKR.AddItem(FBSCreator);
 
+            PushButtonData ColumnSections = new PushButtonData("Column Sections", "Сечения по пилонам", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.ColumnSections.CreateColumnSections");
+            panelKR.AddItem(ColumnSections);
+
 
             panelControl = a.CreateRibbonPanel(tabName, "Управление");
             panelControl.Visible = false;
