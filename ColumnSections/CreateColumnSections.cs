@@ -5,6 +5,7 @@ using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Windows;
 
 namespace FerrumAddinDev.ColumnSections
@@ -187,7 +188,15 @@ namespace FerrumAddinDev.ColumnSections
                     // Создание разреза
                     ViewSection section1 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
                     section1.Scale = 25;
-                    section1.Name = razd + " Пилон " + marka;
+                    try
+                    {
+                        section1.Name = razd + " Пилон " + marka;
+                    }
+                    catch
+                    {
+                        t.RollBack();
+                        continue;
+                    }
                     section1.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
                     section1.ViewTemplateId = templateId;
 
