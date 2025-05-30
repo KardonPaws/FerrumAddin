@@ -15,28 +15,107 @@ namespace FerrumAddinDev.ColumnSections
         {
             var uiDoc = data.Application.ActiveUIDocument;
             var doc = uiDoc.Document;
-
-            // 1. Собираем колонны
+            
+            // Получаем шаблон вида для разреза
+            var sectionTemplate = new FilteredElementCollector(doc)
+            .OfClass(typeof(View))
+            .Cast<View>()
+            .FirstOrDefault(v => v.IsTemplate
+                         && v.ViewType == ViewType.Section
+                         && v.Name.Equals("ZH_КЖ_К_Арм_01"));
+            if (sectionTemplate == null)
+            {
+                TaskDialog.Show("Ошибка", "Не найден шаблон вида ZH_КЖ_К_Арм_01");
+                return Result.Failed;
+            }
+            ElementId templateId = sectionTemplate.Id;
+            // Собираем колонны
             var columns = new FilteredElementCollector(doc, doc.ActiveView.Id)
                 .OfCategory(BuiltInCategory.OST_StructuralColumns)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .ToList();
 
-            // 2. Группируем по "Марка"
+            // Группируем по "Марка"
             var byMark = columns
                 .GroupBy(fi => fi.LookupParameter("Марка")?.AsString() ?? string.Empty)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            // 3. Получаем ViewFamilyType для сечений
+            // Получаем ViewFamilyType для сечений
             var sectionType = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewFamilyType))
                 .Cast<ViewFamilyType>()
                 .First(v => v.ViewFamily == ViewFamily.Section);
 
+            // Получение шаблонов спецификаций
+            string[] suffixes = new string[] { "", " ВД", " ВРС", " Материал" };
+            List<ViewSchedule> scheduleTemplates = new List<ViewSchedule>();
+            foreach (var sfx in suffixes)
+            {
+                // Исходное имя шаблона
+                string originalName = "!Армирование пилонов" + sfx;
+                // Ищем его в документе
+                ViewSchedule origSchedule = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ViewSchedule))
+                    .Cast<ViewSchedule>()
+                    .FirstOrDefault(vs => vs.Name.Equals(originalName));
+                scheduleTemplates.Add(origSchedule);
+            }
+
+            // Получаем символ штампа 
+            var tbSymbol = new FilteredElementCollector(doc)
+                .OfClass(typeof(FamilySymbol))
+                .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                .Where(x => x.Name == "КЖ")
+                .Cast<FamilySymbol>()
+                .FirstOrDefault();
+            if (tbSymbol == null)
+            {
+                TaskDialog.Show("Ошибка", "Не найдено семейство штампа");
+                return Result.Failed;
+            }
+
+            // Определяем следующий номер листа
+            var existingNumbers = new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewSheet))
+                .Cast<ViewSheet>()
+                .Select(s =>
+                {
+                    int n;
+                    return int.TryParse(s.SheetNumber, out n) ? n : 0;
+                });
+            int nextSheetNumber = existingNumbers.Any() ? existingNumbers.Max() + 1 : 1;
+
+            List<XYZ> schedulePoints = new List<XYZ>()
+            {
+                new XYZ(8.682607785, 6.039084094, 0.000000000),
+                new XYZ(8.682607785, 5.916110255, 0.000000000),
+                new XYZ(8.922187027, 5.916110255, 0.000000000),
+                new XYZ(8.682607785, 5.966082442, 0.000000000)
+            };
+
+            var vpTypes = new FilteredElementCollector(doc)
+            .OfClass(typeof(ElementType))
+            .Cast<ElementType>().Where(x => x.FamilyName == "Видовой экран")
+            .ToList();
+
+            var vpTypeRazrez = vpTypes
+                .FirstOrDefault(vt => vt.Name.Equals("Разрез_Номер вида"));
+            var vpTypeZagolovok = vpTypes
+                .FirstOrDefault(vt => vt.Name.Equals("Заголовок на листе"));
+
+            if (vpTypeRazrez == null || vpTypeZagolovok == null)
+            {
+                TaskDialog.Show("Ошибка", "Не найдены типы viewport: 'Разрез_Номер вида' и/или 'Заголовок на листе'");
+                return Result.Failed;
+            }
+
+            ElementId razrezTypeId = vpTypeRazrez.Id;
+            ElementId zagolovokTypeId = vpTypeZagolovok.Id;
+
             double offset = 150 / 304.8;
             string razd = doc.ActiveView.LookupParameter("ADSK_Штамп_Раздел проекта")?.AsString() ?? string.Empty;
-            using (var t = new Transaction(doc, "Чертежи пилонов"))
+            using (var t = new Transaction(doc, "Сечения по пилонам"))
             {
                 t.Start();
 
@@ -95,8 +174,10 @@ namespace FerrumAddinDev.ColumnSections
 
                     // Создание разреза
                     ViewSection section1 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
+                    section1.Scale = 25;
                     section1.Name = razd + " Пилон " + marka;
-                    section1.LookupParameter("ADSK_Штамп_Раздел проекта").SetValueString(razd);
+                    section1.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
+                    section1.ViewTemplateId = templateId;
 
                     direction = XYZ.Zero;
                     if (elementWidth < elementLenght)
@@ -137,8 +218,10 @@ namespace FerrumAddinDev.ColumnSections
 
                     // Создание разреза
                     ViewSection section2 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
+                    section2.Scale = 25;
                     section2.Name = razd + " Пилон " + marka + " Р1";
-                    section2.LookupParameter("ADSK_Штамп_Раздел проекта").SetValueString(razd);
+                    section2.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
+                    section2.ViewTemplateId = templateId;
 
                     direction = -XYZ.BasisZ;
                     center = (bb.Max + bb.Min) / 2;
@@ -178,8 +261,77 @@ namespace FerrumAddinDev.ColumnSections
 
                     // Создание разреза
                     ViewSection section3 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
+                    section3.Scale = 25;
                     section3.Name = razd + " Пилон " + marka + " Р";
-                    section3.LookupParameter("ADSK_Штамп_Раздел проекта").SetValueString(razd);
+                    section3.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
+                    section3.ViewTemplateId = templateId;
+
+                    List<ViewSchedule> createdSchedules = new List<ViewSchedule>();
+                    for (int i = 0; i < scheduleTemplates.Count(); i++)
+                    {
+                        ViewSchedule newSchedule = doc.GetElement(scheduleTemplates[i].Duplicate(ViewDuplicateOption.Duplicate)) as ViewSchedule;
+                        createdSchedules.Add(newSchedule);
+                        // Переименовываем
+                        newSchedule.Name = $"ZH_{razd}_Арм_{marka}" + suffixes[i];
+
+                        // Меняем значение первого фильтра на текущую марку
+                        ScheduleDefinition schedDef = newSchedule.Definition;
+                        if (schedDef.GetFilterCount() > 0)
+                        {
+                            ScheduleFilter firstFilter = schedDef.GetFilter(0);
+                            firstFilter.SetValue(@marka);
+                            schedDef.SetFilter(0, firstFilter);
+                        }
+                    }
+
+                    ViewSheet sheet = ViewSheet.Create(doc, tbSymbol.Id);
+
+                    // Заполняем параметры листа
+                    sheet.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
+                    sheet.SheetNumber = nextSheetNumber.ToString();
+                    sheet.Name = $"Пилон {marka}";
+                    nextSheetNumber++;
+
+                    var tbInstance = new FilteredElementCollector(doc, sheet.Id)
+                        .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                        .OfClass(typeof(FamilyInstance))
+                        .Cast<FamilyInstance>()
+                        .FirstOrDefault(fi_ => fi_.OwnerViewId == sheet.Id);
+
+                    if (tbInstance != null)
+                    {
+                        // Получаем текущее местоположение
+                        var locPoint = tbInstance.Location as LocationPoint;
+                        if (locPoint != null)
+                        {
+                            XYZ currentPos = locPoint.Point;
+                            XYZ targetPos = new XYZ(9.305967365, 5.081078844, 0.0);
+                            XYZ translation = targetPos - currentPos;
+
+                            // Сдвигаем элемент
+                            ElementTransformUtils.MoveElement(doc, tbInstance.Id, translation);
+                        }
+                        tbInstance.LookupParameter("А").Set(3);
+                    }
+
+
+                    // Размещаем 3 разреза на листе
+                    Viewport v1 = Viewport.Create(doc, sheet.Id, section1.Id, new XYZ(8.165574789, 5.646644124, -0.059228049));
+                    v1.ChangeTypeId(razrezTypeId);
+                    v1.LabelOffset = new XYZ(0.166867110, 0.696294923, 0.000000000);
+                    Viewport v2 = Viewport.Create(doc, sheet.Id, section2.Id, new XYZ(8.437272730, 5.643270480, -0.064714496));
+                    v2.ChangeTypeId(zagolovokTypeId);
+                    v2.LabelOffset = new XYZ(0.118537803, 0.630344372, 0.000000000);
+                    Viewport v3 = Viewport.Create(doc, sheet.Id, section3.Id, new XYZ(8.280574212, 5.181068513, -0.426660051));
+                    v3.ChangeTypeId(razrezTypeId);
+                    v3.LabelOffset = new XYZ(0.098949906, 0.151181997, 0.000000000);
+
+                    // Размещаем 4 спецификации
+                    for (int i = 0; i < createdSchedules.Count; i++)
+                    {
+                        double x = 1.0 + i * 6.0;
+                        ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, schedulePoints[i]);
+                    }
                 }
 
                 t.Commit();
