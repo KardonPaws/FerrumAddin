@@ -69,7 +69,7 @@ namespace FerrumAddinDev.ColumnSections
                     .FirstOrDefault(vs => vs.Name.Equals(originalName));
                 scheduleTemplates.Add(origSchedule);
             }
-            if (scheduleTemplates.Count == 0)
+            if (scheduleTemplates.Count == 0 || scheduleTemplates.Any(x => x == null))
             {
                 MessageBox.Show("Не найдены шаблоны спецификаций", "Ошибка");
                 return Result.Failed;
