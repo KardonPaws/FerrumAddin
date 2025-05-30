@@ -5,6 +5,7 @@ using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows;
 
 namespace FerrumAddinDev.ColumnSections
 {
@@ -25,7 +26,7 @@ namespace FerrumAddinDev.ColumnSections
                          && v.Name.Equals("ZH_КЖ_К_Арм_01"));
             if (sectionTemplate == null)
             {
-                TaskDialog.Show("Ошибка", "Не найден шаблон вида ZH_КЖ_К_Арм_01");
+                MessageBox.Show("Не найден шаблон вида ZH_КЖ_К_Арм_01", "Ошибка");
                 return Result.Failed;
             }
             ElementId templateId = sectionTemplate.Id;
@@ -47,6 +48,12 @@ namespace FerrumAddinDev.ColumnSections
                 .Cast<ViewFamilyType>()
                 .First(v => v.ViewFamily == ViewFamily.Section);
 
+            if (sectionType == null)
+            {
+                MessageBox.Show("Не найдено семейство разрезов", "Ошибка");
+                return Result.Failed;
+            }
+
             // Получение шаблонов спецификаций
             string[] suffixes = new string[] { "", " ВД", " ВРС", " Материал" };
             List<ViewSchedule> scheduleTemplates = new List<ViewSchedule>();
@@ -60,6 +67,11 @@ namespace FerrumAddinDev.ColumnSections
                     .Cast<ViewSchedule>()
                     .FirstOrDefault(vs => vs.Name.Equals(originalName));
                 scheduleTemplates.Add(origSchedule);
+            }
+            if (scheduleTemplates.Count == 0)
+            {
+                MessageBox.Show("Не найдены шаблоны спецификаций", "Ошибка");
+                return Result.Failed;
             }
 
             // Получаем символ штампа 
