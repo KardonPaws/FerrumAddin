@@ -40,7 +40,6 @@ namespace FerrumAddinDev
         public ExternalCommandData eData = null;
         public static Document doc = null;
         public UIDocument uidoc = null;
-        public static ObservableCollection<CategoryFilterItem> CategoryFilters { get; set; } = new ObservableCollection<CategoryFilterItem>();
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)
@@ -159,7 +158,8 @@ namespace FerrumAddinDev
             selectedTabItem.MenuItems.Clear();
 
             // Получение категорий для фильтрации
-            var selectedCategories = CategoryFilters
+            // 01.06.25 - перенос списка фильтров
+            var selectedCategories = MainViewModel.CategoryFilters
                 .Where(cf => cf.IsChecked)
                 .Select(cf => cf.CategoryName)
                 .ToHashSet();
@@ -199,9 +199,10 @@ namespace FerrumAddinDev
         }
 
         // Обновление фильтра при изменении категории
+        // 01.06.25 - перенос списка фильтров
         private void UpdateCategoryFilters()
         {
-            CategoryFilters.Clear();
+            MainViewModel.CategoryFilters.Clear();
             var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
        
             if (selectedTabItem != null)
@@ -214,7 +215,7 @@ namespace FerrumAddinDev
                         CategoryName = category,
                         IsChecked = true
                     };
-                    CategoryFilters.Add(filterItem);
+                    MainViewModel.CategoryFilters.Add(filterItem);
                 }
             }
             StartDynamicFiltering();
@@ -230,6 +231,7 @@ namespace FerrumAddinDev
             }
         }
 
+        // 01.06.25 - перенос списка фильтров
         private void ApplyCategoryFilter()
         {
             var selectedTabItem = Tabs.SelectedItem as TabItemViewModel;
@@ -237,7 +239,7 @@ namespace FerrumAddinDev
             {
                 foreach (var menuItem in selectedTabItem.MenuItems)
                 {
-                    var categoryFilter = CategoryFilters.FirstOrDefault(cf => cf.CategoryName == menuItem.Category);
+                    var categoryFilter = MainViewModel.CategoryFilters.FirstOrDefault(cf => cf.CategoryName == menuItem.Category);
                     menuItem.IsVisible = categoryFilter?.IsChecked ?? true;
                 }
             }
@@ -712,9 +714,10 @@ namespace FerrumAddinDev
             Tabs.SelectedIndex = 0;
         }
 
+        // 01.06.25 - перенос списка фильтров
         private void allItems_Checked(object sender, RoutedEventArgs e)
         {
-            foreach (var item in CategoryFilters)
+            foreach (var item in MainViewModel.CategoryFilters)
             {
                 item.IsChecked = (bool)(sender as System.Windows.Controls.CheckBox).IsChecked;
             }
@@ -776,6 +779,9 @@ namespace FerrumAddinDev
     // Инициализируем OriginalMenuItems при загрузке вкладок
     public class MainViewModel : INotifyPropertyChanged
     {
+        // 01.06.25 - перенос списка фильтров
+        public static ObservableCollection<CategoryFilterItem> CategoryFilters { get; set; } = new ObservableCollection<CategoryFilterItem>();
+
         public ObservableCollection<TabItemViewModel> TabItems { get; set; }
         
         private int _width;
