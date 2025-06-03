@@ -197,7 +197,8 @@ namespace FerrumAddinDev.ColumnSections
                         }
                         catch
                         {
-
+                            doc.Delete(section1.Id);
+                            section1 = (ViewSection)new FilteredElementCollector(doc).OfClass(typeof(ViewSection)).First(x => x.Name == razd + " Пилон " + marka);
                         }
                         section1.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
                         section1.ViewTemplateId = templateId;
@@ -248,7 +249,8 @@ namespace FerrumAddinDev.ColumnSections
                         }
                         catch
                         {
-
+                            doc.Delete(section2.Id);
+                            section2 = (ViewSection)new FilteredElementCollector(doc).OfClass(typeof(ViewSection)).First(x => x.Name == razd + " Пилон " + marka + " Р1");
                         }
                         section2.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
                         section2.ViewTemplateId = templateId;
@@ -296,7 +298,12 @@ namespace FerrumAddinDev.ColumnSections
                         {
                             section3.Name = razd + " Пилон " + marka + " Р";
                         }
-                        catch { }
+                        catch 
+                        {
+                            doc.Delete(section3.Id);
+                            section3 = (ViewSection)new FilteredElementCollector(doc).OfClass(typeof(ViewSection)).First(x => x.Name == razd + " Пилон " + marka + " Р");
+
+                        }
                         section3.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
                         section3.ViewTemplateId = templateId;
 
@@ -304,9 +311,17 @@ namespace FerrumAddinDev.ColumnSections
                         for (int i = 0; i < scheduleTemplates.Count(); i++)
                         {
                             ViewSchedule newSchedule = doc.GetElement(scheduleTemplates[i].Duplicate(ViewDuplicateOption.Duplicate)) as ViewSchedule;
-                            createdSchedules.Add(newSchedule);
                             // Переименовываем
-                            newSchedule.Name = $"ZH_{razd}_Арм_{marka}" + suffixes[i];
+                            try
+                            {
+                                newSchedule.Name = $"ZH_{razd}_Арм_{marka}" + suffixes[i];
+                            }
+                            catch
+                            {
+                                doc.Delete(newSchedule.Id);
+                                newSchedule = (ViewSchedule)new FilteredElementCollector(doc).OfClass(typeof(ViewSchedule)).First(x => x.Name == $"ZH_{razd}_Арм_{marka}" + suffixes[i]);
+                            }
+                            createdSchedules.Add(newSchedule);
 
                             // Меняем значение первого фильтра на текущую марку
                             ScheduleDefinition schedDef = newSchedule.Definition;
