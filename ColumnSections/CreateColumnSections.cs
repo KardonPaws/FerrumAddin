@@ -56,7 +56,7 @@ namespace FerrumAddinDev.ColumnSections
             }
 
             // Получение шаблонов спецификаций
-            string[] suffixes = new string[] { "", " ВД", " ВРС", " Материал" };
+            string[] suffixes = new string[] { "", " Материал", " ВД", " ВРС"};
             List<ViewSchedule> scheduleTemplates = new List<ViewSchedule>();
             foreach (var sfx in suffixes)
             {
@@ -103,8 +103,8 @@ namespace FerrumAddinDev.ColumnSections
             {
                 new XYZ(8.682607785, 6.039084094, 0.000000000),
                 new XYZ(8.682607785, 5.916110255, 0.000000000),
-                new XYZ(8.922187027, 5.916110255, 0.000000000),
-                new XYZ(8.682607785, 5.966082442, 0.000000000)
+                new XYZ(8.682607785, 5.966082442, 0.000000000),
+                new XYZ(8.922187027, 5.916110255, 0.000000000)
             };
 
             var vpTypes = new FilteredElementCollector(doc)
@@ -197,8 +197,7 @@ namespace FerrumAddinDev.ColumnSections
                         }
                         catch
                         {
-                            t.RollBack();
-                            continue;
+
                         }
                         section1.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
                         section1.ViewTemplateId = templateId;
@@ -243,7 +242,14 @@ namespace FerrumAddinDev.ColumnSections
                         // Создание разреза
                         ViewSection section2 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
                         section2.Scale = 25;
-                        section2.Name = razd + " Пилон " + marka + " Р1";
+                        try
+                        {
+                            section2.Name = razd + " Пилон " + marka + " Р1";
+                        }
+                        catch
+                        {
+
+                        }
                         section2.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
                         section2.ViewTemplateId = templateId;
 
@@ -286,7 +292,11 @@ namespace FerrumAddinDev.ColumnSections
                         // Создание разреза
                         ViewSection section3 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
                         section3.Scale = 25;
-                        section3.Name = razd + " Пилон " + marka + " Р";
+                        try
+                        {
+                            section3.Name = razd + " Пилон " + marka + " Р";
+                        }
+                        catch { }
                         section3.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
                         section3.ViewTemplateId = templateId;
 
@@ -312,8 +322,16 @@ namespace FerrumAddinDev.ColumnSections
 
                         // Заполняем параметры листа
                         sheet.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
-                        sheet.SheetNumber = nextSheetNumber.ToString();
-                        sheet.Name = $"Пилон {marka}";
+                        try
+                        {
+                            sheet.SheetNumber = nextSheetNumber.ToString();
+                            sheet.Name = $"Пилон {marka}";
+                        }
+                        catch
+                        {
+                            t.RollBack();
+                            continue;
+                        }
                         nextSheetNumber++;
 
                         var tbInstance = new FilteredElementCollector(doc, sheet.Id)
@@ -342,19 +360,44 @@ namespace FerrumAddinDev.ColumnSections
                         // Размещаем 3 разреза на листе
                         Viewport v1 = Viewport.Create(doc, sheet.Id, section1.Id, new XYZ(8.165574789, 5.646644124, -0.059228049));
                         v1.ChangeTypeId(razrezTypeId);
-                        v1.LabelOffset = new XYZ(0.166867110, 0.696294923, 0.000000000);
+                        BoundingBoxXYZ b1 = section1.get_BoundingBox(null);
+                        Outline o1 = v1.GetBoxOutline();
+                        double p1 = (o1.MaximumPoint.X - o1.MinimumPoint.X) / 2;
+                        double p2 = (b1.Max.Y - b1.Min.Y) / 50 + (o1.MaximumPoint.Y - o1.MinimumPoint.Y) / 2;
+                        v1.LabelOffset = new XYZ(p1, p2, 0.000000000);
                         Viewport v2 = Viewport.Create(doc, sheet.Id, section2.Id, new XYZ(8.437272730, 5.643270480, -0.064714496));
                         v2.ChangeTypeId(zagolovokTypeId);
-                        v2.LabelOffset = new XYZ(0.118537803, 0.630344372, 0.000000000);
+                        b1 = section2.get_BoundingBox(null);
+                        o1 = v2.GetBoxOutline();
+                        p1 = (o1.MaximumPoint.X - o1.MinimumPoint.X) / 2;
+                        p2 = (b1.Max.Y - b1.Min.Y) / 50 + (o1.MaximumPoint.Y - o1.MinimumPoint.Y) / 2;
+                        v2.LabelOffset = new XYZ(p1, p2, 0.000000000);
                         Viewport v3 = Viewport.Create(doc, sheet.Id, section3.Id, new XYZ(8.280574212, 5.181068513, -0.426660051));
                         v3.ChangeTypeId(razrezTypeId);
-                        v3.LabelOffset = new XYZ(0.098949906, 0.151181997, 0.000000000);
+                        b1 = section3.get_BoundingBox(null);
+                        o1 = v3.GetBoxOutline();
+                        p1 = (o1.MaximumPoint.X - o1.MinimumPoint.X) / 2;
+                        p2 = (b1.Max.Y - b1.Min.Y) / 50 + (o1.MaximumPoint.Y - o1.MinimumPoint.Y) / 2;
+                        v3.LabelOffset = new XYZ(p1, p2, 0.000000000);
 
+                        List<ScheduleSheetInstance> sheetInstances = new List<ScheduleSheetInstance>();
                         // Размещаем 4 спецификации
                         for (int i = 0; i < createdSchedules.Count; i++)
                         {
-                            double x = 1.0 + i * 6.0;
-                            ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, schedulePoints[i]);
+                            if (i == 0)
+                            {
+                                sheetInstances.Add(ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, schedulePoints[i]));
+                                doc.Regenerate();
+                            }
+                            else if (i != 3)
+                            {
+                                sheetInstances.Add(ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, new XYZ(schedulePoints[i].X, sheetInstances[i-1].get_BoundingBox(sheet).Min.Y + 2.12/304.8, 0)));
+                                doc.Regenerate();
+                            }
+                            else
+                            {
+                                ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, new XYZ(schedulePoints[i].X, sheetInstances.Last().Point.Y, 0));
+                            }
                         }
                         t.Commit();
 
