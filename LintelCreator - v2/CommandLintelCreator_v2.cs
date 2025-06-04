@@ -240,7 +240,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     Width = g.Key.Width,
                     SupportType = g.Key.SupportType,
                     Walls = g
-                        .Where(el => el.Host is Wall)
+                        .Where(el => el.Host is Wall && (el.Host as Wall).WallType.Kind != WallKind.Curtain)
                         .GroupBy(el => (el.Host as Wall)?.GetTypeId())
                         .Where(wg => wg.Key != null)
                         .ToDictionary(
@@ -253,6 +253,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     )
                 });
 
+            List<Element> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().Where(x => x is Wall && (doc.GetElement(x.GetTypeId()) as WallType).Kind != WallKind.Curtain).ToList();
             // Группировка витражей по имени, ширине и SupportType
             var curtainGroups = curtains
                 .GroupBy(el => new
@@ -268,15 +269,28 @@ namespace FerrumAddinDev.LintelCreator_v2
                     Width = g.Key.Width,
                     SupportType = g.Key.SupportType,
                     Walls = g
-                        .GroupBy(el => el.WallType.Id)
-                        .ToDictionary(
-                            wg => doc.GetElement(wg.Key) as WallType,
-                            wg => wg.Cast<Element>().ToList()
-                        ),
-                    SupportDirection = g.ToDictionary(
-                        el => (Element)el,
-                        el => supportInfo[el].Direction
+            .Select(el => new
+            {
+                Element = el,
+                HostWall = walls
+                    .Cast<Wall>()
+                    .FirstOrDefault(wall =>
+                        wall.FindInserts(false, false, true, false)
+                            .Any(insertId => insertId == el.Id)
                     )
+            })
+            .Where(x => x.HostWall != null)
+            .GroupBy(x => x.HostWall.GetTypeId())
+            .Where(wg => wg.Key != null)
+            .ToDictionary(
+                wg => doc.GetElement(wg.Key) as WallType,
+                wg => wg.Select(x => (Element)x.Element).ToList()
+            ),
+                    // Словарь SupportDirection остаётся без изменений
+                    SupportDirection = g.ToDictionary(
+            el => (Element)el,
+            el => supportInfo[el].Direction
+        )
                 });
 
             // Объединяем все группы и возвращаем итоговый список
