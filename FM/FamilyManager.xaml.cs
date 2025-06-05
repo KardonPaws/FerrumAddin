@@ -467,6 +467,11 @@ namespace FerrumAddinDev
                     if (matchingMenuItem != null)
                     {
                         string projectVersion = "";
+                        // 05.06.25 - проверка существования семейства
+                        if (!File.Exists(matchingMenuItem.Path))
+                        {
+                            continue;
+                        }
                         Document loadedFamily = App.uiapp.Application.OpenDocumentFile(matchingMenuItem.Path);
                         if (loadedFamily == null) continue;
 
