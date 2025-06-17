@@ -54,7 +54,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
                 // 29.05.25 - исключен тип 211.002
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
-                    .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f =>
+                    .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f => !f.Name.Contains("Лоджий")).Where(f =>
                     {
                         double code;
                         try
@@ -131,7 +131,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             var curtains = windowsAndDoorsList.Except(windowsAndDoors).OfType<Wall>().ToList();
 
             // Подготавливаем список плит перекрытия для вычисления опор
-            var floors = new FilteredElementCollector(doc)
+            var floors = new FilteredElementCollector(doc, doc.ActiveView.Id)
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WhereElementIsNotElementType()
                 .ToList()
@@ -184,14 +184,22 @@ namespace FerrumAddinDev.LintelCreator_v2
                 bool leftSup = false, rightSup = false;
                 foreach (var fl in floors)
                 {
-                    var opts = new Options { ComputeReferences = false };
+                    var opts = new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Fine };
                     var geom = fl.get_Geometry(opts);
-                    var solid = geom
+                    Solid solid = (Solid)geom
                         .OfType<GeometryInstance>()
-                        .SelectMany(gi => gi.GetInstanceGeometry().OfType<Solid>())
-                        .OrderByDescending(s => s.Volume)
+                        .SelectMany(gi => gi.GetInstanceGeometry())
+                        .OrderByDescending(s => (s as Solid).Volume)
                         .FirstOrDefault();
-                    if (solid == null) continue;
+                    if (solid == null)
+                    {
+                        solid = (Solid)geom
+                        .OfType<Solid>()
+                        .OrderByDescending(s => (s as Solid).Volume)
+                        .FirstOrDefault();
+                    }
+                    if (solid == null)
+                        continue;
 
                     var fbb = solid.GetBoundingBox();
                     var idx = solid.ComputeCentroid();

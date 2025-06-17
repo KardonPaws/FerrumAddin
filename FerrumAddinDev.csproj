@@ -111,6 +111,10 @@
     <Compile Include="FM\FamilyManager.xaml.cs">
       <DependentUpon>FamilyManager.xaml</DependentUpon>
     </Compile>
+    <Compile Include="GrillageCreator - v2\CommandGrillageCreator_v2.cs" />
+    <Compile Include="GrillageCreator - v2\WindowGrillageCreator_v2.xaml.cs">
+      <DependentUpon>WindowGrillageCreator_v2.xaml</DependentUpon>
+    </Compile>
     <Compile Include="GrillageCreator\CommandGrillageCreator.cs" />
     <Compile Include="GrillageCreator\WindowGrillageCreator.xaml.cs">
       <DependentUpon>WindowGrillageCreator.xaml</DependentUpon>
@@ -185,6 +189,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="GrillageCreator - v2\WindowGrillageCreator_v2.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="GrillageCreator\WindowGrillageCreator.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -233,7 +241,9 @@
   <ItemGroup>
     <Resource Include="Worksets\Worksets_Sample.xml" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Resource Include="GrillageCreator - v2\GrillageCreatorBackground.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"

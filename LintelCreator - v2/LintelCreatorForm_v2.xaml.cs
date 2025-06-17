@@ -471,6 +471,14 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 return false;
                             }
                         }
+                        else
+                        {
+                            if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() == 1 &&
+                                type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() == 1)
+                            {
+                                return false;
+                            }
+                        }
 
                         // 6. Материал перемычки
                         if (IsMetalChecked && !(type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;

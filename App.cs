@@ -264,7 +264,7 @@ namespace FerrumAddinDev
             PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.LintelCreator_v2.CommandLintelCreator_v2");
             panelKR.AddItem(LintelCreator);
 
-            PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.CommandGrillageCreator");
+            PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.GrillageCreator_v2.CommandGrillageCreator_v2");
             panelKR.AddItem(GrillageCreator);
 
             PushButtonData FBSCreator = new PushButtonData("FBSCreator", "Раскладка ФБС", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.FBS.FBSLayoutCommand");

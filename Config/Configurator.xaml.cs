@@ -104,7 +104,7 @@ namespace FerrumAddinDev
             SaveToggleButtonState(root);
             root.Save(xmlFilePath);
             App.ButtonConf(root);
-            CreateCheckboxesFromXml();
+            //CreateCheckboxesFromXml();
             SaveCheckboxesToXml();
             App.dockableWindow.Newpath();
             this.Close();
