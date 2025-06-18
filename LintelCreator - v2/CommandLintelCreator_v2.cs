@@ -131,7 +131,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             var curtains = windowsAndDoorsList.Except(windowsAndDoors).OfType<Wall>().ToList();
 
             // Подготавливаем список плит перекрытия для вычисления опор
-            var floors = new FilteredElementCollector(doc, doc.ActiveView.Id)
+            var floors = new FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WhereElementIsNotElementType()
                 .ToList()
@@ -145,7 +145,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
                     catch
                     {
-                        code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+                        code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
 
                     }
                     return (311 <= code && code < 312) || (317 <= code && code < 318);
