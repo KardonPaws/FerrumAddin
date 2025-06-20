@@ -170,7 +170,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         // Получаем диаметры арматуры в футах
                         double topRadius = typeTop.BarModelDiameter / 2;
                         double bottomRadius = typeBot.BarModelDiameter / 2;
-                        double verticalRadius = typeVertical.BarModelDiameter / 2;
+                        double verticalRadius = typeVertical == null? 0 : typeVertical.BarModelDiameter / 2;
 
                         // Вычисляем смещение от края
                         double offsetFromEdge = Math.Max(topRadius, bottomRadius) + verticalRadius;
@@ -281,62 +281,62 @@ namespace FerrumAddinDev.GrillageCreator_v2
                             {
                             Line.CreateBound(
                                 verticalLineRightStart.GetEndPoint(0) - 
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ - 
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ - 
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeVertical.BarModelDiameter / 2 * dirKnitted -
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
                                 Math.Max(bottomRadius, topRadius) * dirKnitted, 
                                 
                                 verticalLineRightStart.GetEndPoint(1) +
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ +
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeVertical.BarModelDiameter / 2 * dirKnitted -
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
                                 Math.Max(bottomRadius, topRadius) * dirKnitted),
 
                             Line.CreateBound(
                                 verticalLineRightStart.GetEndPoint(1) +
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ +
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeVertical.BarModelDiameter / 2 * dirKnitted -
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
                                 Math.Max(bottomRadius, topRadius) * dirKnitted, 
                                 
                                 verticalLineLeftStart.GetEndPoint(1) +
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ +
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeVertical.BarModelDiameter / 2 * dirKnitted +
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
                                 Math.Max(bottomRadius, topRadius) * dirKnitted),
 
                             Line.CreateBound(
                                 verticalLineLeftStart.GetEndPoint(1) +
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ +
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeVertical.BarModelDiameter / 2 * dirKnitted +
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
                                 Math.Max(bottomRadius, topRadius) * dirKnitted, 
                                 
                                 verticalLineLeftStart.GetEndPoint(0) -
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ -
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeVertical.BarModelDiameter / 2 * dirKnitted +
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
                                 Math.Max(bottomRadius, topRadius) * dirKnitted),
 
                             Line.CreateBound(
                                 verticalLineLeftStart.GetEndPoint(0) -
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ -
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeVertical.BarModelDiameter / 2 * dirKnitted +
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
                                 Math.Max(bottomRadius, topRadius) * dirKnitted, 
                                 
                                 verticalLineRightStart.GetEndPoint(0) -
-                                typeVertical.BarModelDiameter / 2 * XYZ.BasisZ -
+                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
                                 Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeVertical.BarModelDiameter / 2 * dirKnitted -
+                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
                                 Math.Max(bottomRadius, topRadius) * dirKnitted)
                             };
-                            CreateRebarSet(doc, lines, typeHorizontal, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount);
+                            CreateRebarSet(doc, lines, typeHorizontal, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount, true);
                         }
                         else
                         {
-                            CreateRebarSet(doc, verticalLines, typeVertical, RebarStyle.Standard, element, direction, numberOfLinesTop, verticalCount);
-                            CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, element, direction, numberOfLinesBot, WindowGrillageCreator_v2.horizontCount / 304.8);
+                            CreateRebarSet(doc, verticalLines, typeVertical, RebarStyle.Standard, element, direction, numberOfLinesTop, verticalCount, false);
+                            CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, element, direction, numberOfLinesBot, WindowGrillageCreator_v2.horizontCount / 304.8, true);
                         }
 
                         RebarBarType type2 = rebarTypesCorner.Where(x => x.Name == WindowGrillageCreator_v2.cornerDiameter).FirstOrDefault() as RebarBarType;
@@ -400,7 +400,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                             // Создаем уголки для нижних линий (от первого к последнему)
                             CreateCornersBetweenLines(doc, bottomLines1, bottomLines2, centerIntersection, barType, host);
-                            if (i == 4)
+                            if (i == topLines1.Count())
                                 break;
                         }
                     }
@@ -486,6 +486,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 null, null, host, XYZ.BasisZ, cornerCurves,
                 RebarHookOrientation.Right, RebarHookOrientation.Left,
                 true, true);
+            cornerRebar.LookupParameter("ADSK_Позиция").Set("1");
+
         }
 
         private void CreateRebarFromLines(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, bool bottom)
@@ -514,10 +516,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         RebarHookOrientation.Right, RebarHookOrientation.Left, true, true);
                     rebar.LookupParameter("ADSK_A").Set(extendedLine.Length);
 
-                    if (firstEl)
+                    if (!WindowGrillageCreator_v2.isKnittedMode)
                     {
                         rebar.LookupParameter("ADSK_Марка изделия").Set("Кр-1");
-                        firstEl = false;
                     }
                     if (bottom)
                     {
@@ -528,7 +529,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
             }
         }
 
-        private void CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step)
+        private void CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step, bool poz)
         {
             RebarShape shape = (RebarShape)new FilteredElementCollector(doc).OfClass(typeof(RebarShape)).WhereElementIsElementType().Where(x => x.Name == "Х_51").First();
             using (Transaction tx = new Transaction(doc))
@@ -544,7 +545,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                     }
                     RebarHookType hook = (RebarHookType)new FilteredElementCollector(doc).OfClass(typeof(RebarHookType)).WhereElementIsElementType().Where(x=>x.Name == barType.Name).FirstOrDefault();
                     Rebar rebarSet = Rebar.CreateFromCurves(doc, style, barType, hook, hook, host,
-                            (lines2[1] as Line).Direction.CrossProduct(XYZ.BasisZ), lines2,
+                            dir, lines2,
                             RebarHookOrientation.Left, RebarHookOrientation.Left, true, true);
                     //rebarSet.LookupParameter("ADSK_A").Set(extendedLine.Length);
                     if (rebarSet != null)
@@ -556,6 +557,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         ElementId shapeToDel = rebarSet.GetShapeId();
                         rebarSet.LookupParameter("Форма").Set(shape.Id);
                         doc.Delete(shapeToDel);
+                        rebarSet.LookupParameter("ADSK_Позиция").Set("1");
                     }
                 }
                 else
@@ -595,9 +597,13 @@ namespace FerrumAddinDev.GrillageCreator_v2
                             rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_BAR_SPACING).Set(step);
                             rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS).Set(count);
                             rebarSet.GetShapeDrivenAccessor().BarsOnNormalSide = true;
-                            if (lines.IndexOf(line) == lines.Count - 1)
+                            if (!poz)
                             {
                                 rebarSet.LookupParameter("ADSK_Марка изделия").Set("Кр-1");
+                            }
+                            else
+                            {
+                                rebarSet.LookupParameter("ADSK_Позиция").Set("1");
                             }
                         }
                     }
@@ -834,14 +840,15 @@ namespace FerrumAddinDev.GrillageCreator_v2
                     {
 
                             int sortedByDir2 = sortedByDirection.IndexOf(otherLine);
-
+                        double an1 = Line.CreateBound(closestPointCurrent, endOther).Direction.DotProduct(currentDir);
+                        double an2 = Line.CreateBound(startCurrent, closestPointOther).Direction.DotProduct(otherDir);
                         // Дотягиваем линии, чтобы конечные точки совпали
-                        if (Line.CreateBound(closestPointCurrent, endOther).Direction.DotProduct(currentDir) < 1e-6 || Line.CreateBound(closestPointCurrent, endOther).Direction.DotProduct(-currentDir) < 1e-6)
+                        if (Math.Abs(an1) < 1e-9 )//|| Line.CreateBound(closestPointCurrent, endOther).Direction.DotProduct(-currentDir) < 1e-9)
                         {
                             sortedLines[sortedLines.IndexOf(otherLine)] = Line.CreateBound(closestPointCurrent, endOther);
                             sortedByDirection[sortedByDir2] = Line.CreateBound(closestPointCurrent, endOther);
                         }
-                        else if (Line.CreateBound(startCurrent, closestPointOther).Direction.DotProduct(otherDir) < 1e-6 || Line.CreateBound(startCurrent, closestPointOther).Direction.DotProduct(-otherDir) < 1e-6)
+                        else if (Math.Abs(an2) < 1e-9)// || Line.CreateBound(startCurrent, closestPointOther).Direction.DotProduct(-otherDir) < 1e-9)
                         {
                             sortedLines[i] = Line.CreateBound(startCurrent, closestPointOther);
                             sortedByDirection[0] = Line.CreateBound(startCurrent, closestPointOther);

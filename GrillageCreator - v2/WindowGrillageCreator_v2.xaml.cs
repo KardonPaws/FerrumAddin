@@ -189,13 +189,13 @@ namespace FerrumAddinDev.GrillageCreator_v2
         {
             // Проверяем, что все обязательные поля заполнены
             if (string.IsNullOrEmpty(boxHorizont.Text) ||
-                string.IsNullOrEmpty(boxVertical.Text) ||
+                (!isKnittedMode && string.IsNullOrEmpty(boxVertical.Text)) ||
                 string.IsNullOrEmpty(boxLeftRight.Text) ||
                 string.IsNullOrEmpty(boxTopBottom.Text) ||
                 string.IsNullOrEmpty(boxHorizontal.Text) ||
                 comboTop.SelectedItem == null ||
                 comboBottom.SelectedItem == null ||
-                comboVert.SelectedItem == null ||
+                (!isKnittedMode && comboVert.SelectedItem == null) ||
                 comboHorizont.SelectedItem == null ||
                 comboCorner.SelectedItem == null)
             {
@@ -216,7 +216,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                 topDiameter = comboTop.SelectedItem.ToString();
                 bottomDiameter = comboBottom.SelectedItem.ToString();
-                vertDiameter = comboVert.SelectedItem.ToString();
+                vertDiameter = comboVert.SelectedItem?.ToString();
                 horizontDiameter = comboHorizont.SelectedItem.ToString();
                 cornerDiameter = comboCorner.SelectedItem.ToString();
 
@@ -260,10 +260,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
             comboHorizont.ItemsSource = rebars2;
             comboCorner.ItemsSource = rebars3;
 
-            comboVert.IsEnabled = true;
-            comboHorizont.IsEnabled = true;
-            boxVertical.IsEnabled = true;
-            boxHorizontal.IsEnabled = true;
+            comboVert.Visibility = System.Windows.Visibility.Visible;
+            boxVertical.Visibility = System.Windows.Visibility.Visible;
         }
 
         private void RadioButton_Welded_Unchecked(object sender, RoutedEventArgs e)
@@ -276,10 +274,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
             comboHorizont.ItemsSource = rebars2;
             comboCorner.ItemsSource = rebars3;
 
-            comboVert.IsEnabled = false;
-            comboHorizont.IsEnabled = true;
-            boxVertical.IsEnabled = false;
-            boxHorizontal.IsEnabled = true;
+            comboVert.Visibility = System.Windows.Visibility.Hidden;
+            boxVertical.Visibility = System.Windows.Visibility.Hidden;
         }
 
         // Срабатывает, когда включается «Вязанные каркасы»
@@ -292,10 +288,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
             comboHorizont.ItemsSource = rebars3;
             comboCorner.ItemsSource = rebars3;
 
-            comboVert.IsEnabled = false;
-            comboHorizont.IsEnabled = true;
-            boxVertical.IsEnabled = false;
-            boxHorizontal.IsEnabled = true;
+            comboVert.Visibility = System.Windows.Visibility.Hidden;
+            boxVertical.Visibility = System.Windows.Visibility.Hidden;
         }
 
         // Срабатывает, когда выключается «Вязанные каркасы»
@@ -309,10 +303,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
             comboHorizont.ItemsSource = rebars2;
             comboCorner.ItemsSource = rebars3;
 
-            comboVert.IsEnabled = true;
-            comboHorizont.IsEnabled = true;
-            boxVertical.IsEnabled = true;
-            boxHorizontal.IsEnabled = true;
+            comboVert.Visibility = System.Windows.Visibility.Visible;
+            boxVertical.Visibility = System.Windows.Visibility.Visible;
         }
 
 
