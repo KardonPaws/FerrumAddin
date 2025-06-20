@@ -1164,13 +1164,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                         trans.RollBack();
                         return;
                     }
-
+                    var sel = selectedParentElement.Walls;
                     // Получаем элементы, связанные с выбранной стеной
-                    foreach (var wallElements in selectedParentElement.Walls)
+                    // 20.06.25 - изменения в созданных элементах в окне
+                    foreach (var wallElements in sel)
                     {
                         if (wallElements.Key.Name != selectedWallType)
                             continue;
                         List<Element> wallElement = wallElements.Value;
+                        List<Element> lintelCreated = new List<Element>();
                         foreach (var element in wallElement)
                         {
                             using (Transaction tr = new Transaction(doc, "Добавление перемычек"))
@@ -1307,13 +1309,73 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
                                 newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
                                 newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
-                                if (vm.openingsWithoutLintel.Contains(selectedParentElement))
-                                    vm.openingsWithoutLintel.Remove(selectedParentElement);
-                                if (!vm.openingsWithLintel.Contains(selectedParentElement))
-                                    vm.openingsWithLintel.Add(selectedParentElement);
+
+                                // Переделать удаление списков - тут удалять из списка Walls сам элемент, после группы проверять колиество элементов и удалять если нет
+                                // 20.06.25 - изменения в созданных элементах в окне
+                                lintelCreated.Add(element);
+                                
                                 tr.Commit();
                             }
                         }
+
+                        // найдём реальный ключ WallType в ParentElement по имени
+                        var wallTypeKey = selectedParentElement.Walls.Keys
+                            .First(x => x.Name == selectedWallType);
+
+                        foreach (var element in lintelCreated)
+                        {
+                            selectedParentElement.Walls[wallTypeKey].Remove(element);
+                        }
+
+                        // Обновляем список без перемычек
+                        if (vm.openingsWithoutLintel.Contains(selectedParentElement))
+                        {
+                            var noLintelParent = vm.openingsWithoutLintel
+                                [vm.openingsWithoutLintel.IndexOf(selectedParentElement)];
+
+                            // если для этого типа стены больше не осталось элементов — убираем ключ
+                            if (noLintelParent.Walls.TryGetValue(wallTypeKey, out var remaining)
+                                && remaining.Count == 0)
+                            {
+                                noLintelParent.Walls.Remove(wallTypeKey);
+                            }
+                            // если словарь словарей пуст — убираем весь ParentElement
+                            if (noLintelParent.Walls.Count == 0)
+                            {
+                                vm.openingsWithoutLintel.Remove(noLintelParent);
+                            }
+                        }
+
+                        // Переносим все обработанные элементы в openingsWithLintel
+                        var withParent = vm.openingsWithLintel.FirstOrDefault(p =>
+                            p.Name == selectedParentElement.Name
+                            && p.TypeName == selectedParentElement.TypeName
+                            && p.Width == selectedParentElement.Width
+                            && p.SupportType == selectedParentElement.SupportType);
+
+                        if (withParent == null)
+                        {
+                            // если ещё не было такой группы — создаём
+                            withParent = new ParentElement
+                            {
+                                Name = selectedParentElement.Name,
+                                TypeName = selectedParentElement.TypeName,
+                                Width = selectedParentElement.Width,
+                                SupportType = selectedParentElement.SupportType,
+                                SupportDirection = selectedParentElement.SupportDirection,
+                                ChildElements = selectedParentElement.ChildElements,
+                                Walls = new Dictionary<WallType, List<Element>>()
+                            };
+                            vm.openingsWithLintel.Add(withParent);
+                        }
+
+                        // добавляем к существующему или новому ParentElement
+                        if (withParent.Walls.ContainsKey(wallTypeKey))
+                            withParent.Walls[wallTypeKey].AddRange(lintelCreated);
+                        else
+                            withParent.Walls[wallTypeKey] = new List<Element>(lintelCreated);
+
+
                         break;
                     }
                     trans.Assimilate();
