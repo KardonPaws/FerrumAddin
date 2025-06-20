@@ -375,16 +375,16 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             // создаём область немного ниже макс.Z и немного выше на 100 мм
             double mm = 1.0 / 304.8;
-            XYZ searchMin = new XYZ(min.X - 100 * mm, min.Y - 100 * mm, max.Z - 500 * mm);
-            XYZ searchMax = new XYZ(max.X + 100 * mm, max.Y + 100 * mm, max.Z + 100 * mm);
+            XYZ searchMin = new XYZ(min.X - 10 * mm, min.Y - 10 * mm, max.Z - 50 * mm);
+            XYZ searchMax = new XYZ(max.X + 10 * mm, max.Y + 10 * mm, max.Z + 10 * mm);
 
             var outline = new Outline(searchMin, searchMax);
             var filter = new BoundingBoxIntersectsFilter(outline);
 
             var found = new FilteredElementCollector(doc)
-                .OfClass(typeof(FamilyInstance))
+                .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WherePasses(filter)
-                .ToElements();
+                .Where(x=> (x as FamilyInstance).Symbol.FamilyName.Contains("_Перемычки"));
 
             // параметр "ADSK_Группирование" == "ПР" обозначает уже созданную перемычку
             return found
@@ -1199,16 +1199,17 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 XYZ maxPoint = bb.Max;
 
                                 // Увеличиваем BoundingBox вверх для поиска перемычки
-                                XYZ searchMinPoint = new XYZ(minPoint.X - 100 / 304.8, minPoint.Y - 100 / 304.8, maxPoint.Z - 500 / 304.8);
-                                XYZ searchMaxPoint = new XYZ(maxPoint.X + 100 / 304.8, maxPoint.Y + 100 / 304.8, maxPoint.Z + 100 / 304.8); // 100 мм вверх
+                                XYZ searchMinPoint = new XYZ(minPoint.X - 10 / 304.8, minPoint.Y - 10 / 304.8, maxPoint.Z - 50 / 304.8);
+                                XYZ searchMaxPoint = new XYZ(maxPoint.X + 10 / 304.8, maxPoint.Y + 10 / 304.8, maxPoint.Z + 10 / 304.8); // 100 мм вверх
 
                                 Outline searchOutline = new Outline(searchMinPoint, searchMaxPoint);
                                 BoundingBoxIntersectsFilter searchFilter = new BoundingBoxIntersectsFilter(searchOutline);
 
                                 // Поиск существующих перемычек
                                 List<Element> lintelCollector = new FilteredElementCollector(doc)
-                                    .OfClass(typeof(FamilyInstance))
-                                    .WherePasses(searchFilter).ToList();
+                .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                .WherePasses(searchFilter)
+                .Where(x => (x as FamilyInstance).Symbol.FamilyName.Contains("_Перемычки")).ToList();
                                 List<ElementId> listToDel = new List<ElementId>();
                                 // Если есть существующая перемычка, пропускаем создание новой
                                 if (lintelCollector.Count() > 0 && lintelCollector.Any(x => x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
