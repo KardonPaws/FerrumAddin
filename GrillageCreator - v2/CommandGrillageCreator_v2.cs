@@ -25,7 +25,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
         public static ExternalEvent createGrillage;
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            List<Element> rebarTypes = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x=>x.LookupParameter("ADSK_Каркас").AsInteger() == 1).ToList();
+            List<Element> rebarTypes = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => x.Name.Contains("к_")).ToList();
             List<Element> rebarTypesCorner = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x=>x.Name.Contains("д_")).ToList();
             List<Element> rebarTypesHorizontal = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x=>!x.Name.Contains("_")).ToList();
 
@@ -45,7 +45,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
             d = doc;
-            List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => x.LookupParameter("ADSK_Каркас").AsInteger() == 1).ToList();
+            List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => x.Name.Contains("к_")).ToList();
             List<Element> rebarTypesCorner = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => x.Name.Contains("д_")).ToList();
             List<Element> rebarTypesHorizontal = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => !x.Name.Contains("_")).ToList();
             List<Element> rearCoverTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarCoverType)).ToList();
@@ -242,7 +242,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
 
                         //Горизонтальные линии
-                        RebarBarType typeHorizontal = rebarTypesHorizontal.Where(x => x.Name == WindowGrillageCreator_v2.horizontDiameter).FirstOrDefault() as RebarBarType;
+                        RebarBarType typeHorizontal = rebarTypesHorizontal.Concat(rebarTypesCorner).Where(x => x.Name == WindowGrillageCreator_v2.horizontDiameter).FirstOrDefault() as RebarBarType;
 
                         List<Line> horizontalLines = new List<Line>();
                         // Количество линий, которые нужно создать
@@ -331,7 +331,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                                 typeVertical.BarModelDiameter / 2 * dirKnitted -
                                 Math.Max(bottomRadius, topRadius) * dirKnitted)
                             };
-                            CreateRebarSet(doc, lines, typeVertical, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount);
+                            CreateRebarSet(doc, lines, typeHorizontal, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount);
                         }
                         else
                         {

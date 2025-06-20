@@ -131,7 +131,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             var curtains = windowsAndDoorsList.Except(windowsAndDoors).OfType<Wall>().ToList();
 
             // Подготавливаем список плит перекрытия для вычисления опор
-            var floors = new FilteredElementCollector(doc)
+            var floors = new FilteredElementCollector(doc, doc.ActiveView.Id)
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WhereElementIsNotElementType()
                 .ToList()
@@ -166,11 +166,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                 var max = bb.Max;
                 XYZ wallCenter;
 
-                
+                // 20.06.25 - изменения в координатах
                 var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);
                 var center = el is FamilyInstance? (el.Location as LocationPoint).Point + (max.Z-min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
-                var leftPt = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2 - 1e-6) * orient : center - Math.Abs(orient.DotProduct(center - min)) * orient;
-                var rightPt = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2 + 1e-6) * orient : center + Math.Abs(orient.DotProduct(max - center)) * orient;
+                var leftPt = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2) * orient : center - Math.Abs(orient.DotProduct(center - min)) * orient;
+                var rightPt = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + Math.Abs(orient.DotProduct(max - center)) * orient;
                 double threshold = 0;
                 if (el is FamilyInstance inst)
                 {
@@ -206,15 +206,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                     fbb.Min += idx;
                     fbb.Max += idx;
 
-                    if (leftPt.X > fbb.Min.X && leftPt.X < fbb.Max.X
-                         && leftPt.Y > fbb.Min.Y && leftPt.Y < fbb.Max.Y)
+                    // 20.06.25 - изменения в координатах
+                    if (leftPt.X > fbb.Min.X + 1e-6 && leftPt.X < fbb.Max.X - 1e-6
+                         && leftPt.Y > fbb.Min.Y + 1e-6 && leftPt.Y < fbb.Max.Y - 1e-6)
                     {
                         double dz = fbb.Min.Z - leftPt.Z;
                         if (dz >= 0 && dz <= threshold) leftSup = true;
                     }
 
-                    if (rightPt.X > fbb.Min.X && rightPt.X < fbb.Max.X
-                     && rightPt.Y > fbb.Min.Y && rightPt.Y < fbb.Max.Y)
+                    if (rightPt.X > fbb.Min.X + 1e-6 && rightPt.X < fbb.Max.X - 1e-6
+                     && rightPt.Y > fbb.Min.Y + 1e-6 && rightPt.Y < fbb.Max.Y - 1e-6)
                     {
                         double dz = fbb.Min.Z - rightPt.Z;
                         if (dz >= 0 && dz <= threshold) rightSup = true;
@@ -248,7 +249,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     Width = g.Key.Width,
                     SupportType = g.Key.SupportType,
                     Walls = g
-                        .Where(el => el.Host is Wall && (el.Host as Wall).WallType.Kind != WallKind.Curtain)
+                        .Where(el => el.Host is Wall && (el.Host as Wall).WallType.Kind != WallKind.Curtain && !(el.Host as Wall).WallType.Name.Contains("_пгп_") && !(el.Host as Wall).WallType.Name.Contains("_ЛДЖ_"))
                         .GroupBy(el => (el.Host as Wall)?.GetTypeId())
                         .Where(wg => wg.Key != null)
                         .ToDictionary(
@@ -1099,6 +1100,7 @@ namespace FerrumAddinDev.LintelCreator_v2
         public FamilySymbol LintelType { get; set; }
     }
 
+    // 20.06.25 - изменение ошибок транзакций
     public class LintelCreate : IExternalEventHandler
     {
         string output = "";
@@ -1126,7 +1128,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                        .OrderBy(l => l.Elevation)
                                        .ToList().Select(x =>x.Elevation).ToList();
 
-            using (Transaction trans = new Transaction(doc, "Добавление перемычек"))
+            using (TransactionGroup trans = new TransactionGroup(doc, "Добавление перемычек"))
             {
                 trans.Start();
 
@@ -1152,12 +1154,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                         return;
                     }
 
-                    // Проверяем, активен ли выбранный тип
-                    if (!selectedType.IsActive)
-                    {
-                        selectedType.Activate();
-                        doc.Regenerate();
-                    }
+                    
 
                     // Получение выбранного типа стены из радиокнопки
                     var selectedWallType = mainViewModel.SelectedWallTypeName;
@@ -1173,133 +1170,153 @@ namespace FerrumAddinDev.LintelCreator_v2
                     {
                         if (wallElements.Key.Name != selectedWallType)
                             continue;
-                        List<Element> wallElement = wallElements.Value;  
+                        List<Element> wallElement = wallElements.Value;
                         foreach (var element in wallElement)
                         {
-                            FamilyInstance newLintel = null;
-
-                            // Получаем уровен 
-                            Level level = doc.GetElement(element.LevelId) as Level;
-
-                            // Рассчитываем BoundingBox текущего элемента
-                            BoundingBoxXYZ bb = element.get_BoundingBox(null);
-                            if (bb == null) continue;
-
-                            XYZ minPoint = bb.Min;
-                            XYZ maxPoint = bb.Max;
-
-                            // Увеличиваем BoundingBox вверх для поиска перемычки
-                            XYZ searchMinPoint = new XYZ(minPoint.X - 100 / 304.8, minPoint.Y - 100 / 304.8, maxPoint.Z - 500/304.8);
-                            XYZ searchMaxPoint = new XYZ(maxPoint.X + 100 / 304.8, maxPoint.Y + 100 / 304.8, maxPoint.Z + 100/304.8); // 100 мм вверх
-
-                            Outline searchOutline = new Outline(searchMinPoint, searchMaxPoint);
-                            BoundingBoxIntersectsFilter searchFilter = new BoundingBoxIntersectsFilter(searchOutline);
-
-                            // Поиск существующих перемычек
-                            List<Element> lintelCollector = new FilteredElementCollector(doc)
-                                .OfClass(typeof(FamilyInstance))
-                                .WherePasses(searchFilter).ToList();
-                            List<ElementId> listToDel = new List<ElementId>();
-                            // Если есть существующая перемычка, пропускаем создание новой
-                            if (lintelCollector.Count() > 0 && lintelCollector.Any(x => x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
+                            using (Transaction tr = new Transaction(doc, "Добавление перемычек"))
                             {
-                                if (LintelCreatorForm_v2.recreate)
+                                tr.Start();
+
+                                // Проверяем, активен ли выбранный тип
+                                if (!selectedType.IsActive)
                                 {
-                                    foreach (Element e in lintelCollector)
+                                    selectedType.Activate();
+                                    doc.Regenerate();
+                                }
+
+                                FamilyInstance newLintel = null;
+
+                                // Получаем уровен 
+                                Level level = doc.GetElement(element.LevelId) as Level;
+
+                                // Рассчитываем BoundingBox текущего элемента
+                                BoundingBoxXYZ bb = element.get_BoundingBox(null);
+                                if (bb == null) continue;
+
+                                XYZ minPoint = bb.Min;
+                                XYZ maxPoint = bb.Max;
+
+                                // Увеличиваем BoundingBox вверх для поиска перемычки
+                                XYZ searchMinPoint = new XYZ(minPoint.X - 100 / 304.8, minPoint.Y - 100 / 304.8, maxPoint.Z - 500 / 304.8);
+                                XYZ searchMaxPoint = new XYZ(maxPoint.X + 100 / 304.8, maxPoint.Y + 100 / 304.8, maxPoint.Z + 100 / 304.8); // 100 мм вверх
+
+                                Outline searchOutline = new Outline(searchMinPoint, searchMaxPoint);
+                                BoundingBoxIntersectsFilter searchFilter = new BoundingBoxIntersectsFilter(searchOutline);
+
+                                // Поиск существующих перемычек
+                                List<Element> lintelCollector = new FilteredElementCollector(doc)
+                                    .OfClass(typeof(FamilyInstance))
+                                    .WherePasses(searchFilter).ToList();
+                                List<ElementId> listToDel = new List<ElementId>();
+                                // Если есть существующая перемычка, пропускаем создание новой
+                                if (lintelCollector.Count() > 0 && lintelCollector.Any(x => x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
+                                {
+                                    if (LintelCreatorForm_v2.recreate)
                                     {
-                                        string par = e.LookupParameter("ADSK_Группирование")?.AsString();
-                                        if (par == "ПР")
-                                            listToDel.Add(e.Id);
+                                        foreach (Element e in lintelCollector)
+                                        {
+                                            string par = e.LookupParameter("ADSK_Группирование")?.AsString();
+                                            if (par == "ПР")
+                                                listToDel.Add(e.Id);
+                                        }
                                     }
+                                    else
+                                    {
+                                        output += "У элемента " + element.Id + " уже создана перемычка, создание пропущено\n";
+                                        continue;
+                                    }
+                                }
+
+
+
+                                foreach (ElementId id in listToDel.Distinct())
+                                {
+                                    if (doc.GetElement(id) != null)
+                                        doc.Delete(id);
+                                }
+
+                                double height = 0;
+                                XYZ locationPoint = null;
+                                XYZ translation = null;
+                                if (element is Wall)
+                                {
+                                    var bounding = element.get_BoundingBox(doc.ActiveView);
+                                    height = bounding.Max.Z - bounding.Min.Z;
+                                    Line c = (element.Location as LocationCurve).Curve as Line;
+                                    locationPoint = (c.GetEndPoint(0) + c.GetEndPoint(1)) / 2 - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
                                 }
                                 else
                                 {
-                                    output += "У элемента " + element.Id + " уже создана перемычка, создание пропущено\n";
+                                    height = element.LookupParameter("ADSK_Размер_Высота").AsDouble();
+                                    locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
+
+                                }
+
+                                // Создаем экземпляр перемычки
+                                newLintel = doc.Create.NewFamilyInstance(locationPoint, selectedType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
+                                
+                                if (newLintel == null)
+                                {
+                                    tr.RollBack();
                                     continue;
                                 }
-                            }
                                 
-                            
-                            
-                            foreach (ElementId id in listToDel.Distinct())
-                            {
-                                if (doc.GetElement(id) != null)
-                                doc.Delete(id);
+                                XYZ baseOrientation;
+                                if (selectedParentElement.SupportType == 1
+                                    && selectedParentElement.SupportDirection.TryGetValue(element, out XYZ supportDir))
+                                {
+                                    // при одиночной опоре – используем именно её направление
+                                    baseOrientation = supportDir;
+                                }
+                                else if (element is Wall w)
+                                {
+                                    baseOrientation = w.Orientation;
+                                }
+                                else // FamilyInstance
+                                {
+                                    baseOrientation = ((FamilyInstance)element).FacingOrientation;
+                                }
+
+                                // смещение перемычки на половину ширины
+                                translation = baseOrientation * wallElements.Key.Width / 2;
+
+                                // поворот перемычки так, чтобы newLintel.FacingOrientation == baseOrientation
+                                if (!baseOrientation.IsAlmostEqualTo(newLintel.FacingOrientation))
+                                {
+                                    // ось вращения – вертикальная через точку размещения
+                                    var locPt = (LocationPoint)newLintel.Location;
+                                    Line rotateAxis = Line.CreateBound(
+                                        locPt.Point,
+                                        locPt.Point + XYZ.BasisZ);
+
+                                    // считаем углы относительно глобальной X
+                                    double u1 = baseOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                    double u2 = newLintel.FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                                    double rotateAngle = u2 - u1;
+
+                                    ElementTransformUtils.RotateElement(
+                                        doc,
+                                        newLintel.Id,
+                                        rotateAxis,
+                                        rotateAngle);
+                                }
+
+                                // перемещаем перемычку
+                                ElementTransformUtils.MoveElement(doc, newLintel.Id, translation);
+                                newLintel.LookupParameter("ADSK_Группирование").Set("ПР");
+                                int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
+                                newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
+                                newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
+                                if (vm.openingsWithoutLintel.Contains(selectedParentElement))
+                                    vm.openingsWithoutLintel.Remove(selectedParentElement);
+                                if (!vm.openingsWithLintel.Contains(selectedParentElement))
+                                    vm.openingsWithLintel.Add(selectedParentElement);
+                                tr.Commit();
                             }
-
-                            double height = 0;
-                            XYZ locationPoint = null;
-                            XYZ translation = null;
-                            if (element is Wall)
-                            {
-                                var bounding = element.get_BoundingBox(doc.ActiveView);
-                                height = bounding.Max.Z - bounding.Min.Z ;
-                                Line c = (element.Location as LocationCurve).Curve as Line;
-                                locationPoint = (c.GetEndPoint(0) + c.GetEndPoint(1))/2 - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
-                            }
-                            else
-                            { 
-                                height = element.LookupParameter("ADSK_Размер_Высота").AsDouble();
-                                locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
-
-                            }
-
-                            // Создаем экземпляр перемычки
-                            newLintel = doc.Create.NewFamilyInstance(locationPoint, selectedType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
-                            XYZ baseOrientation;
-                            if (selectedParentElement.SupportType == 1
-                                && selectedParentElement.SupportDirection.TryGetValue(element, out XYZ supportDir))
-                            {
-                                // при одиночной опоре – используем именно её направление
-                                baseOrientation = supportDir;
-                            }
-                            else if (element is Wall w)
-                            {
-                                baseOrientation = w.Orientation;
-                            }
-                            else // FamilyInstance
-                            {
-                                baseOrientation = ((FamilyInstance)element).FacingOrientation;
-                            }
-
-                            // смещение перемычки на половину ширины
-                            translation = baseOrientation * wallElements.Key.Width / 2;
-
-                            // поворот перемычки так, чтобы newLintel.FacingOrientation == baseOrientation
-                            if (!baseOrientation.IsAlmostEqualTo(newLintel.FacingOrientation))
-                            {
-                                // ось вращения – вертикальная через точку размещения
-                                var locPt = (LocationPoint)newLintel.Location;
-                                Line rotateAxis = Line.CreateBound(
-                                    locPt.Point,
-                                    locPt.Point + XYZ.BasisZ);
-
-                                // считаем углы относительно глобальной X
-                                double u1 = baseOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
-                                double u2 = newLintel.FacingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
-                                double rotateAngle = u2 - u1;
-
-                                ElementTransformUtils.RotateElement(
-                                    doc,
-                                    newLintel.Id,
-                                    rotateAxis,
-                                    rotateAngle);
-                            }
-
-                            // перемещаем перемычку
-                            ElementTransformUtils.MoveElement(doc, newLintel.Id, translation);
-                            newLintel.LookupParameter("ADSK_Группирование").Set("ПР");
-                            int intLev = level.Elevation >= 0 ? levels.IndexOf(level.Elevation) + 1 : -1;
-                            newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
-                            newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
-                            if (vm.openingsWithoutLintel.Contains(selectedParentElement))
-                                vm.openingsWithoutLintel.Remove(selectedParentElement);
-                            if (!vm.openingsWithLintel.Contains(selectedParentElement))
-                                vm.openingsWithLintel.Add(selectedParentElement);
                         }
                         break;
                     }
-                    trans.Commit();
+                    trans.Assimilate();
                 }
                 catch (Exception ex)
                 {

@@ -10,10 +10,10 @@
         <!-- Фон окна -->
         <Image HorizontalAlignment="Left" Height="403" VerticalAlignment="Top" Width="540" Margin="10,10,10,10" Source="/FerrumAddinDev;component/GrillageCreator/GrillageCreatorBackground.png"/>
 
-        <TextBox x:Name="boxHorizont" PreviewTextInput="previewTextInput" TextChanged="BoxHorizontal_TextChanged" HorizontalAlignment="Center" Margin="0,41,0,0" TextWrapping="Wrap" Text="2" VerticalAlignment="Top" Width="120"/>
+        <TextBox x:Name="boxHorizont" PreviewTextInput="previewTextInput" HorizontalAlignment="Center" Margin="0,41,0,0" TextWrapping="Wrap" Text="2" VerticalAlignment="Top" Width="120"/>
         <TextBlock x:Name="textHorizont" HorizontalAlignment="Center" Margin="0,7,0,0" TextWrapping="Wrap" Text="Количество&#x0a;горизонтальных каркасов" VerticalAlignment="Top" TextAlignment="Center"/>
         <!-- Количество/шаг вертикальных каркасов -->
-        <TextBox x:Name="boxVertical" PreviewTextInput="previewTextInput" TextChanged="BoxVertical_TextChanged" HorizontalAlignment="Left" Margin="58,181,0,0" TextWrapping="Wrap" Text="200" VerticalAlignment="Top" Width="45"/>
+        <TextBox x:Name="boxVertical" PreviewTextInput="previewTextInput" HorizontalAlignment="Left" Margin="58,181,0,0" TextWrapping="Wrap" Text="200" VerticalAlignment="Top" Width="45"/>
         <TextBlock x:Name="textVertical" HorizontalAlignment="Left" Margin="25,182,0,0" TextWrapping="Wrap" Text="Шаг" VerticalAlignment="Top"/>
         <!-- Количество/шаг вертикальных каркасов -->
         <TextBox x:Name="boxHorizontal" HorizontalAlignment="Left" Margin="419,395,0,0" TextWrapping="Wrap" Text="200" VerticalAlignment="Top" Width="45" PreviewTextInput="previewTextInput"/>
@@ -29,8 +29,7 @@
                   HorizontalAlignment="Left"
                   Margin="23,151,0,0"
                   VerticalAlignment="Top"
-                  Width="147"
-                  SelectionChanged="ComboVert_SelectionChanged"/>
+                  Width="147"/>
         <TextBlock HorizontalAlignment="Left"
                    Margin="23,131,0,0"
                    TextWrapping="Wrap"
@@ -41,8 +40,7 @@
                   HorizontalAlignment="Left"
                   Margin="382,362,0,0"
                   VerticalAlignment="Top"
-                  Width="162"
-                  SelectionChanged="ComboHorizont_SelectionChanged"/>
+                  Width="162"/>
         <TextBlock HorizontalAlignment="Left"
                    Margin="382,342,0,0"
                    TextWrapping="Wrap"

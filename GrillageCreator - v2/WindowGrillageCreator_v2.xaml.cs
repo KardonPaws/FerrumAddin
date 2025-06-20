@@ -23,22 +23,23 @@ namespace FerrumAddinDev.GrillageCreator_v2
     /// </summary>
     public partial class WindowGrillageCreator_v2 : Window
     {
+        List<string> rebars = new List<string>();
+        List<string> rebars2 = new List<string>();
+        List<string> rebars3 = new List<string>();
+
         public WindowGrillageCreator_v2(List<Element> elements, List<Element> elements2, List<Element> elements3)
         {
             InitializeComponent();
-            List<string> rebars = new List<string>();
             foreach (Element element in elements)
             {
                 rebars.Add(element.Name);
             }
             rebars = rebars.OrderBy(x=>x, new NaturalStringComparer()).ToList();
-            List<string> rebars2 = new List<string>();
             foreach (Element element in elements2)
             {
                 rebars2.Add(element.Name);
             }
             rebars2 = rebars2.OrderBy(x => x, new NaturalStringComparer()).ToList();
-            List<string> rebars3 = new List<string>();
             foreach (Element element in elements3)
             {
                 rebars3.Add(element.Name);
@@ -253,25 +254,32 @@ namespace FerrumAddinDev.GrillageCreator_v2
         {
             isKnittedMode = false;
 
-            // Отписываемся, чтобы перестать синхронно менять значения
-            comboVert.SelectionChanged -= ComboVert_SelectionChanged;
-            comboHorizont.SelectionChanged -= ComboHorizont_SelectionChanged;
-            boxVertical.TextChanged -= BoxVertical_TextChanged;
-            boxHorizontal.TextChanged -= BoxHorizontal_TextChanged;
+            comboBottom.ItemsSource = rebars;
+            comboTop.ItemsSource = rebars;
+            comboVert.ItemsSource = rebars;
+            comboHorizont.ItemsSource = rebars2;
+            comboCorner.ItemsSource = rebars3;
+
+            comboVert.IsEnabled = true;
+            comboHorizont.IsEnabled = true;
+            boxVertical.IsEnabled = true;
+            boxHorizontal.IsEnabled = true;
         }
 
         private void RadioButton_Welded_Unchecked(object sender, RoutedEventArgs e)
         {
             isKnittedMode = true;
 
-            comboVert.SelectedItem = comboHorizont.SelectedItem;
-            boxVertical.Text = boxHorizontal.Text;
+            comboBottom.ItemsSource = rebars;
+            comboTop.ItemsSource = rebars;
+            comboVert.ItemsSource = rebars;
+            comboHorizont.ItemsSource = rebars2;
+            comboCorner.ItemsSource = rebars3;
 
-            // Подписываемся на события, чтобы синхронизировать «вверх/вниз»
-            comboVert.SelectionChanged += ComboVert_SelectionChanged;
-            comboHorizont.SelectionChanged += ComboHorizont_SelectionChanged;
-            boxVertical.TextChanged += BoxVertical_TextChanged;
-            boxHorizontal.TextChanged += BoxHorizontal_TextChanged;
+            comboVert.IsEnabled = false;
+            comboHorizont.IsEnabled = true;
+            boxVertical.IsEnabled = false;
+            boxHorizontal.IsEnabled = true;
         }
 
         // Срабатывает, когда включается «Вязанные каркасы»
@@ -279,14 +287,15 @@ namespace FerrumAddinDev.GrillageCreator_v2
         {
             isKnittedMode = true;
 
-            comboVert.SelectedItem = comboHorizont.SelectedItem;
-            boxVertical.Text = boxHorizontal.Text;
+            comboBottom.ItemsSource = rebars;
+            comboTop.ItemsSource = rebars;
+            comboHorizont.ItemsSource = rebars3;
+            comboCorner.ItemsSource = rebars3;
 
-            // Подписываемся на события, чтобы синхронизировать «вверх/вниз»
-            comboVert.SelectionChanged += ComboVert_SelectionChanged;
-            comboHorizont.SelectionChanged += ComboHorizont_SelectionChanged;
-            boxVertical.TextChanged += BoxVertical_TextChanged;
-            boxHorizontal.TextChanged += BoxHorizontal_TextChanged;
+            comboVert.IsEnabled = false;
+            comboHorizont.IsEnabled = true;
+            boxVertical.IsEnabled = false;
+            boxHorizontal.IsEnabled = true;
         }
 
         // Срабатывает, когда выключается «Вязанные каркасы»
@@ -294,77 +303,16 @@ namespace FerrumAddinDev.GrillageCreator_v2
         {
             isKnittedMode = false;
 
-            // Отписываемся, чтобы перестать синхронно менять значения
-            comboVert.SelectionChanged -= ComboVert_SelectionChanged;
-            comboHorizont.SelectionChanged -= ComboHorizont_SelectionChanged;
-            boxVertical.TextChanged -= BoxVertical_TextChanged;
-            boxHorizontal.TextChanged -= BoxHorizontal_TextChanged;
-        }
+            comboBottom.ItemsSource = rebars;
+            comboTop.ItemsSource = rebars;
+            comboVert.ItemsSource = rebars;
+            comboHorizont.ItemsSource = rebars2;
+            comboCorner.ItemsSource = rebars3;
 
-        // Если пользователь поменял выбор в comboVert, то, будучи в «вязаном» режиме,
-        // сразу выставляем тот же SelectedItem у comboHorizont
-        private void ComboVert_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (!isKnittedMode) return;
-
-            var newValue = comboVert.SelectedItem;
-            if (newValue != null && !newValue.Equals(comboHorizont.SelectedItem))
-                comboHorizont.SelectedItem = newValue;
-        }
-
-        // Аналогично, если пользователь поменял выбор в comboHorizont
-        private void ComboHorizont_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (!isKnittedMode) return;
-
-            var newValue = comboHorizont.SelectedItem;
-            if (newValue != null && !newValue.Equals(comboVert.SelectedItem))
-                comboVert.SelectedItem = newValue;
-        }
-
-        // При изменении текста в boxVertical – копируем его в boxHorizontal,
-        // но с флагом isUpdatingBoxes, чтобы не зациклиться
-        private void BoxVertical_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            if (!isKnittedMode || isUpdatingBoxes) return;
-
-            try
-            {
-                isUpdatingBoxes = true;
-                if (boxHorizontal == null)
-                {
-                    return;
-                }
-                string newText = boxVertical.Text;
-                if (boxHorizontal.Text != newText)
-                    boxHorizontal.Text = newText;
-            }
-            finally
-            {
-                isUpdatingBoxes = false;
-            }
-        }
-
-        // При изменении текста в boxHorizontal – копируем его в boxVertical
-        private void BoxHorizontal_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            if (!isKnittedMode || isUpdatingBoxes) return;
-
-            try
-            {
-                isUpdatingBoxes = true;
-                if (boxVertical == null)
-                {
-                    return;
-                }
-                string newText = boxHorizontal.Text;
-                if (boxVertical.Text != newText)
-                    boxVertical.Text = newText;
-            }
-            finally
-            {
-                isUpdatingBoxes = false;
-            }
+            comboVert.IsEnabled = true;
+            comboHorizont.IsEnabled = true;
+            boxVertical.IsEnabled = true;
+            boxHorizontal.IsEnabled = true;
         }
 
 
