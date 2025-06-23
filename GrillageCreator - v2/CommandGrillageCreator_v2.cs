@@ -248,9 +248,6 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         // Количество линий, которые нужно создать
                         int numberOfLinesBot = (int)(centerLineLength / (WindowGrillageCreator_v2.horizontCount / 304.8)) + 1;
 
-                        // Направление для создания линий
-                        direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
-
                         // Вычисляем смещение для текущей линии
                         double offsetTop = topRadius + (typeHorizontal.BarModelDiameter / 2);
                         double offsetBot = bottomRadius + (typeHorizontal.BarModelDiameter / 2);
@@ -274,64 +271,133 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         Line line4 = Line.CreateBound(start4, end4);
                         horizontalLines.Add(line4);
 
+                        //if (WindowGrillageCreator_v2.isKnittedMode)
+                        //{
+                        //    XYZ dirKnitted = direction.CrossProduct(XYZ.BasisZ);
+                        //    List<Line> lines = new List<Line>() 
+                        //    {
+                        //    Line.CreateBound(
+                        //        verticalLineRightStart.GetEndPoint(0) - 
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ - 
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted -
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted, 
+
+                        //        verticalLineRightStart.GetEndPoint(1) +
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted -
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted),
+
+                        //    Line.CreateBound(
+                        //        verticalLineRightStart.GetEndPoint(1) +
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted -
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted, 
+
+                        //        verticalLineLeftStart.GetEndPoint(1) +
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted +
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted),
+
+                        //    Line.CreateBound(
+                        //        verticalLineLeftStart.GetEndPoint(1) +
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted +
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted, 
+
+                        //        verticalLineLeftStart.GetEndPoint(0) -
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted +
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted),
+
+                        //    Line.CreateBound(
+                        //        verticalLineLeftStart.GetEndPoint(0) -
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted +
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted, 
+
+                        //        verticalLineRightStart.GetEndPoint(0) -
+                        //        typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
+                        //        Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
+                        //        typeHorizontal.BarModelDiameter / 2 * dirKnitted -
+                        //        Math.Max(bottomRadius, topRadius) * dirKnitted)
+                        //    };
+                        //    CreateRebarSet(doc, lines, typeHorizontal, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount, true);
+                        //}
                         if (WindowGrillageCreator_v2.isKnittedMode)
                         {
-                            XYZ dirKnitted = direction.CrossProduct(XYZ.BasisZ);
-                            List<Line> lines = new List<Line>() 
+                            // Ось вдоль ширины хомута: от ЛЕВОЙ вертикали к ПРАВОЙ
+                            XYZ horizontalDir = (verticalLineRightStart.GetEndPoint(0)
+                                              - verticalLineLeftStart.GetEndPoint(0))
+                                              .Normalize();
+
+                            // Ось «глубины» хомута (поперёк стены)
+                            XYZ depthDir = direction.CrossProduct(XYZ.BasisZ).Normalize();
+
+                            // Полная ширина между вертикалями
+                            double lineWidth = verticalLineLeftStart.GetEndPoint(0)
+                                             .DistanceTo(verticalLineRightStart.GetEndPoint(0));
+
+                            // Сколько хомутов по 400 мм
+                            int stirrupCount = Math.Max(
+                                1,
+                                (int)Math.Ceiling(modLength * 2 / (400.0 / 304.8))
+                            );
+
+                            // Формула ширины: 2/(2N-1) для N>=2, или 1 для N=1
+                            double coverageFactor = stirrupCount == 1
+                                ? 1.0
+                                : 2.0 / (2.0 * stirrupCount - 1.0);
+                            double stirrupWidth = lineWidth * coverageFactor;
+                            double halfW = stirrupWidth / 2.0;
+
+                            // Припуски по Z
+                            double offsetBotZ = bottomRadius + typeHorizontal.BarModelDiameter / 2.0;
+                            double offsetTopZ = topRadius + typeHorizontal.BarModelDiameter / 2.0;
+                            // Припуск по «глубине»
+                            double halfDiaH = typeHorizontal.BarModelDiameter / 2.0;
+
+                            for (int i = 0; i < stirrupCount; i++)
                             {
-                            Line.CreateBound(
-                                verticalLineRightStart.GetEndPoint(0) - 
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ - 
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
-                                Math.Max(bottomRadius, topRadius) * dirKnitted, 
-                                
-                                verticalLineRightStart.GetEndPoint(1) +
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
-                                Math.Max(bottomRadius, topRadius) * dirKnitted),
+                                // Центр хомута вдоль линии: 1/(N+1), 2/(N+1)… N/(N+1)
+                                double t = (i + 1.0) / (stirrupCount + 1.0);
 
-                            Line.CreateBound(
-                                verticalLineRightStart.GetEndPoint(1) +
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
-                                Math.Max(bottomRadius, topRadius) * dirKnitted, 
-                                
-                                verticalLineLeftStart.GetEndPoint(1) +
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
-                                Math.Max(bottomRadius, topRadius) * dirKnitted),
+                                // Центры нижней и верхней граней
+                                XYZ bottomCenter = verticalLineRightStart.GetEndPoint(0)
+                                                 + (verticalLineLeftStart.GetEndPoint(0)
+                                                 - verticalLineRightStart.GetEndPoint(0)) * t;
+                                XYZ topCenter = verticalLineRightStart.GetEndPoint(1)
+                                                 + (verticalLineLeftStart.GetEndPoint(1)
+                                                 - verticalLineRightStart.GetEndPoint(1)) * t;
 
-                            Line.CreateBound(
-                                verticalLineLeftStart.GetEndPoint(1) +
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ +
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
-                                Math.Max(bottomRadius, topRadius) * dirKnitted, 
-                                
-                                verticalLineLeftStart.GetEndPoint(0) -
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
-                                Math.Max(bottomRadius, topRadius) * dirKnitted),
+                                // «Сырые» углы прямоугольного хомута
+                                XYZ br0 = bottomCenter + horizontalDir * halfW;  // теперь действительно правый-низ
+                                XYZ bl0 = bottomCenter - horizontalDir * halfW;  // левый-низ
+                                XYZ tl0 = topCenter - horizontalDir * halfW;   // левый-верх
+                                XYZ tr0 = topCenter + horizontalDir * halfW;   // правый-верх
 
-                            Line.CreateBound(
-                                verticalLineLeftStart.GetEndPoint(0) -
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ +
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted +
-                                Math.Max(bottomRadius, topRadius) * dirKnitted, 
-                                
-                                verticalLineRightStart.GetEndPoint(0) -
-                                typeHorizontal.BarModelDiameter / 2 * XYZ.BasisZ -
-                                Math.Max(bottomRadius, topRadius) * XYZ.BasisZ -
-                                typeHorizontal.BarModelDiameter / 2 * dirKnitted -
-                                Math.Max(bottomRadius, topRadius) * dirKnitted)
-                            };
-                            CreateRebarSet(doc, lines, typeHorizontal, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount, true);
+                                // Смещаем к продольным пруткам и внутрь по толщине стержня
+                                XYZ pBR = br0 - XYZ.BasisZ * offsetBotZ - depthDir * halfDiaH;
+                                XYZ pBL = bl0 - XYZ.BasisZ * offsetBotZ - depthDir * halfDiaH;
+                                XYZ pTL = tl0 + XYZ.BasisZ * offsetTopZ - depthDir * halfDiaH;
+                                XYZ pTR = tr0 + XYZ.BasisZ * offsetTopZ - depthDir * halfDiaH;
+
+                                var rect = new List<Line>
+                                {
+                                    Line.CreateBound(pBR, pBL),
+                                    Line.CreateBound(pBL, pTL),
+                                    Line.CreateBound(pTL, pTR),
+                                    Line.CreateBound(pTR, pBR)
+                                };
+
+                                CreateRebarSet(doc, rect, typeHorizontal, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount, true);
+                            }
                         }
                         else
                         {
@@ -553,7 +619,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_LAYOUT_RULE).Set(3);
                         rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_BAR_SPACING).Set(step);
                         rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS).Set(count);
-                        rebarSet.GetShapeDrivenAccessor().BarsOnNormalSide = true;
+                        rebarSet.GetShapeDrivenAccessor().BarsOnNormalSide = false;
                         ElementId shapeToDel = rebarSet.GetShapeId();
                         rebarSet.LookupParameter("Форма").Set(shape.Id);
                         doc.Delete(shapeToDel);
