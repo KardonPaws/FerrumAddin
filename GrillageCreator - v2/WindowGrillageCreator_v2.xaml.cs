@@ -24,10 +24,11 @@ namespace FerrumAddinDev.GrillageCreator_v2
     public partial class WindowGrillageCreator_v2 : Window
     {
         List<string> rebars = new List<string>();
-        List<string> rebars2 = new List<string>();
-        List<string> rebars3 = new List<string>();
+        List<string> rebarsHorizontal = new List<string>();
+        List<string> rebarsCorner = new List<string>();
+        List<string> rebarsKnitted = new List<string>();
 
-        public WindowGrillageCreator_v2(List<Element> elements, List<Element> elements2, List<Element> elements3)
+        public WindowGrillageCreator_v2(List<Element> elements, List<Element> elements2, List<Element> elements3, List<Element> elements4)
         {
             InitializeComponent();
             foreach (Element element in elements)
@@ -37,19 +38,24 @@ namespace FerrumAddinDev.GrillageCreator_v2
             rebars = rebars.OrderBy(x=>x, new NaturalStringComparer()).ToList();
             foreach (Element element in elements2)
             {
-                rebars2.Add(element.Name);
+                rebarsHorizontal.Add(element.Name);
             }
-            rebars2 = rebars2.OrderBy(x => x, new NaturalStringComparer()).ToList();
+            rebarsHorizontal = rebarsHorizontal.OrderBy(x => x, new NaturalStringComparer()).ToList();
             foreach (Element element in elements3)
             {
-                rebars3.Add(element.Name);
+                rebarsCorner.Add(element.Name);
             }
-            rebars3 = rebars3.OrderBy(x => x, new NaturalStringComparer()).ToList();
+            rebarsCorner = rebarsCorner.OrderBy(x => x, new NaturalStringComparer()).ToList();
+            foreach (Element element in elements4)
+            {
+                rebarsKnitted.Add(element.Name);
+            }
+            rebarsKnitted = rebarsKnitted.OrderBy(x => x, new NaturalStringComparer()).ToList();
             comboBottom.ItemsSource = rebars;
             comboTop.ItemsSource = rebars;
             comboVert.ItemsSource = rebars;
-            comboHorizont.ItemsSource = rebars2;
-            comboCorner.ItemsSource = rebars3;
+            comboHorizont.ItemsSource = rebarsHorizontal;
+            comboCorner.ItemsSource = rebarsCorner;
             LoadSettings();
         }
 
@@ -256,9 +262,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
             comboBottom.ItemsSource = rebars;
             comboTop.ItemsSource = rebars;
-            comboVert.ItemsSource = rebars;
-            comboHorizont.ItemsSource = rebars2;
-            comboCorner.ItemsSource = rebars3;
+            comboHorizont.ItemsSource = rebarsHorizontal;
+            comboCorner.ItemsSource = rebarsCorner;
 
             comboVert.Visibility = System.Windows.Visibility.Visible;
             boxVertical.Visibility = System.Windows.Visibility.Visible;
@@ -268,11 +273,10 @@ namespace FerrumAddinDev.GrillageCreator_v2
         {
             isKnittedMode = true;
 
-            comboBottom.ItemsSource = rebars;
-            comboTop.ItemsSource = rebars;
-            comboVert.ItemsSource = rebars;
-            comboHorizont.ItemsSource = rebars2;
-            comboCorner.ItemsSource = rebars3;
+            comboBottom.ItemsSource = rebarsKnitted;
+            comboTop.ItemsSource = rebarsKnitted;
+            comboHorizont.ItemsSource = rebarsCorner;
+            comboCorner.ItemsSource = rebarsCorner;
 
             comboVert.Visibility = System.Windows.Visibility.Hidden;
             boxVertical.Visibility = System.Windows.Visibility.Hidden;
@@ -283,10 +287,10 @@ namespace FerrumAddinDev.GrillageCreator_v2
         {
             isKnittedMode = true;
 
-            comboBottom.ItemsSource = rebars;
-            comboTop.ItemsSource = rebars;
-            comboHorizont.ItemsSource = rebars3;
-            comboCorner.ItemsSource = rebars3;
+            comboBottom.ItemsSource = rebarsKnitted;
+            comboTop.ItemsSource = rebarsKnitted;
+            comboHorizont.ItemsSource = rebarsCorner;
+            comboCorner.ItemsSource = rebarsCorner;
 
             comboVert.Visibility = System.Windows.Visibility.Hidden;
             boxVertical.Visibility = System.Windows.Visibility.Hidden;
@@ -299,9 +303,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
             comboBottom.ItemsSource = rebars;
             comboTop.ItemsSource = rebars;
-            comboVert.ItemsSource = rebars;
-            comboHorizont.ItemsSource = rebars2;
-            comboCorner.ItemsSource = rebars3;
+            comboHorizont.ItemsSource = rebarsHorizontal;
+            comboCorner.ItemsSource = rebarsCorner;
 
             comboVert.Visibility = System.Windows.Visibility.Visible;
             boxVertical.Visibility = System.Windows.Visibility.Visible;
