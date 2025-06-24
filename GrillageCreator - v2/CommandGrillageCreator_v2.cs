@@ -28,10 +28,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
             List<Element> rebarTypes = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => x.Name.Contains("к_")).ToList();
             List<Element> rebarTypesCorner = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x=>x.Name.Contains("д_")).ToList();
             List<Element> rebarTypesHorizontal = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x=>!x.Name.Contains("_")).ToList();
-            List<Element> rebarTypesKnitted = new FilteredElementCollector(commandData.Application.ActiveUIDocument.Document).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => !x.Name.Contains("_") || x.Name.StartsWith("мп_")).ToList();
 
             createGrillage = ExternalEvent.Create(new CreateGrillage_v2());
-            WindowGrillageCreator_v2 window = new WindowGrillageCreator_v2(rebarTypes, rebarTypesHorizontal, rebarTypesCorner, rebarTypesKnitted);
+            WindowGrillageCreator_v2 window = new WindowGrillageCreator_v2(rebarTypes, rebarTypesHorizontal, rebarTypesCorner);
             window.Show();
             
             return Result.Succeeded;
@@ -46,7 +45,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
             UIDocument uiDoc = uiApp.ActiveUIDocument;
             Document doc = uiDoc.Document;
             d = doc;
-            List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().ToList();
+            List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => x.Name.Contains("к_")).ToList();
+            List<Element> rebarTypesCorner = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => x.Name.Contains("д_")).ToList();
+            List<Element> rebarTypesHorizontal = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().Where(x => !x.Name.Contains("_")).ToList();
             List<Element> rearCoverTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarCoverType)).ToList();
             // Получаем выбранный элемент (перекрытие)
             List<Reference> elements = (List<Reference>)uiDoc.Selection.PickObjects(ObjectType.Element);
@@ -241,7 +242,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
 
                         //Горизонтальные линии
-                        RebarBarType typeHorizontal = rebarTypes.Where(x => x.Name == WindowGrillageCreator_v2.horizontDiameter).FirstOrDefault() as RebarBarType;
+                        RebarBarType typeHorizontal = rebarTypesHorizontal.Concat(rebarTypesCorner).Where(x => x.Name == WindowGrillageCreator_v2.horizontDiameter).FirstOrDefault() as RebarBarType;
 
                         List<Line> horizontalLines = new List<Line>();
                         // Количество линий, которые нужно создать
@@ -344,11 +345,15 @@ namespace FerrumAddinDev.GrillageCreator_v2
                                              .DistanceTo(verticalLineRightStart.GetEndPoint(0));
 
                             // Сколько хомутов по 400 мм
-                            double fourHundredFt = 400.0 / 304.8;
-                            int stirrupCount = Math.Max(1, (int)Math.Ceiling(lineWidth / fourHundredFt));
+                            int stirrupCount = Math.Max(
+                                1,
+                                (int)Math.Ceiling(modLength * 2 / (400.0 / 304.8))
+                            );
 
                             // Формула ширины: 2/(2N-1) для N>=2, или 1 для N=1
-                            double coverageFactor = 2.0 / (stirrupCount + 1.0);
+                            double coverageFactor = stirrupCount == 1
+                                ? 1.0
+                                : 2.0 / (2.0 * stirrupCount - 1.0);
                             double stirrupWidth = lineWidth * coverageFactor;
                             double halfW = stirrupWidth / 2.0;
 
@@ -400,7 +405,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                             CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, element, direction, numberOfLinesBot, WindowGrillageCreator_v2.horizontCount / 304.8, true);
                         }
 
-                        RebarBarType type2 = rebarTypes.Where(x => x.Name == WindowGrillageCreator_v2.cornerDiameter).FirstOrDefault() as RebarBarType;
+                        RebarBarType type2 = rebarTypesCorner.Where(x => x.Name == WindowGrillageCreator_v2.cornerDiameter).FirstOrDefault() as RebarBarType;
                         CreateCornerRebarsAtIntersections(doc, dictTop, dictBottom, type2, element);
                     }
                     using (Transaction tx = new Transaction(doc))
