@@ -94,8 +94,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                         foreach (Line curveLoop in array)
                         {
-                            Line l1 = Line.CreateBound(curveLoop.GetEndPoint(0) - XYZ.BasisZ * thickness + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble(),
-                                curveLoop.GetEndPoint(1) - XYZ.BasisZ * thickness + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble());
+                            Line l1 = Line.CreateBound(curveLoop.GetEndPoint(0)  + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble(),
+                                curveLoop.GetEndPoint(1) + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble());
                             allCurves.Add(l1);
                         }
                     }
@@ -160,8 +160,15 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         RebarBarType typeTop = rebarTypes.Where(x => x.Name == WindowGrillageCreator_v2.topDiameter).FirstOrDefault() as RebarBarType;
                         RebarBarType typeBot = rebarTypes.Where(x => x.Name == WindowGrillageCreator_v2.bottomDiameter).FirstOrDefault() as RebarBarType;
 
-                        CreateRebarFromLines(doc, intermediateLinesBottom, typeTop, RebarStyle.Standard, element, true);
-                        CreateRebarFromLines(doc, intermediateLinesTop, typeBot, RebarStyle.Standard, element, false);
+                        List<Element> rebs = CreateRebarFromLines(doc, intermediateLinesBottom, typeTop, RebarStyle.Standard, element, true);
+                        rebs.AddRange(CreateRebarFromLines(doc, intermediateLinesTop, typeBot, RebarStyle.Standard, element, false));
+
+                        using (Transaction trans = new Transaction(doc))
+                        {
+                            trans.Start("Группа");
+                            Group group = doc.Create.NewGroup(rebs.Select(x => x.Id).ToList());
+                            trans.Commit();
+                        }
 
                         // Вертикальные линии
                         RebarBarType typeVertical = rebarTypes.Where(x => x.Name == WindowGrillageCreator_v2.vertDiameter).FirstOrDefault() as RebarBarType;
@@ -341,13 +348,12 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                             // Полная ширина между вертикалями
                             double lineWidth = verticalLineLeftStart.GetEndPoint(0)
-                                             .DistanceTo(verticalLineRightStart.GetEndPoint(0));
+                                             .DistanceTo(verticalLineRightStart.GetEndPoint(0)) + Math.Max(bottomRadius, topRadius) * 2 + typeHorizontal.BarModelDiameter;
 
                             // Сколько хомутов по 400 мм
                             double fourHundredFt = 400.0 / 304.8;
-                            int stirrupCount = Math.Max(1, (int)Math.Ceiling(lineWidth / fourHundredFt));
+                            int stirrupCount = Math.Max(1, (int)Math.Ceiling(modLength * 2 / fourHundredFt));
 
-                            // Формула ширины: 2/(2N-1) для N>=2, или 1 для N=1
                             double coverageFactor = 2.0 / (stirrupCount + 1.0);
                             double stirrupWidth = lineWidth * coverageFactor;
                             double halfW = stirrupWidth / 2.0;
@@ -356,7 +362,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                             double offsetBotZ = bottomRadius + typeHorizontal.BarModelDiameter / 2.0;
                             double offsetTopZ = topRadius + typeHorizontal.BarModelDiameter / 2.0;
                             // Припуск по «глубине»
-                            double halfDiaH = typeHorizontal.BarModelDiameter / 2.0;
+                            double halfDiaH = Math.Max(bottomRadius, topRadius) + typeHorizontal.BarModelDiameter / 2;
 
                             for (int i = 0; i < stirrupCount; i++)
                             {
@@ -372,7 +378,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                                                  - verticalLineRightStart.GetEndPoint(1)) * t;
 
                                 // «Сырые» углы прямоугольного хомута
-                                XYZ br0 = bottomCenter + horizontalDir * halfW;  // теперь действительно правый-низ
+                                XYZ br0 = bottomCenter + horizontalDir * halfW;  // правый-низ
                                 XYZ bl0 = bottomCenter - horizontalDir * halfW;  // левый-низ
                                 XYZ tl0 = topCenter - horizontalDir * halfW;   // левый-верх
                                 XYZ tr0 = topCenter + horizontalDir * halfW;   // правый-верх
@@ -551,9 +557,10 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
         }
 
-        private void CreateRebarFromLines(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, bool bottom)
+        private List<Element> CreateRebarFromLines(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, bool bottom)
         {
             bool firstEl = true;
+            List<Element> result = new List<Element>();
             using (Transaction tx = new Transaction(doc))
             {
                 tx.Start("Создание арматуры");
@@ -575,6 +582,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                     Rebar rebar = Rebar.CreateFromCurves(doc, style, barType, null, null, host,
                         XYZ.BasisZ, new List<Curve>() { extendedLine },
                         RebarHookOrientation.Right, RebarHookOrientation.Left, true, true);
+                    result.Add(rebar);
                     rebar.LookupParameter("ADSK_A").Set(extendedLine.Length);
 
                     if (!WindowGrillageCreator_v2.isKnittedMode)
@@ -588,6 +596,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 }
                 tx.Commit();
             }
+            return result;
         }
 
         private void CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step, bool poz)
