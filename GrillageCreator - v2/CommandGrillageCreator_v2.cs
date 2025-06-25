@@ -87,6 +87,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         return;
                     }
                     double thickness = thicknessParam.AsDouble();
+                    var th = (thickness * XYZ.BasisZ);
                     List<Line> allCurves = new List<Line>();
                     foreach (CurveArray array in profile)
                     {
@@ -94,8 +95,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                         foreach (Line curveLoop in array)
                         {
-                            Line l1 = Line.CreateBound(curveLoop.GetEndPoint(0)  + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble(),
-                                curveLoop.GetEndPoint(1) + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble());
+                            Line l1 = Line.CreateBound(curveLoop.GetEndPoint(0) + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble() - th,
+                                curveLoop.GetEndPoint(1) + XYZ.BasisZ * element.LookupParameter("Смещение от уровня").AsDouble() - th);
                             allCurves.Add(l1);
                         }
                     }
