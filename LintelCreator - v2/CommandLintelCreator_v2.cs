@@ -62,13 +62,13 @@ namespace FerrumAddinDev.LintelCreator_v2
                             code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
                             if (code == 0)
                             {
-                                code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+                                code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
 
                             }
                         }
                         catch
                         {
-                            code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+                            code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
 
                         }
                         return code != 211.002;
@@ -117,10 +117,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                         try
                         {
                             code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                            if (code == 0)
+                            {
+                                code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
+
+                            }
                         }
                         catch
                         {
-                            code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+                            code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
 
                         }
                         return code != 211.002;
