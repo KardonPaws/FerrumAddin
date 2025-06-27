@@ -350,62 +350,78 @@ namespace FerrumAddinDev.GrillageCreator_v2
                             var botLines = intermediateLinesBottom;
 
                             int i = 0;
-                            // пока есть хотя бы 2 линии в остатке
+                            const double TOLERANCE = 1e-6; // ~0.3 мм в футах
+
                             while (i < botLines.Count - 1)
                             {
-                                // ищем максимальный j > i, такой что расстояние от линии i до j <= maxStep
+                                // ищем максимальный j > i, такой что расстояние от линии i до j <= maxStep (включая ровно maxStep)
                                 int j = i + 1;
-                                while (j + 1 < botLines.Count
-                                       && botLines[i].GetEndPoint(0).DistanceTo(botLines[j + 1].GetEndPoint(0)) <= maxStep)
+                                while (j + 1 < botLines.Count)
                                 {
-                                    j++;
+                                    double d = botLines[i]
+                                                .GetEndPoint(0)
+                                                .DistanceTo(botLines[j + 1].GetEndPoint(0));
+                                    if (d <= maxStep + TOLERANCE)
+                                        j++;
+                                    else
+                                        break;
+                                }
+
+                                // проверяем, что хотя бы до ближайшей линии расстояние не больше maxStep
+                                double d0 = botLines[i]
+                                             .GetEndPoint(0)
+                                             .DistanceTo(botLines[j].GetEndPoint(0));
+                                if (d0 > maxStep + TOLERANCE)
+                                {
+                                    // ни одна следующая линия не подходит — можно выйти из цикла
+                                    break;
                                 }
 
                                 // строим хомут между линиями i и j
-                                {
-                                    // центры нижней и верхней граней
-                                    XYZ botC = botLines[i].GetEndPoint(0)
-                                             + (botLines[j].GetEndPoint(0) - botLines[i].GetEndPoint(0)) * 0.5;
-                                    XYZ topC = topLines[i].GetEndPoint(0)
-                                             + (topLines[j].GetEndPoint(0) - topLines[i].GetEndPoint(0)) * 0.5;
 
-                                    // направление хомута (от i к j)
-                                    XYZ horDir = (botLines[j].GetEndPoint(0) - botLines[i].GetEndPoint(0)).Normalize();
-                                    double halfW = botLines[i].GetEndPoint(0)
-                                                       .DistanceTo(botLines[j].GetEndPoint(0)) * 0.5;
+                                // центры нижней и верхней граней
+                                XYZ botC = botLines[i].GetEndPoint(0)
+                                         + (botLines[j].GetEndPoint(0) - botLines[i].GetEndPoint(0)) * 0.5;
+                                XYZ topC = topLines[i].GetEndPoint(0)
+                                         + (topLines[j].GetEndPoint(0) - topLines[i].GetEndPoint(0)) * 0.5;
 
-                                    // «сырые» углы
-                                    XYZ br0 = botC + horDir * halfW;
-                                    XYZ bl0 = botC - horDir * halfW;
-                                    XYZ tl0 = topC - horDir * halfW;
-                                    XYZ tr0 = topC + horDir * halfW;
+                                // направление хомута (от i к j)
+                                XYZ horDir = (botLines[j].GetEndPoint(0) - botLines[i].GetEndPoint(0)).Normalize();
+                                double halfW = botLines[i].GetEndPoint(0)
+                                                   .DistanceTo(botLines[j].GetEndPoint(0)) * 0.5;
 
-                                    // применяем смещения по Z и глубине
-                                    XYZ pBR = br0 - XYZ.BasisZ * dzBot - depthDir * dz;
-                                    XYZ pBL = bl0 - XYZ.BasisZ * dzBot + depthDir * dz;
-                                    XYZ pTL = tl0 + XYZ.BasisZ * dzTop + depthDir * dz;
-                                    XYZ pTR = tr0 + XYZ.BasisZ * dzTop - depthDir * dz;
+                                // «сырые» углы
+                                XYZ br0 = botC + horDir * halfW;
+                                XYZ bl0 = botC - horDir * halfW;
+                                XYZ tl0 = topC - horDir * halfW;
+                                XYZ tr0 = topC + horDir * halfW;
 
-                                    var rect = new List<Line>
+                                // применяем смещения по Z и глубине
+                                XYZ pBR = br0 - XYZ.BasisZ * dzBot - depthDir * dz;
+                                XYZ pBL = bl0 - XYZ.BasisZ * dzBot + depthDir * dz;
+                                XYZ pTL = tl0 + XYZ.BasisZ * dzTop + depthDir * dz;
+                                XYZ pTR = tr0 + XYZ.BasisZ * dzTop - depthDir * dz;
+
+                                var rect = new List<Line>
                                         {
                                         Line.CreateBound(pBL - XYZ.BasisZ * (5/304.8), pTL),
                                             Line.CreateBound(pTL, pTR),
                                             Line.CreateBound(pTR, pBR),
-                                            Line.CreateBound(pBR, pBL + depthDir * (5/304.8))                                           
+                                            Line.CreateBound(pBR, pBL + depthDir * (5/304.8))
                                         };
 
-                                    CreateRebarSet(
-                                        doc,
-                                        rect,
-                                        typeHorizontal,
-                                        RebarStyle.StirrupTie,
-                                        element,
-                                        direction,
-                                        numberOfLinesTop,
-                                        verticalCount,
-                                        true
-                                    );
-                                }
+                                CreateRebarSet(
+                                    doc,
+                                    rect,
+                                    typeHorizontal,
+                                    RebarStyle.StirrupTie,
+                                    element,
+                                    direction,
+                                    numberOfLinesTop,
+                                    verticalCount,
+                                    true
+                                );
+
 
                                 // следующий «старт» с линии j
                                 i = j;

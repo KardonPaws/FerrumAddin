@@ -480,8 +480,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
 
                     // 6. Материал перемычки
-                    if (IsMetalChecked && !(type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
-                    if (IsReinforcedConcreteChecked && (type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
+                    if (IsMetalChecked && (!type.Name.Contains("у") && !type.Name.Contains("У") && !type.Name.Contains("А") && !type.Name.Contains("Шв"))) return false;
+                    if (IsReinforcedConcreteChecked && (type.Name.Contains("у") || type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
 
                     return true;
                 })
