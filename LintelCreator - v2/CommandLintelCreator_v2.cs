@@ -60,6 +60,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                         try
                         {
                             code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                            if (code == 0)
+                            {
+                                code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsString());
+
+                            }
                         }
                         catch
                         {
