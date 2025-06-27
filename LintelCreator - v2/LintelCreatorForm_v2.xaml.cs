@@ -403,96 +403,95 @@ namespace FerrumAddinDev.LintelCreator_v2
             if (FilteredFamilies == null || FilteredFamilies.Count == 0)
                 return;
 
-            foreach (var family in FilteredFamilies)
-            {
-                family.RestoreOriginalTypes();
+            var family = SelectedFamily;
+            family.RestoreOriginalTypes();
 
-                var filteredTypes = family.OriginalTypes
-                            .Where(type =>
+            var filteredTypes = family.OriginalTypes
+                        .Where(type =>
+                {
+                    var parts = type.Name.Split('_');
+                    if (parts.Length < 4) return false;
+
+                    // 1. Проверка высоты кирпича
+                    if (IsBrick65Checked && parts[0] != "65") return false;
+                    if (IsBrick85Checked && parts[0] != "88") return false;
+
+                    // 2. Проверка толщины стены
+                    try
                     {
-                        var parts = type.Name.Split('_');
-                        if (parts.Length < 4) return false;
-
-                        // 1. Проверка высоты кирпича
-                        if (IsBrick65Checked && parts[0] != "65") return false;
-                        if (IsBrick85Checked && parts[0] != "88") return false;
-
-                        // 2. Проверка толщины стены
-                        try
-                        {
-                            var wallThickness = Math.Round((double)(SelectedWallType?.Width * 304.8));
-                            if (wallThickness == 400)
-                                wallThickness = 380;
-                            if (wallThickness == 500)
-                                wallThickness = 510;
-                            if (wallThickness == 600)
-                                wallThickness = 640;
-                            if (Convert.ToDouble(parts[1]) != wallThickness) return false;
-                        }
-                        catch
-                        {
-                            return true;
-                        }
-
-                        // 3. Размер пролёта
-                        if (double.TryParse(parts[2], out double spanWidth))
-                        {
-                            if (spanWidth < SelectedOpeningWidth) return false;
-                        }
-
-                        // 4. Опирание
-                        bool hasOneSupport = false;
-                        bool hasTwoSupports = false;
-                        var support = parts[3];
-                        if (parts.Count() == 4)
-                        {
-                            hasOneSupport = support.Any(char.IsUpper);
-                        }
-                        else
-                        {
-                            hasOneSupport = (support.Count(char.IsUpper) > 0 && parts[parts.Count() - 1].Count(char.IsUpper) == 0) ||
-                            (support.Count(char.IsUpper) == 0 && parts[parts.Count() - 1].Count(char.IsUpper) > 0);
-                            hasTwoSupports = support.Any(char.IsUpper) && parts[parts.Count() - 1].Any(char.IsUpper);
-                        }
-
-                        if (!AllSupports)
-                        {
-                            if (SelectedParentElement.SupportType == 0 && (hasOneSupport || hasTwoSupports)) return false;
-                            if (SelectedParentElement.SupportType == 1 && !hasOneSupport) return false;
-                            if (SelectedParentElement.SupportType == 2 && !hasTwoSupports) return false;
-                        }
-                        
-                        // 5. Наличие опорных подушек
-                        if (HasSupportPads)
-                        {
-                            if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() != 1 &&
-                                type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() != 1)
-                            {
-                                return false;
-                            }
-                        }
-                        else
-                        {
-                            if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() == 1 &&
-                                type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() == 1)
-                            {
-                                return false;
-                            }
-                        }
-
-                        // 6. Материал перемычки
-                        if (IsMetalChecked && !(type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
-                        if (IsReinforcedConcreteChecked && (type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
-
+                        var wallThickness = Math.Round((double)(SelectedWallType?.Width * 304.8));
+                        if (wallThickness == 400)
+                            wallThickness = 380;
+                        if (wallThickness == 500)
+                            wallThickness = 510;
+                        if (wallThickness == 600)
+                            wallThickness = 640;
+                        if (Convert.ToDouble(parts[1]) != wallThickness) return false;
+                    }
+                    catch
+                    {
                         return true;
-                    })
-                    .ToList();
+                    }
 
-                // Обновляем доступные типы
-                SelectedFamily.Types = new ObservableCollection<FamilySymbol>(filteredTypes);
-                OnPropertyChanged(nameof(family.Types));
+                    // 3. Размер пролёта
+                    if (double.TryParse(parts[2], out double spanWidth))
+                    {
+                        if (spanWidth < SelectedOpeningWidth) return false;
+                    }
 
-            }
+                    // 4. Опирание
+                    bool hasOneSupport = false;
+                    bool hasTwoSupports = false;
+                    var support = parts[3];
+                    if (parts.Count() == 4)
+                    {
+                        hasOneSupport = support.Any(char.IsUpper);
+                    }
+                    else
+                    {
+                        hasOneSupport = (support.Count(char.IsUpper) > 0 && parts[parts.Count() - 1].Count(char.IsUpper) == 0) ||
+                        (support.Count(char.IsUpper) == 0 && parts[parts.Count() - 1].Count(char.IsUpper) > 0);
+                        hasTwoSupports = support.Any(char.IsUpper) && parts[parts.Count() - 1].Any(char.IsUpper);
+                    }
+
+                    if (!AllSupports)
+                    {
+                        if (SelectedParentElement.SupportType == 0 && (hasOneSupport || hasTwoSupports)) return false;
+                        if (SelectedParentElement.SupportType == 1 && !hasOneSupport) return false;
+                        if (SelectedParentElement.SupportType == 2 && !hasTwoSupports) return false;
+                    }
+
+                    // 5. Наличие опорных подушек
+                    if (HasSupportPads)
+                    {
+                        if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() != 1 &&
+                            type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() != 1)
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() == 1 &&
+                            type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() == 1)
+                        {
+                            return false;
+                        }
+                    }
+
+                    // 6. Материал перемычки
+                    if (IsMetalChecked && !(type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
+                    if (IsReinforcedConcreteChecked && (type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
+
+                    return true;
+                })
+                .ToList();
+
+            // Обновляем доступные типы
+            SelectedFamily.Types = new ObservableCollection<FamilySymbol>(filteredTypes);
+            OnPropertyChanged(nameof(family.Types));
+
+
 
             OnPropertyChanged(nameof(FilteredFamilies));
             OnPropertyChanged(nameof(SelectedFamilyTypes));

@@ -339,66 +339,76 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         //}
                         if (WindowGrillageCreator_v2.isKnittedMode)
                         {
-                            // Ось вдоль ширины хомута: от ЛЕВОЙ вертикали к ПРАВОЙ
-                            XYZ horizontalDir = (verticalLineRightStart.GetEndPoint(0)
-                                              - verticalLineLeftStart.GetEndPoint(0))
-                                              .Normalize();
-
-                            // Ось «глубины» хомута (поперёк стены)
+                            double maxStep = 400.0 / 304.8;    // 400 мм в футах
                             XYZ depthDir = direction.CrossProduct(XYZ.BasisZ).Normalize();
+                            double dzBot = bottomRadius + typeHorizontal.BarModelDiameter / 2.0;
+                            double dzTop = topRadius + typeHorizontal.BarModelDiameter / 2.0;
+                            double dz = Math.Max(dzBot, dzTop) + typeHorizontal.BarModelDiameter / 2.0;
 
-                            // Полная ширина между вертикалями
-                            double lineWidth = verticalLineLeftStart.GetEndPoint(0)
-                                             .DistanceTo(verticalLineRightStart.GetEndPoint(0)) + Math.Max(bottomRadius, topRadius) * 2 + typeHorizontal.BarModelDiameter;
+                            // списки ваших линий
+                            var topLines = intermediateLinesTop;
+                            var botLines = intermediateLinesBottom;
 
-                            // Сколько хомутов по 400 мм
-                            double fourHundredFt = 400.0 / 304.8;
-                            int stirrupCount = Math.Max(1, (int)Math.Ceiling(modLength * 2 / fourHundredFt));
-
-                            double coverageFactor = 2.0 / (stirrupCount + 1.0);
-                            double stirrupWidth = lineWidth * coverageFactor;
-                            double halfW = stirrupWidth / 2.0;
-
-                            // Припуски по Z
-                            double offsetBotZ = bottomRadius + typeHorizontal.BarModelDiameter / 2.0;
-                            double offsetTopZ = topRadius + typeHorizontal.BarModelDiameter / 2.0;
-                            // Припуск по «глубине»
-                            double halfDiaH = Math.Max(bottomRadius, topRadius) + typeHorizontal.BarModelDiameter / 2;
-
-                            for (int i = 0; i < stirrupCount; i++)
+                            int i = 0;
+                            // пока есть хотя бы 2 линии в остатке
+                            while (i < botLines.Count - 1)
                             {
-                                // Центр хомута вдоль линии: 1/(N+1), 2/(N+1)… N/(N+1)
-                                double t = (i + 1.0) / (stirrupCount + 1.0);
-
-                                // Центры нижней и верхней граней
-                                XYZ bottomCenter = verticalLineRightStart.GetEndPoint(0)
-                                                 + (verticalLineLeftStart.GetEndPoint(0)
-                                                 - verticalLineRightStart.GetEndPoint(0)) * t;
-                                XYZ topCenter = verticalLineRightStart.GetEndPoint(1)
-                                                 + (verticalLineLeftStart.GetEndPoint(1)
-                                                 - verticalLineRightStart.GetEndPoint(1)) * t;
-
-                                // «Сырые» углы прямоугольного хомута
-                                XYZ br0 = bottomCenter + horizontalDir * halfW;  // правый-низ
-                                XYZ bl0 = bottomCenter - horizontalDir * halfW;  // левый-низ
-                                XYZ tl0 = topCenter - horizontalDir * halfW;   // левый-верх
-                                XYZ tr0 = topCenter + horizontalDir * halfW;   // правый-верх
-
-                                // Смещаем к продольным пруткам и внутрь по толщине стержня
-                                XYZ pBR = br0 - XYZ.BasisZ * offsetBotZ - depthDir * halfDiaH;
-                                XYZ pBL = bl0 - XYZ.BasisZ * offsetBotZ - depthDir * halfDiaH;
-                                XYZ pTL = tl0 + XYZ.BasisZ * offsetTopZ - depthDir * halfDiaH;
-                                XYZ pTR = tr0 + XYZ.BasisZ * offsetTopZ - depthDir * halfDiaH;
-
-                                var rect = new List<Line>
+                                // ищем максимальный j > i, такой что расстояние от линии i до j <= maxStep
+                                int j = i + 1;
+                                while (j + 1 < botLines.Count
+                                       && botLines[i].GetEndPoint(0).DistanceTo(botLines[j + 1].GetEndPoint(0)) <= maxStep)
                                 {
-                                    Line.CreateBound(pBR, pBL),
-                                    Line.CreateBound(pBL, pTL),
-                                    Line.CreateBound(pTL, pTR),
-                                    Line.CreateBound(pTR, pBR)
-                                };
+                                    j++;
+                                }
 
-                                CreateRebarSet(doc, rect, typeHorizontal, RebarStyle.StirrupTie, element, direction, numberOfLinesTop, verticalCount, true);
+                                // строим хомут между линиями i и j
+                                {
+                                    // центры нижней и верхней граней
+                                    XYZ botC = botLines[i].GetEndPoint(0)
+                                             + (botLines[j].GetEndPoint(0) - botLines[i].GetEndPoint(0)) * 0.5;
+                                    XYZ topC = topLines[i].GetEndPoint(0)
+                                             + (topLines[j].GetEndPoint(0) - topLines[i].GetEndPoint(0)) * 0.5;
+
+                                    // направление хомута (от i к j)
+                                    XYZ horDir = (botLines[j].GetEndPoint(0) - botLines[i].GetEndPoint(0)).Normalize();
+                                    double halfW = botLines[i].GetEndPoint(0)
+                                                       .DistanceTo(botLines[j].GetEndPoint(0)) * 0.5;
+
+                                    // «сырые» углы
+                                    XYZ br0 = botC + horDir * halfW;
+                                    XYZ bl0 = botC - horDir * halfW;
+                                    XYZ tl0 = topC - horDir * halfW;
+                                    XYZ tr0 = topC + horDir * halfW;
+
+                                    // применяем смещения по Z и глубине
+                                    XYZ pBR = br0 - XYZ.BasisZ * dzBot - depthDir * dz;
+                                    XYZ pBL = bl0 - XYZ.BasisZ * dzBot + depthDir * dz;
+                                    XYZ pTL = tl0 + XYZ.BasisZ * dzTop + depthDir * dz;
+                                    XYZ pTR = tr0 + XYZ.BasisZ * dzTop - depthDir * dz;
+
+                                    var rect = new List<Line>
+                                        {
+                                        Line.CreateBound(pBL - XYZ.BasisZ * (5/304.8), pTL),
+                                            Line.CreateBound(pTL, pTR),
+                                            Line.CreateBound(pTR, pBR),
+                                            Line.CreateBound(pBR, pBL + depthDir * (5/304.8))                                           
+                                        };
+
+                                    CreateRebarSet(
+                                        doc,
+                                        rect,
+                                        typeHorizontal,
+                                        RebarStyle.StirrupTie,
+                                        element,
+                                        direction,
+                                        numberOfLinesTop,
+                                        verticalCount,
+                                        true
+                                    );
+                                }
+
+                                // следующий «старт» с линии j
+                                i = j;
                             }
                         }
                         else
@@ -615,9 +625,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         lines2.Add(l);
                     }
                     RebarHookType hook = (RebarHookType)new FilteredElementCollector(doc).OfClass(typeof(RebarHookType)).WhereElementIsElementType().Where(x=>x.Name == barType.Name).FirstOrDefault();
-                    Rebar rebarSet = Rebar.CreateFromCurves(doc, style, barType, hook, hook, host,
-                            dir, lines2,
-                            RebarHookOrientation.Left, RebarHookOrientation.Left, true, true);
+                    Rebar rebarSet = Rebar.CreateFromCurves(doc, style, barType, hook, hook, host, dir, lines2, RebarHookOrientation.Left, RebarHookOrientation.Left, true, true);
                     //rebarSet.LookupParameter("ADSK_A").Set(extendedLine.Length);
                     if (rebarSet != null)
                     {
@@ -626,6 +634,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS).Set(count);
                         rebarSet.GetShapeDrivenAccessor().BarsOnNormalSide = false;
                         ElementId shapeToDel = rebarSet.GetShapeId();
+                        rebarSet.LookupParameter("ADSK_A_bent").Set(rebarSet.LookupParameter("ADSK_A_bent").AsDouble() + barType.BarModelDiameter);
+                        rebarSet.LookupParameter("ADSK_B_bent").Set(rebarSet.LookupParameter("ADSK_B_bent").AsDouble() + barType.BarModelDiameter);
+
                         rebarSet.LookupParameter("Форма").Set(shape.Id);
                         doc.Delete(shapeToDel);
                         rebarSet.LookupParameter("ADSK_Позиция").Set("1");

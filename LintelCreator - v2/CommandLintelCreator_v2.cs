@@ -167,8 +167,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                 XYZ wallCenter;
 
                 // 20.06.25 - изменения в координатах
+                var center = new XYZ(0, 0, 0);
                 var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);
-                var center = el is FamilyInstance? (el.Location as LocationPoint).Point + (max.Z-min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
+                try
+                {
+                    center = el is FamilyInstance ? (el.Location as LocationPoint).Point + (max.Z - min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
+                }
+                catch
+                {
+                    continue;
+                }
                 var leftPt = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2) * orient : center - Math.Abs(orient.DotProduct(center - min)) * orient;
                 var rightPt = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + Math.Abs(orient.DotProduct(max - center)) * orient;
                 double threshold = 0;
