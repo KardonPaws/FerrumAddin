@@ -52,7 +52,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x=> (x as FamilyInstance).SuperComponent == null).Where(x=>((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
 
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
-                // 29.05.25 - исключен тип 211.002
+                // 29.06.25 - исключен тип 211.002
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f => !f.Name.Contains("Лоджий")).Where(f =>
                     {
@@ -109,7 +109,7 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null));
 
-                // 29.05.25 - исключен тип 211.002
+                // 29.06.25 - исключен тип 211.002
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f =>
                     {
@@ -147,11 +147,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ToList()
                 .Where(f =>
                 {
-                    // 29.05.25 - добавлен второй параметр, если первого нет
+                    // 29.06.25 - добавлен второй параметр, если первого нет
                     double code;
                     try
                     {
                         code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                        if (code == 0)
+                        {
+                            code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
+
+                        }
                     }
                     catch
                     {
@@ -176,9 +181,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                 var max = bb.Max;
                 XYZ wallCenter;
 
-                // 20.06.25 - изменения в координатах
+                // 29.06.25 - у некоторых семейств нет точки вставки, в try
                 var center = new XYZ(0, 0, 0);
-                var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);
+                var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);               
                 try
                 {
                     center = el is FamilyInstance ? (el.Location as LocationPoint).Point + (max.Z - min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
@@ -1264,7 +1269,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     var bounding = element.get_BoundingBox(doc.ActiveView);
                                     height = bounding.Max.Z - bounding.Min.Z;
                                     Line c = (element.Location as LocationCurve).Curve as Line;
-                                    locationPoint = (c.GetEndPoint(0) + c.GetEndPoint(1)) / 2 - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
+                                    // 29.06.25 - добавлено смещение снизу для стен
+                                    locationPoint = (c.GetEndPoint(0) + c.GetEndPoint(1)) / 2 - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ + element.LookupParameter("Смещение снизу").AsDouble() * XYZ.BasisZ;
                                 }
                                 else
                                 {

@@ -405,7 +405,7 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             var family = SelectedFamily;
             family.RestoreOriginalTypes();
-
+            // 29.06.25 - уьран проход по всем семействам, только выбранное
             var filteredTypes = family.OriginalTypes
                         .Where(type =>
                 {
@@ -480,6 +480,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
 
                     // 6. Материал перемычки
+                    // 29.06.25 - исправлен фильтр
                     if (IsMetalChecked && (!type.Name.Contains("у") && !type.Name.Contains("У") && !type.Name.Contains("А") && !type.Name.Contains("Шв"))) return false;
                     if (IsReinforcedConcreteChecked && (type.Name.Contains("у") || type.Name.Contains("У") || type.Name.Contains("А") || type.Name.Contains("Шв"))) return false;
 

@@ -61,11 +61,13 @@ namespace FerrumAddinDev.FM
 
                 // Добавляем две первые колонки: Выбор и Тип
                 dt.Columns.Add("Выбор", typeof(bool));
+                // 29.06.25 - смена имени столбца для удаления конфликта с параметром
                 dt.Columns.Add("Имя типаᅟ", typeof(string));
 
                 bool firstRow = true;
                 foreach (var line in File.ReadLines(item.Path.Remove(item.Path.Length - 3, 3) + "txt", Encoding.GetEncoding("windows-1251")))
                 {
+                    // 29.06.25 - смена разделителя
                     var cols = line.Split(',');
                     if (firstRow)
                     {
