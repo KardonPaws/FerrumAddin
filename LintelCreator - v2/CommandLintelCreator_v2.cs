@@ -141,7 +141,8 @@ namespace FerrumAddinDev.LintelCreator_v2
             var curtains = windowsAndDoorsList.Except(windowsAndDoors).OfType<Wall>().ToList();
 
             // Подготавливаем список плит перекрытия для вычисления опор
-            var floors = new FilteredElementCollector(doc, doc.ActiveView.Id)
+            // 30.06.26 - перемычки в модели
+            var floors = new FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WhereElementIsNotElementType()
                 .ToList()
@@ -857,7 +858,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName)).FirstOrDefault();
                         if (view != null)
                         {
-                            var framingElements_ = new FilteredElementCollector(doc, view.Id)
+                            // 30.06.26 - перемычки в модели
+                            var framingElements_ = new FilteredElementCollector(doc)
                             .OfCategory(BuiltInCategory.OST_StructuralFraming)
                             .WhereElementIsNotElementType()
                             .Cast<FamilyInstance>()
@@ -933,7 +935,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                 try
                 {
                     // Сбор всех перемычек
-                    var lintelInstances = new FilteredElementCollector(doc, doc.ActiveView.Id)
+                    // 30.06.26 - перемычки в модели
+                    var lintelInstances = new FilteredElementCollector(doc)
                         .OfCategory(BuiltInCategory.OST_StructuralFraming)
                         .WhereElementIsNotElementType()
                         .Cast<FamilyInstance>()
