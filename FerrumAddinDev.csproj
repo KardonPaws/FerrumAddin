@@ -244,6 +244,12 @@
   <ItemGroup>
     <Resource Include="GrillageCreator - v2\GrillageCreatorBackground.png" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PilonsDimensions\PilonsDimensions.csproj">
+      <Project>{71d3aef1-1fd5-4924-ac73-fe16fb5ca006}</Project>
+      <Name>PilonsDimensions</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"

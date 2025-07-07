@@ -273,6 +273,10 @@ namespace FerrumAddinDev
             PushButtonData ColumnSections = new PushButtonData("Column Sections", "Сечения по пилонам", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.ColumnSections.CreateColumnSections");
             panelKR.AddItem(ColumnSections);
 
+            PushButtonData PilonsDimensions = new PushButtonData("PilonsDimensions", "Размеры по пилонам", 
+                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),"PilonsDimensions.dll"), 
+                "PilonsDimensions.PilonsDimensions");
+            panelKR.AddItem(PilonsDimensions);
 
             panelControl = a.CreateRibbonPanel(tabName, "Управление");
             panelControl.Visible = false;
