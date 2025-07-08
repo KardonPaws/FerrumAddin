@@ -175,8 +175,27 @@ namespace FerrumAddinDev.FBS
             var wallsInVariant = variant.Blocks.Select(b => b.Wall).Distinct();
             foreach (var wall in wallsInVariant)
             {
+                int i = 1;
                 string name = GenerateSectionName(wall, wallsInVariant.ToList(), allGrids, existingNames);
-                existingNames.Add(name);
+                // 08.07.25 - добавление цифр к разрезам тк при одинаковых именах вылетает
+                if (!existingNames.Contains(name))
+                {
+                    existingNames.Add(name);
+                }
+                else
+                {
+                    if (i != 1)
+                    {
+                        name = name.Remove(name.Length - 3, 3);
+                        name += "(" + i + ")";
+                        i++;
+                    }
+                    else
+                    {
+                        name += " (" + i + ")";
+                        i++;
+                    }
+                }
 
                 BoundingBoxXYZ box = GetSectionBox(wall);
                 // box теперь валидный
