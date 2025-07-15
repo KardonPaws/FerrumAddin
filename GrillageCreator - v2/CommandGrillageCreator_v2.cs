@@ -1370,6 +1370,13 @@ namespace FerrumAddinDev.GrillageCreator_v2
             else
             {
                 // Если линии не направлены строго по осям, используем общий подход
+                // 16.07 - доработка под углом
+                if (start1.DistanceTo(start2) > start1.DistanceTo(end2))
+                {
+                    var s = start2;
+                    start2 = end2;
+                    end2 = s;
+                }
                 XYZ midStart = (start1 + start2) / 2;
                 XYZ midEnd = (end1 + end2) / 2;
 
