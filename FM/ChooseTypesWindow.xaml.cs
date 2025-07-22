@@ -68,7 +68,7 @@ namespace FerrumAddinDev.FM
                 foreach (var line in File.ReadLines(item.Path.Remove(item.Path.Length - 3, 3) + "txt", Encoding.GetEncoding("windows-1251")))
                 {
                     // 29.06.25 - смена разделителя
-                    var cols = line.Split(',');
+                    var cols = line.Split(',', ';');
                     if (firstRow)
                     {
                         bool firstCol = true;
