@@ -80,7 +80,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
             boxVertical.Text = settings.VerticalStep == 0 ? "200" : settings.VerticalStep.ToString() ;
             boxHorizontal.Text = settings.HorizontalStep == 0 ? "200" : settings.HorizontalStep.ToString();
             boxLeftRight.Text = settings.LeftRightOffset == 0 ? "50" : settings.LeftRightOffset.ToString();
-            boxTopBottom.Text = settings.TopBottomOffset == 0 ? "50" : settings.TopBottomOffset.ToString();
+            // 24.07.25 - отдельный отступ сверху
+            boxBottom.Text = settings.BottomOffset == 0 ? "50" : settings.BottomOffset.ToString();
+            boxTop.Text = settings.TopOffset == 0 ? "50" : settings.TopOffset.ToString();
         }
         private void SaveSettings()
         {
@@ -97,7 +99,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 VerticalStep = int.TryParse(boxVertical.Text, out var vs) ? vs : 200,
                 HorizontalStep = int.TryParse(boxHorizontal.Text, out var hs) ? hs : 200,
                 LeftRightOffset = int.TryParse(boxLeftRight.Text, out var lr) ? lr : 50,
-                TopBottomOffset = int.TryParse(boxTopBottom.Text, out var tb) ? tb : 50
+                // 24.07.25 - отдельный отступ сверху
+                BottomOffset = int.TryParse(boxBottom.Text, out var tb) ? tb : 50,
+                TopOffset = int.TryParse(boxTop.Text, out var to) ? to : 50
             };
 
             GrillageSettings.SaveSettings(settings, _settingsFilePath);
@@ -180,7 +184,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
         public static int horizontalCount;
         public static int verticalCount;
         public static int leftRightOffset;
-        public static int topBottomOffset;
+        public static int bottomOffset;
+        public static int topOffset;
         public static int horizontCount;
 
         public static bool isNumber;
@@ -197,7 +202,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
             if (string.IsNullOrEmpty(boxHorizont.Text) ||
                 (!isKnittedMode && string.IsNullOrEmpty(boxVertical.Text)) ||
                 string.IsNullOrEmpty(boxLeftRight.Text) ||
-                string.IsNullOrEmpty(boxTopBottom.Text) ||
+                string.IsNullOrEmpty(boxBottom.Text) ||
+                string.IsNullOrEmpty(boxTop.Text) ||
                 string.IsNullOrEmpty(boxHorizontal.Text) ||
                 comboTop.SelectedItem == null ||
                 comboBottom.SelectedItem == null ||
@@ -217,7 +223,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 horizontalCount = int.Parse(boxHorizont.Text);
                 verticalCount = int.Parse(boxVertical.Text);
                 leftRightOffset = int.Parse(boxLeftRight.Text);
-                topBottomOffset = int.Parse(boxTopBottom.Text);
+                bottomOffset = int.Parse(boxBottom.Text);
+                topOffset = int.Parse(boxTop.Text);
                 horizontCount = int.Parse(boxHorizontal.Text);
 
                 topDiameter = comboTop.SelectedItem.ToString();
@@ -328,7 +335,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
         public int VerticalStep { get; set; }
         public int HorizontalStep { get; set; }
         public int LeftRightOffset { get; set; }
-        public int TopBottomOffset { get; set; }
+        public int TopOffset { get; set; }
+        public int BottomOffset { get; set; }
+
 
         public static void SaveSettings(GrillageSettings settings, string filePath)
         {

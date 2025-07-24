@@ -118,11 +118,11 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         // Перпендикулярное направление
                         XYZ perpendicularDirection = new XYZ(-lineDirection.Y, lineDirection.X, 0);
 
-                        // Вычисляем смещения
-                        XYZ offsetBottomRight = perpendicularDirection * (modLength - WindowGrillageCreator_v2.leftRightOffset / 304.8) + WindowGrillageCreator_v2.topBottomOffset / 304.8 * XYZ.BasisZ;
-                        XYZ offsetBottomLeft = perpendicularDirection * (-modLength + WindowGrillageCreator_v2.leftRightOffset / 304.8) + WindowGrillageCreator_v2.topBottomOffset / 304.8 * XYZ.BasisZ;
-                        XYZ offsetTopRight = perpendicularDirection * (modLength - WindowGrillageCreator_v2.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator_v2.topBottomOffset / 304.8) * XYZ.BasisZ;
-                        XYZ offsetTopLeft = perpendicularDirection * (-modLength + WindowGrillageCreator_v2.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator_v2.topBottomOffset / 304.8) * XYZ.BasisZ;
+                        // Вычисляем смещения 24.07.25 - отдельное смещение сверху
+                        XYZ offsetBottomRight = perpendicularDirection * (modLength - WindowGrillageCreator_v2.leftRightOffset / 304.8) + WindowGrillageCreator_v2.bottomOffset / 304.8 * XYZ.BasisZ;
+                        XYZ offsetBottomLeft = perpendicularDirection * (-modLength + WindowGrillageCreator_v2.leftRightOffset / 304.8) + WindowGrillageCreator_v2.bottomOffset / 304.8 * XYZ.BasisZ;
+                        XYZ offsetTopRight = perpendicularDirection * (modLength - WindowGrillageCreator_v2.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator_v2.topOffset / 304.8) * XYZ.BasisZ;
+                        XYZ offsetTopLeft = perpendicularDirection * (-modLength + WindowGrillageCreator_v2.leftRightOffset / 304.8) + (thickness - WindowGrillageCreator_v2.topOffset / 304.8) * XYZ.BasisZ;
 
                         // Создаем 4 линии - крайние верхние и нижние линии
                         Line lineBR = Line.CreateBound(centerLine.GetEndPoint(0) + offsetBottomRight, centerLine.GetEndPoint(1) + offsetBottomRight);
@@ -442,7 +442,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         Element coverLeftRight = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (WindowGrillageCreator_v2.leftRightOffset / 304.8 - 25 / 304.8)).FirstOrDefault();
                         if (coverLeftRight != null)
                             element.get_Parameter(BuiltInParameter.CLEAR_COVER_OTHER).Set(coverLeftRight.Id);
-                        Element coverTopBottom = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (WindowGrillageCreator_v2.topBottomOffset / 304.8 - 25 / 304.8)).FirstOrDefault();
+                        //24.07.25 - отдельное смещение сверху
+                        Element coverTopBottom = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (Math.Min(WindowGrillageCreator_v2.topOffset, WindowGrillageCreator_v2.bottomOffset) / 304.8 - 25 / 304.8)).FirstOrDefault();
                         if (coverTopBottom != null)
                         {
                             element.get_Parameter(BuiltInParameter.CLEAR_COVER_TOP).Set(coverTopBottom.Id);

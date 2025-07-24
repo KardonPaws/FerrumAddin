@@ -242,13 +242,13 @@
     <Resource Include="Worksets\Worksets_Sample.xml" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="GrillageCreator - v2\GrillageCreatorBackground.png" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\PilonsDimensions\PilonsDimensions.csproj">
       <Project>{71d3aef1-1fd5-4924-ac73-fe16fb5ca006}</Project>
       <Name>PilonsDimensions</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="GrillageCreator - v2\GrillageCreatorBackground.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

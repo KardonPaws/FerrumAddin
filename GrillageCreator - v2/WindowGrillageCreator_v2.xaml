@@ -8,7 +8,8 @@
         Title="WindowGrillageCreator" Height="auto" Width="auto" ResizeMode="NoResize" SizeToContent="WidthAndHeight" Closing="Window_Closing">
     <Grid Height="450" Margin="0,10,0,0">
         <!-- Фон окна -->
-        <Image HorizontalAlignment="Left" Height="403" VerticalAlignment="Top" Width="540" Margin="10,10,10,10" Source="/FerrumAddinDev;component/GrillageCreator/GrillageCreatorBackground.png"/>
+        <!-- 24.07.25 - отдельное смещение сверху -->
+        <Image HorizontalAlignment="Left" Height="403" VerticalAlignment="Top" Width="540" Margin="10,10,10,10" Source="/FerrumAddinDev;component/GrillageCreator - v2/GrillageCreatorBackground.png"/>
 
         <TextBox x:Name="boxHorizont" PreviewTextInput="previewTextInput" HorizontalAlignment="Center" Margin="0,41,0,0" TextWrapping="Wrap" Text="2" VerticalAlignment="Top" Width="120"/>
         <TextBlock x:Name="textHorizont" HorizontalAlignment="Center" Margin="0,7,0,0" TextWrapping="Wrap" Text="Количество&#x0a;горизонтальных каркасов" VerticalAlignment="Top" TextAlignment="Center"/>
@@ -48,8 +49,9 @@
                    VerticalAlignment="Top"/>
         <!-- Отступ слева/справа -->
         <TextBox x:Name="boxLeftRight" HorizontalAlignment="Left" Margin="214,366,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
-        <!-- Отступ сверху/снизу -->
-        <TextBox x:Name="boxTopBottom" HorizontalAlignment="Left" Margin="68,366,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
+        <!-- Отступ сверху/снизу 24.07.25 - отдельное смещение сверху-->
+        <TextBox x:Name="boxBottom" HorizontalAlignment="Left" Margin="68,366,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
+        <TextBox x:Name="boxTop" HorizontalAlignment="Left" Margin="419,48,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
 
         <Button Content="Выполнить" HorizontalAlignment="Right" Margin="0,420,13,0" VerticalAlignment="Top" Click="Button_Click"/>
 
