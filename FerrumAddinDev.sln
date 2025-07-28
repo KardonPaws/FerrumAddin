@@ -5,7 +5,7 @@ VisualStudioVersion = 17.8.34525.116
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FerrumAddinDev", "FerrumAddinDev.csproj", "{36C29E80-E243-47CB-85D0-3299F79019CE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PilonsDimensions", "..\PilonsDimensions\PilonsDimensions.csproj", "{71D3AEF1-1FD5-4924-AC73-FE16FB5CA006}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zhConstructionPilonsDimensions24", "..\zhConstructionPilonsDimensions24\zhConstructionPilonsDimensions24.csproj", "{71D3AEF1-1FD5-4924-AC73-FE16FB5CA006}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

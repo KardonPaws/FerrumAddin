@@ -92,7 +92,8 @@ namespace FerrumAddinDev.LintelCreator_v2
 
         private void RadioButton_Checked_1(object sender, RoutedEventArgs e)
         {
-            if (sender is RadioButton radioButton && radioButton.DataContext is KeyValuePair<WallType, List<Element>> childElement)
+            //28.07.25 - объединение проемов в перемычках
+            if (sender is RadioButton radioButton && radioButton.DataContext is KeyValuePair<WallType, List<ElementsForLintel>> childElement)
             {
                 if (DataContext is MainViewModel viewModel)
                 {
@@ -121,7 +122,14 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 viewModel.SelectedParentElement = parentElement;
                                 viewModel.SelectedWallTypeName = (sender as RadioButton).Content.ToString();
                                 viewModel.FilterFamiliesAndTypes();
-                                selection.SetElementIds(parentElement.Walls[childElement.Key].Select(x => x.Id).ToList());
+                                //28.07.25 - объединение проемов в перемычках
+                                var list = parentElement.Walls[childElement.Key];
+                                List<ElementId> elements = new List<ElementId>();
+                                foreach (var element in list) 
+                                {
+                                    elements.AddRange(element.ElementsId);
+                                }
+                                selection.SetElementIds(elements);
                             }
                         }
                     }
@@ -548,15 +556,22 @@ namespace FerrumAddinDev.LintelCreator_v2
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
+    //28.07.25 - объединение проемов в перемычках
 
-
+    public class ElementsForLintel
+    {
+        public List<Element> Elements { get; set; }
+        public List<ElementId> ElementsId { get; set; }
+        public XYZ Location;
+    }
     public class ParentElement
     {
         public string Name { get; set; } // Имя семейства
         public string TypeName { get; set; } // Имя типа
         public string Width { get; set; } // Ширина проема
         public ObservableCollection<ChildElement> ChildElements { get; set; } // Список дочерних элементов
-        public Dictionary<WallType, List<Element>> Walls { get; set; } // Словарь для определения в какой стене находятся отверстия
+        //28.07.25 - объединение проемов в перемычках
+        public Dictionary<WallType, List<ElementsForLintel>> Walls { get; set; } // Словарь для определения в какой стене находятся отверстия
         public int SupportType { get; set; } // опирание, 0 - без опирания, 1 - опирание с 1 стороны, 2 - опирание с 2 сторон
         public Dictionary<Element, XYZ> SupportDirection { get; set; } // При опирании == 1 указывает направление пересекаемого перекрытия
 

@@ -257,77 +257,336 @@ namespace FerrumAddinDev.LintelCreator_v2
                 supportInfo[el] = (supType, dir);
             }
 
-            // Группировка по имени, типу, ширине и SupportType для окон/дверей
-            var windowGroups = windowsAndDoors
-                .GroupBy(el => new
-                {
-                    el.Symbol.FamilyName,
-                    el.Symbol.Name,
-                    Width = el.LookupParameter("ADSK_Размер_Ширина").AsValueString(),
-                    supportInfo[el].SupportType
-                })
-                .Select(g => new ParentElement
-                {
-                    Name = g.Key.FamilyName,
-                    TypeName = g.Key.Name,
-                    Width = g.Key.Width,
-                    SupportType = g.Key.SupportType,
-                    Walls = g
-                        .Where(el => el.Host is Wall && (el.Host as Wall).WallType.Kind != WallKind.Curtain && !(el.Host as Wall).WallType.Name.Contains("_пгп_") && !(el.Host as Wall).WallType.Name.Contains("_ЛДЖ_"))
-                        .GroupBy(el => (el.Host as Wall)?.GetTypeId())
-                        .Where(wg => wg.Key != null)
-                        .ToDictionary(
-                            wg => doc.GetElement(wg.Key) as WallType,
-                            wg => wg.Cast<Element>().ToList()
-                        ),
-                    SupportDirection = g.ToDictionary(
-                        el => (Element)el,
-                        el => supportInfo[el].Direction
-                    )
-                });
+            //    // Группировка по имени, типу, ширине и SupportType для окон/дверей
+            //    var windowGroups = windowsAndDoors
+            //        .GroupBy(el => new
+            //        {
+            //            el.Symbol.FamilyName,
+            //            el.Symbol.Name,
+            //            Width = el.LookupParameter("ADSK_Размер_Ширина").AsValueString(),
+            //            supportInfo[el].SupportType
+            //        })
+            //        .Select(g => new ParentElement
+            //        {
+            //            Name = g.Key.FamilyName,
+            //            TypeName = g.Key.Name,
+            //            Width = g.Key.Width,
+            //            SupportType = g.Key.SupportType,
+            //            Walls = g
+            //                .Where(el => el.Host is Wall && (el.Host as Wall).WallType.Kind != WallKind.Curtain && !(el.Host as Wall).WallType.Name.Contains("_пгп_") && !(el.Host as Wall).WallType.Name.Contains("_ЛДЖ_"))
+            //                .GroupBy(el => (el.Host as Wall)?.GetTypeId())
+            //                .Where(wg => wg.Key != null)
+            //                .ToDictionary(
+            //                    wg => doc.GetElement(wg.Key) as WallType,
+            //                    wg => wg.Cast<Element>().ToList()
+            //                ),
+            //            SupportDirection = g.ToDictionary(
+            //                el => (Element)el,
+            //                el => supportInfo[el].Direction
+            //            )
+            //        });
 
-            List<Element> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().Where(x => x is Wall && (doc.GetElement(x.GetTypeId()) as WallType).Kind != WallKind.Curtain).ToList();
-            // Группировка витражей по имени, ширине и SupportType
-            var curtainGroups = curtains
-                .GroupBy(el => new
-                {
-                    el.Name,
-                    Width = Math.Round(el.LookupParameter("Длина").AsDouble() * 304.8).ToString(),
-                    supportInfo[el].SupportType
-                })
-                .Select(g => new ParentElement
-                {
-                    Name = g.Key.Name,
-                    TypeName = "Витраж",
-                    Width = g.Key.Width,
-                    SupportType = g.Key.SupportType,
-                    Walls = g
-            .Select(el => new
-            {
-                Element = el,
-                HostWall = walls
-                    .Cast<Wall>()
-                    .FirstOrDefault(wall =>
-                        wall.FindInserts(false, false, true, false)
-                            .Any(insertId => insertId == el.Id)
-                    )
-            })
-            .Where(x => x.HostWall != null)
-            .GroupBy(x => x.HostWall.GetTypeId())
-            .Where(wg => wg.Key != null)
-            .ToDictionary(
-                wg => doc.GetElement(wg.Key) as WallType,
-                wg => wg.Select(x => (Element)x.Element).ToList()
-            ),
-                    // Словарь SupportDirection остаётся без изменений
-                    SupportDirection = g.ToDictionary(
-            el => (Element)el,
-            el => supportInfo[el].Direction
-        )
-                });
+            //    List<Element> walls = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().Where(x => x is Wall && (doc.GetElement(x.GetTypeId()) as WallType).Kind != WallKind.Curtain).ToList();
+            //    // Группировка витражей по имени, ширине и SupportType
+            //    var curtainGroups = curtains
+            //        .GroupBy(el => new
+            //        {
+            //            el.Name,
+            //            Width = Math.Round(el.LookupParameter("Длина").AsDouble() * 304.8).ToString(),
+            //            supportInfo[el].SupportType
+            //        })
+            //        .Select(g => new ParentElement
+            //        {
+            //            Name = g.Key.Name,
+            //            TypeName = "Витраж",
+            //            Width = g.Key.Width,
+            //            SupportType = g.Key.SupportType,
+            //            Walls = g
+            //    .Select(el => new
+            //    {
+            //        Element = el,
+            //        HostWall = walls
+            //            .Cast<Wall>()
+            //            .FirstOrDefault(wall =>
+            //                wall.FindInserts(false, false, true, false)
+            //                    .Any(insertId => insertId == el.Id)
+            //            )
+            //    })
+            //    .Where(x => x.HostWall != null)
+            //    .GroupBy(x => x.HostWall.GetTypeId())
+            //    .Where(wg => wg.Key != null)
+            //    .ToDictionary(
+            //        wg => doc.GetElement(wg.Key) as WallType,
+            //        wg => wg.Select(x => (Element)x.Element).ToList()
+            //    ),
+            //            // Словарь SupportDirection остаётся без изменений
+            //            SupportDirection = g.ToDictionary(
+            //    el => (Element)el,
+            //    el => supportInfo[el].Direction
+            //)
+            //        });
 
             // Объединяем все группы и возвращаем итоговый список
-            var groupedElements = windowGroups.Concat(curtainGroups);
+            //var groupedElements = windowGroups.Concat(curtainGroups);
+            
+            //28.07.25 - объединение проемов в перемычках
+            const double proximityThreshold = 380.0 / 304.8; // в футах
+
+            // Общий список всех элементов с координатами
+            var allOpenings = windowsAndDoors.Cast<Element>().Concat(curtains.Cast<Element>())
+                .Select(el =>
+                {
+                    string name = el is FamilyInstance fi ? fi.Symbol.FamilyName : el.Name;
+                    string typeName = el is FamilyInstance fi2 ? fi2.Symbol.Name : "Витраж";
+                    string widthStr = el is FamilyInstance fi3 ?
+                        fi3.LookupParameter("ADSK_Размер_Ширина")?.AsValueString() ?? "0" :
+                        Math.Round(el.LookupParameter("Длина")?.AsDouble() * 304.8 ?? 0).ToString();
+
+                    XYZ center;
+                    double width;
+                    XYZ dir;
+
+                    if (el is FamilyInstance inst)
+                    {
+                        center = (inst.Location as LocationPoint)?.Point ?? XYZ.Zero;
+                        width = inst.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0;
+                        dir = inst.HandOrientation;
+                    }
+                    else if (el is Wall wall)
+                    {
+                        var curve = (wall.Location as LocationCurve)?.Curve as Line;
+                        if (curve == null) return null;
+                        var p1 = curve.GetEndPoint(0);
+                        var p2 = curve.GetEndPoint(1);
+                        center = (p1 + p2) / 2;
+                        width = curve.Length;
+                        dir = curve.Direction;
+                    }
+                    else return null;
+
+                    return new
+                    {
+                        Element = el,
+                        Name = name,
+                        TypeName = typeName,
+                        WidthStr = widthStr,
+                        Width = width,
+                        Center = center,
+                        Direction = dir,
+                        SupportType = supportInfo.TryGetValue(el, out var val) ? val.SupportType : 0,
+                        SupDirection = supportInfo.TryGetValue(el, out var val2) ? val2.Direction : XYZ.Zero
+                    };
+                })
+                .Where(x => x != null)
+                .ToList();
+
+            // Кластеризация по Min/Max
+            var clusters = new List<List<Element>>();
+            var currentCluster = new List<Element>();
+            double currentMax = double.MinValue;
+
+            foreach (var item in allOpenings)
+            {
+                XYZ p1Min, p1Max, p2Min, p2Max;
+                p1Min = item.Center - item.Direction * item.Width/2;
+                p1Max = item.Center + item.Direction * item.Width / 2;
+                if (clusters.Count > 0)
+                {
+                    int ind = clusters.IndexOf(clusters.Where(x => x.Any(y => y.Id == item.Element.Id)).FirstOrDefault());
+                    if (ind != -1)
+                    {
+                        currentCluster = clusters[ind];
+                    }
+                    else
+                    {
+                        clusters.Add(new List<Element>() { item.Element });
+                        currentCluster = clusters.Last();
+                    }
+                }
+                else
+                {
+                    clusters.Add(new List<Element>() { item.Element });
+                    currentCluster = clusters.Last();
+                }
+                foreach (var secondIt in allOpenings)
+                {
+                    if (secondIt == item || (!secondIt.Direction.IsAlmostEqualTo(item.Direction) && !secondIt.Direction.IsAlmostEqualTo(item.Direction * -1)))
+                    {
+                        continue;
+                    }
+
+                    p2Min = secondIt.Center - secondIt.Direction * secondIt.Width / 2;
+                    p2Max = secondIt.Center + secondIt.Direction * secondIt.Width / 2;
+                    if (p1Min.DistanceTo(p2Min) <= 380 / 304.8 || p1Min.DistanceTo(p2Max) <= 380 / 304.8 || 
+                        p1Max.DistanceTo(p2Min) <= 380 / 304.8 || p1Max.DistanceTo(p2Max) <= 380 / 304.8)
+                    {
+                        int ind = clusters.IndexOf(currentCluster);
+                        clusters[ind].Add(secondIt.Element);
+                        currentCluster = clusters[ind];
+                    }
+                }
+                
+            }
+
+            // Получение всех стен для поиска хостов витражей
+            List<Element> allWalls = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_Walls)
+                .WhereElementIsNotElementType()
+                .Where(x => x is Wall w && (doc.GetElement(x.GetTypeId()) as WallType).Kind != WallKind.Curtain)
+                .ToList();
+
+            // Группировка кластеров в ParentElement
+            var groupedElements = new List<ParentElement>();
+            var Clusters = new List<List<Element>>();
+
+            foreach (var group in clusters)
+            {
+                var g = group.Distinct();
+                Clusters.Add(g.ToList());
+            }
+            foreach (var group in Clusters)
+            {
+                var meta = group.Select(el =>
+                {
+                    string name = el is FamilyInstance fi ? fi.Symbol.FamilyName : el.Name;
+                    string typeName = el is FamilyInstance fi2 ? fi2.Symbol.Name : "Витраж";
+                    string widthStr = el is FamilyInstance fi3 ?
+                        fi3.LookupParameter("ADSK_Размер_Ширина")?.AsValueString() ?? "0" :
+                        Math.Round(el.LookupParameter("Длина")?.AsDouble() * 304.8 ?? 0).ToString();
+
+                    var dir = supportInfo.TryGetValue(el, out var val) ? val.Direction : XYZ.Zero;
+                    int supportType = supportInfo.TryGetValue(el, out var val2) ? val2.SupportType : 0;
+
+                    return new { el, name, typeName, widthStr, supportType, dir };
+                }).ToList();
+
+                // Границы
+                var xBounds = group.Select(el =>
+                {
+                    var bb = el.get_BoundingBox(null);
+                    var center = el is FamilyInstance ? (el.Location as LocationPoint).Point :
+                    ((el.Location as LocationCurve).Curve.GetEndPoint(0) + (el.Location as LocationCurve).Curve.GetEndPoint(1)) / 2;
+                    var width = el is FamilyInstance ? el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0 :
+                        Math.Round(el.LookupParameter("Длина")?.AsDouble() * 304.8 ?? 0);
+                    var dir = el is FamilyInstance ? (el as FamilyInstance).HandOrientation : ((el.Location as LocationCurve).Curve as Line).Direction;
+                    return (center - width / 2 * dir, center + width / 2 * dir);
+                });
+
+                double mergedWidth = double.MinValue;
+                List<XYZ> mergedPoints = new List<XYZ>();
+                List<XYZ> farPoints = new List<XYZ>();
+                
+                foreach ( var x in xBounds )
+                {
+                    mergedPoints.Add(x.Item1);
+                    mergedPoints.Add(x.Item2);
+                }
+                foreach (var x in mergedPoints )
+                {
+                    foreach ( var y in mergedPoints)
+                    {
+                        if (x == y)
+                        {
+                            continue;
+                        }
+                        var dist = x.DistanceTo(y);
+                        if (dist > mergedWidth)
+                        {
+                            mergedWidth = dist;
+                            farPoints = new List<XYZ>() { x, y };
+                        }
+                    }
+
+                }
+
+                var distinctNames = meta.Select(x => x.name).Distinct().OrderBy(s => s).ToList();
+                var mergedName = string.Join(" + ", distinctNames);
+
+                var mergedTypeNames = meta.Select(x => x.typeName).Distinct().OrderBy(s => s).ToList();
+                var mergedTypeName = string.Join(" + ", mergedTypeNames);
+
+                var mergedSupportType = meta.First().supportType;
+                var mergedSupportDirection = meta.ToDictionary(x => x.el, x => x.dir);
+
+                // Словарь стен по типам
+                var wallsDict = new Dictionary<WallType, List<ElementsForLintel>>();
+                WallType wallType = null;
+                foreach (var el in group)
+                {
+                    Wall hostWall = null;
+                    if (el is FamilyInstance fi && fi.Host is Wall wallHost)
+                    {
+                        hostWall = wallHost;
+                    }
+                    else if (el is Wall curWall)
+                    {
+                        hostWall = allWalls.Cast<Wall>()
+                            .FirstOrDefault(w => w.FindInserts(false, false, true, false)
+                                .Any(id => id == el.Id));
+                    }
+
+                    if (hostWall == null) continue;
+
+                    var wtId = hostWall.GetTypeId();
+                    if (wtId == null) continue;
+
+                    wallType = doc.GetElement(wtId) as WallType;
+                    if (wallType == null) continue;
+                    break;
+                }
+                if (wallsDict.Keys.All(x => x.Id != wallType.Id))
+                {
+                    wallsDict.Add(wallType, new List<ElementsForLintel>() { new ElementsForLintel() { Elements = group, ElementsId = group.Select(g => g.Id).ToList(), Location = (farPoints[0] + farPoints[1])/2 } });
+                }
+                else
+                {
+                    wallsDict.Where(x => x.Key.Id == wallType.Id).First().Value.Add(new ElementsForLintel() { Elements = group, ElementsId = group.Select(g => g.Id).ToList(), Location = (farPoints[0] + farPoints[1]) / 2 });
+                }
+                var pEl = new ParentElement
+                {
+                    Name = mergedName,
+                    TypeName = mergedTypeName,
+                    Width = Math.Round(mergedWidth * 304.8).ToString(),
+                    SupportType = mergedSupportType,
+                    SupportDirection = mergedSupportDirection,
+                    Walls = wallsDict,
+                };
+                var existing = groupedElements.Where(x => x.Name == pEl.Name && x.TypeName == pEl.TypeName && x.Width == pEl.Width && x.SupportType == pEl.SupportType).FirstOrDefault();
+                if (existing != null)
+                {
+                    int ind = groupedElements.IndexOf(existing);
+                    foreach (var key in pEl.Walls)
+                    {
+                        foreach (var KeyToAdd in pEl.Walls.Keys)
+                        {
+                            if (groupedElements[ind].Walls.Any(x => x.Key.Id == KeyToAdd.Id))
+                            {
+                                groupedElements[ind].Walls.Where(x => x.Key.Id == KeyToAdd.Id).First().Value.AddRange(pEl.Walls.Where(x => x.Key.Id == KeyToAdd.Id).First().Value);
+                            }
+                            else
+                            {
+                                groupedElements[ind].Walls.Add(wallType, pEl.Walls.Where(x => x.Key.Id == KeyToAdd.Id).First().Value);
+                            }
+                        }
+                        foreach (var KeyToAdd in pEl.SupportDirection.Keys)
+                        {
+                            if (groupedElements[ind].SupportDirection.Any(x => x.Key.Id == KeyToAdd.Id))
+                            {
+
+                            }
+                            else
+                            {
+                                groupedElements[ind].SupportDirection.Add(pEl.SupportDirection.Where(x=>x.Key.Id == KeyToAdd.Id).First().Key, pEl.SupportDirection.Where(x => x.Key.Id == KeyToAdd.Id).First().Value);
+                            }
+                        }
+                        groupedElements[ind].SupportDirection.Concat(pEl.SupportDirection);
+                    }
+                }
+                else
+                {
+                    groupedElements.Add(pEl);
+                }
+            }
                 
             openingsWithoutLintel = new List<ParentElement>();
             openingsWithLintel = new List<ParentElement>();
@@ -335,10 +594,11 @@ namespace FerrumAddinDev.LintelCreator_v2
             foreach (var parent in groupedElements)
             {
                 // создаём «пустые» оболочки, копируя метаданные, но не копируя Walls
+                //28.07.25 - объединение проемов в перемычках
                 var noLintelParent = new ParentElement { Name = parent.Name, 
                     TypeName = parent.TypeName, 
                     Width = parent.Width, 
-                    Walls = new Dictionary<WallType, List<Element>>(), 
+                    Walls = new Dictionary<WallType, List<ElementsForLintel>>(), 
                     ChildElements = parent.ChildElements, 
                     SupportDirection = parent.SupportDirection, 
                     SupportType = parent.SupportType };
@@ -347,7 +607,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     Name = parent.Name,
                     TypeName = parent.TypeName,
                     Width = parent.Width,
-                    Walls = new Dictionary<WallType, List<Element>>(),
+                    Walls = new Dictionary<WallType, List<ElementsForLintel>>(),
                     ChildElements = parent.ChildElements,
                     SupportDirection = parent.SupportDirection,
                     SupportType = parent.SupportType
@@ -389,8 +649,10 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ToList();
         }
 
-        private static bool ElementHasLintel(Element element, Document doc)
+        private static bool ElementHasLintel(ElementsForLintel customEl, Document doc)
         {
+            //28.07.25 - объединение проемов в перемычках
+            Element element = customEl.Elements.FirstOrDefault();
             var bb = element.get_BoundingBox(null);
             if (bb == null) return false;
 
@@ -1197,8 +1459,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                     {
                         if (wallElements.Key.Name != selectedWallType)
                             continue;
-                        List<Element> wallElement = wallElements.Value;
-                        List<Element> lintelCreated = new List<Element>();
+                        //28.07.25 - объединение проемов в перемычках
+                        List<ElementsForLintel> wallElement = wallElements.Value;
+                        List<ElementsForLintel> lintelCreated = new List<ElementsForLintel>();
                         foreach (var element in wallElement)
                         {
                             using (Transaction tr = new Transaction(doc, "Добавление перемычек"))
@@ -1215,10 +1478,12 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 FamilyInstance newLintel = null;
 
                                 // Получаем уровен 
-                                Level level = doc.GetElement(element.LevelId) as Level;
+                                //28.07.25 - объединение проемов в перемычках
+                                Level level = doc.GetElement(element.Elements.FirstOrDefault().LevelId) as Level;
 
                                 // Рассчитываем BoundingBox текущего элемента
-                                BoundingBoxXYZ bb = element.get_BoundingBox(null);
+                                //28.07.25 - объединение проемов в перемычках
+                                BoundingBoxXYZ bb = element.Elements.FirstOrDefault().get_BoundingBox(null);
                                 if (bb == null) continue;
 
                                 XYZ minPoint = bb.Min;
@@ -1251,7 +1516,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     }
                                     else
                                     {
-                                        output += "У элемента " + element.Id + " уже создана перемычка, создание пропущено\n";
+                                        //28.07.25 - объединение проемов в перемычках
+                                        output += "У элемента " + string.Join("+", element.Elements.Select(x=>x.Id)) + " уже создана перемычка, создание пропущено\n";
                                         continue;
                                     }
                                 }
@@ -1267,18 +1533,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 double height = 0;
                                 XYZ locationPoint = null;
                                 XYZ translation = null;
-                                if (element is Wall)
+                                //28.07.25 - объединение проемов в перемычках
+                                if (element.Elements.FirstOrDefault() is Wall)
                                 {
-                                    var bounding = element.get_BoundingBox(doc.ActiveView);
-                                    height = bounding.Max.Z - bounding.Min.Z;
-                                    Line c = (element.Location as LocationCurve).Curve as Line;
                                     // 29.06.25 - добавлено смещение снизу для стен
-                                    locationPoint = (c.GetEndPoint(0) + c.GetEndPoint(1)) / 2 - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ + element.LookupParameter("Смещение снизу").AsDouble() * XYZ.BasisZ;
+                                    locationPoint = element.Location - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ + element.Elements.FirstOrDefault().LookupParameter("Смещение снизу").AsDouble() * XYZ.BasisZ;
                                 }
                                 else
                                 {
-                                    height = element.LookupParameter("ADSK_Размер_Высота").AsDouble();
-                                    locationPoint = (element.Location as LocationPoint).Point - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
+                                    height = element.Elements.FirstOrDefault().LookupParameter("ADSK_Размер_Высота").AsDouble();
+                                    locationPoint = element.Location - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
 
                                 }
 
@@ -1292,19 +1556,20 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 }
                                 
                                 XYZ baseOrientation;
+                                //28.07.25 - объединение проемов в перемычках
                                 if (selectedParentElement.SupportType == 1
-                                    && selectedParentElement.SupportDirection.TryGetValue(element, out XYZ supportDir))
+                                    && selectedParentElement.SupportDirection.TryGetValue(element.Elements.FirstOrDefault(), out XYZ supportDir))
                                 {
                                     // при одиночной опоре – используем именно её направление
                                     baseOrientation = supportDir;
                                 }
-                                else if (element is Wall w)
+                                else if (element.Elements.FirstOrDefault() is Wall w)
                                 {
                                     baseOrientation = w.Orientation;
                                 }
                                 else // FamilyInstance
                                 {
-                                    baseOrientation = ((FamilyInstance)element).FacingOrientation;
+                                    baseOrientation = ((FamilyInstance)element.Elements.FirstOrDefault()).FacingOrientation;
                                 }
 
                                 // смещение перемычки на половину ширины
@@ -1392,7 +1657,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 SupportType = selectedParentElement.SupportType,
                                 SupportDirection = selectedParentElement.SupportDirection,
                                 ChildElements = selectedParentElement.ChildElements,
-                                Walls = new Dictionary<WallType, List<Element>>()
+                                //28.07.25 - объединение проемов в перемычках
+                                Walls = new Dictionary<WallType, List<ElementsForLintel>>()
                             };
                             vm.openingsWithLintel.Add(withParent);
                         }
@@ -1401,7 +1667,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         if (withParent.Walls.ContainsKey(wallTypeKey))
                             withParent.Walls[wallTypeKey].AddRange(lintelCreated);
                         else
-                            withParent.Walls[wallTypeKey] = new List<Element>(lintelCreated);
+                            //28.07.25 - объединение проемов в перемычках
+                            withParent.Walls[wallTypeKey] = new List<ElementsForLintel>(lintelCreated);
 
 
                         break;
