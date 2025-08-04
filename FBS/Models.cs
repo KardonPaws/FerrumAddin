@@ -35,6 +35,8 @@ namespace FerrumAddinDev.FBS
         public List<double> coordZList { get; set; } = new List<double>();
         public bool first300 = false;
         public bool last300 = false;
+        //04.08.25 - базовый уровень в перемычках
+        public ElementId baseLevel { get; set; }
     }
 
     // Описание проёма (дверь/окно) вдоль стены, определённое стартовым и конечным расстоянием (в мм)

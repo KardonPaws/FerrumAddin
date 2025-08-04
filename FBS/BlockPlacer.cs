@@ -92,6 +92,8 @@ namespace FerrumAddinDev.FBS
                     if (familyName != "Кирпичная заделка (керамический кирпич)")
                         blocks.Add(inst);
                     block.PlacedElementId = inst.Id;
+                    //04.08.25 - базовый уровень в перемычках
+                    inst.LookupParameter("Базовый уровень").Set(block.Wall.baseLevel);
 
                     if (block.IsGapFill)
                     {

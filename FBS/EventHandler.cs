@@ -105,7 +105,9 @@ namespace FerrumAddinDev.FBS
                         Height = Math.Round(height),
                         BaseElevation = baseElev,
                         Openings = openings,
-                        line = locCurve.Curve as Line
+                        line = locCurve.Curve as Line,
+                        //04.08.25 - базовый уровень в перемычках
+                        baseLevel = wall.LookupParameter("Зависимость снизу").AsElementId()
                     };
 
                     wallInfos.Add(info);
