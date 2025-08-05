@@ -87,6 +87,13 @@ namespace FerrumAddinDev.FBS
                         {
                             openWidthFt = widthParam.AsDouble();
                         }
+                        // 05.08.25 - добавлен параметр если отсутсвует встроенный параметр
+                        else
+                        {
+                            widthParam = fi.LookupParameter("ADSK_Размер_Ширина");
+                            openWidthFt = widthParam.AsDouble();
+
+                        }
                         // размеры отверстия
                         double openWidthMm = openWidthFt * 304.8;
                         double openStart = openingCenterMm - openWidthMm / 2;
