@@ -103,8 +103,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                     // Вычисляем средние линии для боковых граней
                     List<Line> centerLines = ComputeCenterLines(allCurves);
+                    CreateModelLines(doc, centerLines);
+
                     centerLines = ExtendLinesToConnect(centerLines, modLength);
-                    //CreateModelLines(doc, centerLines);
                     centerLines = ExtendCenterLines(centerLines, modLength);
 
                     Dictionary<Line, List<Line>> dictTop = new Dictionary<Line, List<Line>>();
@@ -1372,16 +1373,30 @@ namespace FerrumAddinDev.GrillageCreator_v2
             {
                 // Если линии не направлены строго по осям, используем общий подход
                 // 16.07 - доработка под углом
-                if (start1.DistanceTo(start2) > start1.DistanceTo(end2))
-                {
-                    var s = start2;
-                    start2 = end2;
-                    end2 = s;
-                }
-                XYZ midStart = (start1 + start2) / 2;
-                XYZ midEnd = (end1 + end2) / 2;
+                XYZ dirA = (line1.GetEndPoint(1) - line1.GetEndPoint(0)).Normalize();
+                XYZ dirB = (line2.GetEndPoint(1) - line2.GetEndPoint(0)).Normalize();
 
-                return Line.CreateBound(midStart, midEnd);
+                // Точка, которую проецируем
+                XYZ pointA = line1.GetEndPoint(0); // начало первой линии
+                XYZ pointB = line2.GetEndPoint(0); // начало второй линии
+
+                // Вектор от начала lineB до начала lineA
+                XYZ vec = pointA - pointB;
+
+                // Проекция vec на направление линии B
+                double projectionLength = vec.DotProduct(dirB);
+                XYZ projectedStart = pointB + dirB.Multiply(projectionLength);
+
+                // Теперь проецируем вектор направления lineA на направление lineB
+                double lineA_length = line1.Length;
+                double dirProjectionLength = dirA.DotProduct(dirB) * lineA_length;
+                XYZ projectedEnd = projectedStart + dirB.Multiply(dirProjectionLength);
+
+                Line l = Line.CreateBound(projectedStart, projectedEnd);
+                XYZ minPoint = (line2.GetEndPoint(0) + line2.GetEndPoint(1)) / 2;
+                XYZ dir = Line.CreateBound(minPoint, line1.Project(minPoint).XYZPoint).Direction;
+
+                return l.CreateOffset(minPoint.DistanceTo((line1.Project(minPoint).XYZPoint + minPoint)/2), dir) as Line;
             }
         }
 

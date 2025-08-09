@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Controls;
@@ -617,7 +618,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                 {
                     var wallType = kv.Key;
                     var elems = kv.Value;
-
+                    if (wallType.Name.ToLower().Contains("_пгп_"))
+                    {
+                        continue;
+                    }
+                    if (wallType.Name.Contains("ПРГ"))
+                    {
+                        withLintelParent.SupportType = 0;
+                        noLintelParent.SupportType = 0;
+                    }
                     // разделить элементы на два списка по наличию перемычки
                     var without = elems.Where(el => !ElementHasLintel(el, doc)).ToList();
                     var with = elems.Where(el => ElementHasLintel(el, doc)).ToList();
@@ -659,10 +668,13 @@ namespace FerrumAddinDev.LintelCreator_v2
             XYZ min = bb.Min;
             XYZ max = bb.Max;
 
+            XYZ center = element is FamilyInstance ? (element.Location as LocationPoint).Point : 
+                (((element.Location as LocationCurve).Curve as Line).GetEndPoint(0) + ((element.Location as LocationCurve).Curve as Line).GetEndPoint(1)) / 2;
+
             // создаём область немного ниже макс.Z и немного выше на 100 мм
             double mm = 1.0 / 304.8;
-            XYZ searchMin = new XYZ(min.X - 10 * mm, min.Y - 10 * mm, max.Z - 50 * mm);
-            XYZ searchMax = new XYZ(max.X + 10 * mm, max.Y + 10 * mm, max.Z + 10 * mm);
+            XYZ searchMin = new XYZ(center.X - 25 * mm, center.Y - 25 * mm, max.Z - 50 * mm);
+            XYZ searchMax = new XYZ(center.X + 25 * mm, center.Y + 25 * mm, max.Z + 10 * mm);
 
             var outline = new Outline(searchMin, searchMax);
             var filter = new BoundingBoxIntersectsFilter(outline);
