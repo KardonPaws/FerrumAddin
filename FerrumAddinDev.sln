@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FerrumAddinDev", "FerrumAdd
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zhConstructionPilonsDimensions24", "..\zhConstructionPilonsDimensions24\zhConstructionPilonsDimensions24.csproj", "{71D3AEF1-1FD5-4924-AC73-FE16FB5CA006}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZhConstructionPilesFromDWG24", "..\ZhConstructionPilesFromDWG24\ZhConstructionPilesFromDWG24.csproj", "{31B4D260-DC1D-4AD8-8F7C-DF4B68BB5DEC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{71D3AEF1-1FD5-4924-AC73-FE16FB5CA006}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{71D3AEF1-1FD5-4924-AC73-FE16FB5CA006}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{71D3AEF1-1FD5-4924-AC73-FE16FB5CA006}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31B4D260-DC1D-4AD8-8F7C-DF4B68BB5DEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31B4D260-DC1D-4AD8-8F7C-DF4B68BB5DEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31B4D260-DC1D-4AD8-8F7C-DF4B68BB5DEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31B4D260-DC1D-4AD8-8F7C-DF4B68BB5DEC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

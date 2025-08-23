@@ -149,11 +149,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ToList()
                 .Where(f =>
                 {
-                    // 29.06.25 - добавлен второй параметр, если первого нет
-                    double code;
+                    // 14.08.25 - изменен поиск параметров, если есть параметр экз
+                    double? code;
                     try
                     {
-                        code = doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число").AsDouble();
+                        code = (doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип_Число")?.AsDouble());
                         if (code == 0)
                         {
                             code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
@@ -162,8 +162,12 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
                     catch
                     {
-                        code = Convert.ToDouble(doc.GetElement(f.GetTypeId()).LookupParameter("ZH_Код_Тип").AsValueString());
+                        code = f.LookupParameter("ZH_Код_Тип_Число")?.AsDouble();
+                        if (code == 0)
+                        {
+                            code = Convert.ToDouble(f.LookupParameter("ZH_Код_Тип").AsValueString());
 
+                        }
                     }
                     return (311 <= code && code < 312) || (317 <= code && code < 318);
                 })
@@ -341,7 +345,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     string typeName = el is FamilyInstance fi2 ? fi2.Symbol.Name : "Витраж";
                     string widthStr = el is FamilyInstance fi3 ?
                         fi3.LookupParameter("ADSK_Размер_Ширина")?.AsValueString() ?? "0" :
-                        Math.Round(el.LookupParameter("Длина")?.AsDouble() * 304.8 ?? 0).ToString();
+                        Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0).ToString();
 
                     XYZ center;
                     double width;
@@ -453,7 +457,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     string typeName = el is FamilyInstance fi2 ? fi2.Symbol.Name : "Витраж";
                     string widthStr = el is FamilyInstance fi3 ?
                         fi3.LookupParameter("ADSK_Размер_Ширина")?.AsValueString() ?? "0" :
-                        Math.Round(el.LookupParameter("Длина")?.AsDouble() * 304.8 ?? 0).ToString();
+                        Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0).ToString();
 
                     var dir = supportInfo.TryGetValue(el, out var val) ? val.Direction : XYZ.Zero;
                     int supportType = supportInfo.TryGetValue(el, out var val2) ? val2.SupportType : 0;
@@ -468,7 +472,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     var center = el is FamilyInstance ? (el.Location as LocationPoint).Point :
                     ((el.Location as LocationCurve).Curve.GetEndPoint(0) + (el.Location as LocationCurve).Curve.GetEndPoint(1)) / 2;
                     var width = el is FamilyInstance ? el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0 :
-                        Math.Round(el.LookupParameter("Длина")?.AsDouble() * 304.8 ?? 0);
+                        Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0);
                     var dir = el is FamilyInstance ? (el as FamilyInstance).HandOrientation : ((el.Location as LocationCurve).Curve as Line).Direction;
                     return (center - width / 2 * dir, center + width / 2 * dir);
                 });

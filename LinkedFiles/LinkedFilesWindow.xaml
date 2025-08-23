@@ -30,10 +30,10 @@
                             </ListView.ItemTemplate>
                         </ListView>
                     </Grid>
-                    <!-- Кнопки управления -->
+                    <!-- 23.08.25 - Аннотации не работают -->
                     <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right" Margin="10">
                         <Button Content="Выключить видимость" Margin="5" Width="215" Click="DisableVisibility_Click" HorizontalAlignment="Left"/>
-                        <Button Content="Выключить аннотации" Margin="5" Width="215" Click="DisableAnnotationVisibility_Click" HorizontalAlignment="Left"/>
+                        <Button Content="Выключить аннотации" IsEnabled="False" Margin="5" Width="215" Click="DisableAnnotationVisibility_Click" HorizontalAlignment="Left"/>
                         <Button Content="Перенос в рабочие наборы" Margin="5" Width="215" Click="MoveToWorksets_Click" HorizontalAlignment="Left"/>
                         <CheckBox x:Name="createWorkset" Content="Создавать отдельный РН" Margin="5" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -45,6 +45,8 @@
                 <Grid Background="#FFE5E5E5">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <!-- 23.08.25 - Для выбора -->
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -54,10 +56,19 @@
                         <Button Content="Выбрать с файлового сервера" Margin="5" Width="200" Click="SelectFromFileServer_Click"/>
                         <Button Content="Выбрать с Revit Server" Margin="5" Width="200" Click="SelectFromRevitServer_Click" IsEnabled="False"/>
                     </StackPanel>
-
+                    <!-- 23.08.25 - Выбор типап вставки -->
+                    <DockPanel Grid.Row="1" Margin="8" LastChildFill="True">
+                        <TextBlock Text="Тип вставки связи" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="cbInsertionType" SelectedIndex="0" Margin="10,0,0,0">
+                            <ComboBoxItem Content="По общим координатам" Tag="Shared"/>
+                            <ComboBoxItem Content="Совмещение внутренних начал" Tag="Origin"/>
+                            <!--<ComboBoxItem Content="Совмещение центров" Tag="Centered"/>-->
+                            <!--<ComboBoxItem Content="От базовой точки проекта до базовой точки проекта" Tag="Site"/>-->
+                        </ComboBox>
+                    </DockPanel>
                     <!-- Список рабочих наборов связи -->
                     
-                    <ListView x:Name="WorksetsList" Grid.Row="1" Margin="10">
+                    <ListView x:Name="WorksetsList" Grid.Row="2" Margin="10">
                         <ListView.ItemTemplate>
                             <DataTemplate>
                                 <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" Margin="5"/>
@@ -66,7 +77,7 @@
                     </ListView>
 
                     <!-- Кнопка загрузки -->
-                    <Button Grid.Row="2" Content="Загрузить" Margin="10" Width="100" HorizontalAlignment="Right" Click="LoadLinkedFile_Click"/>
+                    <Button Grid.Row="3" Content="Загрузить" Margin="10" Width="100" HorizontalAlignment="Right" Click="LoadLinkedFile_Click"/>
                 </Grid>
             </TabItem>
         </TabControl>

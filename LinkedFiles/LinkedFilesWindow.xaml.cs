@@ -316,6 +316,40 @@ namespace FerrumAddinDev.LinkedFiles
            
         }
 
+        // 23.08.25 - Добавлен выбор вставки
+        private ImportPlacement GetSelectedInsertion()
+        {
+            if (cbInsertionType?.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            {
+                return (ImportPlacement)Enum.Parse(typeof(ImportPlacement), tag);
+            }
+            return ImportPlacement.Shared;
+        }
+        private RevitLinkType FindRevitLinkTypeByModelPath(Document doc, ModelPath modelPath)
+        {
+            // Приводим путь к user-visible строке (чтобы можно было сравнить)
+            string userPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(modelPath);
+
+            // Перебираем все RevitLinkType в документе
+            var collector = new FilteredElementCollector(doc)
+                .OfClass(typeof(RevitLinkType))
+                .Cast<RevitLinkType>();
+
+            foreach (var linkType in collector)
+            {
+                // Берём хранимый путь у типа связи
+                string storedPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(
+                    linkType.GetExternalFileReference().GetPath());
+
+                if (string.Equals(userPath, storedPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return linkType;
+                }
+            }
+
+            return null; // не найден
+        }
+
         private void LoadLinkedFile_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -336,36 +370,46 @@ namespace FerrumAddinDev.LinkedFiles
                 // Начинаем транзакцию
                 using (Transaction trans = new Transaction(doc, "Загрузка связи с рабочими наборами"))
                 {
-                    trans.Start();
-
-                    // Создаем конфигурацию рабочих наборов
-                    WorksetConfiguration worksetConfig = new WorksetConfiguration(WorksetConfigurationOption.CloseAllWorksets);
-                    RevitLinkOptions options = new RevitLinkOptions(false, worksetConfig);
-                    // Загружаем связь с указанной конфигурацией рабочих наборов
-                    var linkInstance = RevitLinkType.Create(doc, WorksetsList.ItemsSource.Cast<WorksetModel>().FirstOrDefault().ModelPath, options);
-                    RevitLinkType linkType = (doc.GetElement(linkInstance.ElementId) as RevitLinkType);
-                    
-                    trans.Commit();
-
-                    foreach (Document _linkdoc in doc.Application.Documents)
+                    RevitLinkType linkType = null;
+                    LinkLoadResult linkInstance = null;
+                    try
                     {
-                        if (_linkdoc.Title == linkType.Name.Remove(linkType.Name.Length-4, 4))
-                        {
-                            WorksetConfiguration wk = new WorksetConfiguration(WorksetConfigurationOption.CloseAllWorksets);
-                            ModelPath _modelpath = _linkdoc.GetWorksharingCentralModelPath();
-                            WorksetTable _worksetTable = _linkdoc.GetWorksetTable();
+                        trans.Start();
 
-                            wk.Open(selectedWorksets);
-                            
-                            linkType.LoadFrom(_modelpath, wk);
+                        // Создаем конфигурацию рабочих наборов
+                        WorksetConfiguration worksetConfig = new WorksetConfiguration(WorksetConfigurationOption.CloseAllWorksets);
+                        RevitLinkOptions options = new RevitLinkOptions(false, worksetConfig);
+                        // Загружаем связь с указанной конфигурацией рабочих наборов
+                        linkInstance = RevitLinkType.Create(doc, WorksetsList.ItemsSource.Cast<WorksetModel>().FirstOrDefault().ModelPath, options);
+                        linkType = (doc.GetElement(linkInstance.ElementId) as RevitLinkType);
+
+                        trans.Commit();
+
+                        foreach (Document _linkdoc in doc.Application.Documents)
+                        {
+                            if (_linkdoc.Title == linkType.Name.Remove(linkType.Name.Length - 4, 4))
+                            {
+                                WorksetConfiguration wk = new WorksetConfiguration(WorksetConfigurationOption.CloseAllWorksets);
+                                ModelPath _modelpath = _linkdoc.GetWorksharingCentralModelPath();
+                                WorksetTable _worksetTable = _linkdoc.GetWorksetTable();
+
+                                wk.Open(selectedWorksets);
+
+                                linkType.LoadFrom(_modelpath, wk);
+                            }
                         }
+                    }
+                    catch
+                    {
+                        linkType = FindRevitLinkTypeByModelPath(doc, WorksetsList.ItemsSource.Cast<WorksetModel>().FirstOrDefault().ModelPath);
+                        trans.RollBack();
                     }
 
                     trans.Start("Создание связи");
-                    RevitLinkInstance.Create(doc, linkType.Id);
+                    var rvt = RevitLinkInstance.Create(doc, linkType.Id, GetSelectedInsertion());
                     trans.Commit();
 
-                    if (linkInstance != null)
+                    if (linkInstance != null || rvt != null)
                     {
                         MessageBox.Show("Связь успешно загружена с выбранными рабочими наборами.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     }
