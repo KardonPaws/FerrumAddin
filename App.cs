@@ -278,6 +278,11 @@ namespace FerrumAddinDev
                 "zhConstructionPilonsDimensions24.PilonsDimensions");
             panelKR.AddItem(PilonsDimensions);
 
+            PushButtonData PilessFromDWG = new PushButtonData("PilessFromDWG", "Пилоны из подложки",
+                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "ZhConstructionPilesFromDWG24.dll"),
+                "ZhConstructionPilesFromDWG24.PilesFromDWG");
+            panelKR.AddItem(PilessFromDWG);
+
             panelControl = a.CreateRibbonPanel(tabName, "Управление");
             panelControl.Visible = false;
 
