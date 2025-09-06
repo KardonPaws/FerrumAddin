@@ -67,6 +67,17 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
             var settings = GrillageSettings.LoadSettings(_settingsFilePath);
             if (settings == null) return;
+            // 06.09.25 - сохранение режима работы
+            if (settings.KnittedMode == true)
+            {
+                radioBtnKnitted.IsChecked = true;
+                radioBtnWelded.IsChecked = false;
+            }
+            else
+            {
+                radioBtnKnitted.IsChecked = false;
+                radioBtnWelded.IsChecked = true;
+            }
 
             // Загружаем значения в UI элементы с проверкой наличия в ItemsSource
             SetComboBoxValueIfExists(comboTop, settings.TopDiameter);
@@ -101,7 +112,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 LeftRightOffset = int.TryParse(boxLeftRight.Text, out var lr) ? lr : 50,
                 // 24.07.25 - отдельный отступ сверху
                 BottomOffset = int.TryParse(boxBottom.Text, out var tb) ? tb : 50,
-                TopOffset = int.TryParse(boxTop.Text, out var to) ? to : 50
+                TopOffset = int.TryParse(boxTop.Text, out var to) ? to : 50,
+                // 06.09.25 - сохранение режима работы
+                KnittedMode = (bool)radioBtnKnitted.IsChecked
             };
 
             GrillageSettings.SaveSettings(settings, _settingsFilePath);
@@ -337,6 +350,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
         public int LeftRightOffset { get; set; }
         public int TopOffset { get; set; }
         public int BottomOffset { get; set; }
+        // 06.09.25 - сохранение режима работы
+        public bool KnittedMode { get; set; }
 
 
         public static void SaveSettings(GrillageSettings settings, string filePath)

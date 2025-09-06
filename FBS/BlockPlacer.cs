@@ -88,7 +88,10 @@ namespace FerrumAddinDev.FBS
                     double zOff = (block.Row - 1) * (600 / 304.8);
                     pt = new XYZ(pt.X, pt.Y, block.Wall.BaseElevation + zOff + firstRowZ);
 
-                    FamilyInstance inst = doc.Create.NewFamilyInstance(pt, symbol, StructuralType.NonStructural);    
+                    FamilyInstance inst = doc.Create.NewFamilyInstance(pt, symbol, StructuralType.NonStructural);
+                    // 06.09.25 - Заполнить параметр ZH_Этаж_Числовой в фбс
+                    double l = doc.GetElement(inst.LevelId).LookupParameter("ZH_Этаж_Числовой").AsDouble();
+                    inst.LookupParameter("ZH_Этаж_Числовой").Set(l);
                     if (familyName != "Кирпичная заделка (керамический кирпич)")
                         blocks.Add(inst);
                     block.PlacedElementId = inst.Id;
