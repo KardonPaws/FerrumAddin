@@ -198,8 +198,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                 {
                     continue;
                 }
-                var leftPt = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2) * orient : center - Math.Abs(orient.DotProduct(center - min)) * orient;
-                var rightPt = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + Math.Abs(orient.DotProduct(max - center)) * orient;
+                // 10.08.25 - изменения в перемычках
+                var leftPtC = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2) * orient : center - Math.Abs(orient.DotProduct(center - min)) * orient;
+                var rightPtC = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + Math.Abs(orient.DotProduct(max - center)) * orient;
                 double threshold = 0;
                 if (el is FamilyInstance inst)
                 {
@@ -235,18 +236,31 @@ namespace FerrumAddinDev.LintelCreator_v2
                     fbb.Min += idx;
                     fbb.Max += idx;
 
-                    // 20.06.25 - изменения в координатах
-                    if (leftPt.X > fbb.Min.X + 1e-6 && leftPt.X < fbb.Max.X - 1e-6
-                         && leftPt.Y > fbb.Min.Y + 1e-6 && leftPt.Y < fbb.Max.Y - 1e-6)
+                    // 10.08.25 - изменения в перемычках
+                    var leftPtM = leftPtC - threshold * orient.CrossProduct(XYZ.BasisZ);
+                    var leftPtP = leftPtC + threshold * orient.CrossProduct(XYZ.BasisZ);
+                    var rightPtM = rightPtC - threshold * orient.CrossProduct(XYZ.BasisZ);
+                    var rightPtP = rightPtC + threshold * orient.CrossProduct(XYZ.BasisZ);
+
+                    if ((leftPtC.X >= fbb.Min.X + 1e-6 && leftPtC.X <= fbb.Max.X - 1e-6
+                         && leftPtC.Y >= fbb.Min.Y + 1e-6 && leftPtC.Y <= fbb.Max.Y - 1e-6)||
+                         (leftPtM.X >= fbb.Min.X + 1e-6 && leftPtM.X <= fbb.Max.X - 1e-6
+                         && leftPtM.Y >= fbb.Min.Y + 1e-6 && leftPtM.Y <= fbb.Max.Y - 1e-6)||
+                         (leftPtP.X >= fbb.Min.X + 1e-6 && leftPtP.X <= fbb.Max.X - 1e-6
+                         && leftPtP.Y >= fbb.Min.Y + 1e-6 && leftPtP.Y <= fbb.Max.Y - 1e-6))
                     {
-                        double dz = fbb.Min.Z - leftPt.Z;
+                        double dz = fbb.Min.Z + 0.0001 - leftPtC.Z;
                         if (dz >= 0 && dz <= threshold) leftSup = true;
                     }
 
-                    if (rightPt.X > fbb.Min.X + 1e-6 && rightPt.X < fbb.Max.X - 1e-6
-                     && rightPt.Y > fbb.Min.Y + 1e-6 && rightPt.Y < fbb.Max.Y - 1e-6)
+                    if ((rightPtC.X >= fbb.Min.X + 1e-6 && rightPtC.X <= fbb.Max.X - 1e-6
+                     && rightPtC.Y >= fbb.Min.Y + 1e-6 && rightPtC.Y <= fbb.Max.Y - 1e-6)||
+                     (rightPtM.X >= fbb.Min.X + 1e-6 && rightPtM.X <= fbb.Max.X - 1e-6
+                     && rightPtM.Y >= fbb.Min.Y + 1e-6 && rightPtM.Y <= fbb.Max.Y - 1e-6)||
+                     (rightPtP.X >= fbb.Min.X + 1e-6 && rightPtP.X <= fbb.Max.X - 1e-6
+                     && rightPtP.Y >= fbb.Min.Y + 1e-6 && rightPtP.Y <= fbb.Max.Y - 1e-6))
                     {
-                        double dz = fbb.Min.Z - rightPt.Z;
+                        double dz = fbb.Min.Z + 0.0001 - rightPtC.Z;
                         if (dz >= 0 && dz <= threshold) rightSup = true;
                     }
                     if (leftSup && rightSup) break;
@@ -256,7 +270,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                 XYZ dir = XYZ.Zero;
                 if (supType == 1)
                 {
-                    var supportPt = leftSup ? leftPt : rightPt;
+                    // 10.08.25 - изменения в перемычках
+                    var supportPt = leftSup ? leftPtC : rightPtC;
                     dir = (supportPt - center).Normalize();
                 }
                 supportInfo[el] = (supType, dir);
@@ -1552,7 +1567,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 //28.07.25 - объединение проемов в перемычках
                                 if (element.Elements.FirstOrDefault() is Wall)
                                 {
-                                    // 29.06.25 - добавлено смещение снизу для стен
+                                    // 10.08.25 - изменения в перемычках
+                                    height = element.Elements.FirstOrDefault().LookupParameter("Неприсоединенная высота").AsDouble();
                                     locationPoint = element.Location - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ + element.Elements.FirstOrDefault().LookupParameter("Смещение снизу").AsDouble() * XYZ.BasisZ;
                                 }
                                 else
