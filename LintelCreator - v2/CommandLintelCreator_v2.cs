@@ -232,7 +232,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         continue;
 
                     var fbb = solid.GetBoundingBox();
-                    var idx = solid.ComputeCentroid();
+                    // 10.08.25 - изменения в перемычках
+                    var idx = (fl.Location as LocationPoint).Point;
                     fbb.Min += idx;
                     fbb.Max += idx;
 
@@ -241,24 +242,24 @@ namespace FerrumAddinDev.LintelCreator_v2
                     var leftPtP = leftPtC + threshold * orient.CrossProduct(XYZ.BasisZ);
                     var rightPtM = rightPtC - threshold * orient.CrossProduct(XYZ.BasisZ);
                     var rightPtP = rightPtC + threshold * orient.CrossProduct(XYZ.BasisZ);
-
-                    if ((leftPtC.X >= fbb.Min.X + 1e-6 && leftPtC.X <= fbb.Max.X - 1e-6
-                         && leftPtC.Y >= fbb.Min.Y + 1e-6 && leftPtC.Y <= fbb.Max.Y - 1e-6)||
-                         (leftPtM.X >= fbb.Min.X + 1e-6 && leftPtM.X <= fbb.Max.X - 1e-6
-                         && leftPtM.Y >= fbb.Min.Y + 1e-6 && leftPtM.Y <= fbb.Max.Y - 1e-6)||
-                         (leftPtP.X >= fbb.Min.X + 1e-6 && leftPtP.X <= fbb.Max.X - 1e-6
-                         && leftPtP.Y >= fbb.Min.Y + 1e-6 && leftPtP.Y <= fbb.Max.Y - 1e-6))
+                    // 10.08.25 - изменения в перемычках
+                    if ((leftPtC.X > fbb.Min.X + 1e-6 && leftPtC.X < fbb.Max.X - 1e-6
+                         && leftPtC.Y > fbb.Min.Y + 1e-6 && leftPtC.Y < fbb.Max.Y - 1e-6)||
+                         (leftPtM.X > fbb.Min.X + 1e-6 && leftPtM.X < fbb.Max.X - 1e-6
+                         && leftPtM.Y > fbb.Min.Y + 1e-6 && leftPtM.Y < fbb.Max.Y - 1e-6)||
+                         (leftPtP.X > fbb.Min.X + 1e-6 && leftPtP.X < fbb.Max.X - 1e-6
+                         && leftPtP.Y > fbb.Min.Y + 1e-6 && leftPtP.Y < fbb.Max.Y - 1e-6))
                     {
                         double dz = fbb.Min.Z + 0.0001 - leftPtC.Z;
                         if (dz >= 0 && dz <= threshold) leftSup = true;
                     }
 
-                    if ((rightPtC.X >= fbb.Min.X + 1e-6 && rightPtC.X <= fbb.Max.X - 1e-6
-                     && rightPtC.Y >= fbb.Min.Y + 1e-6 && rightPtC.Y <= fbb.Max.Y - 1e-6)||
-                     (rightPtM.X >= fbb.Min.X + 1e-6 && rightPtM.X <= fbb.Max.X - 1e-6
-                     && rightPtM.Y >= fbb.Min.Y + 1e-6 && rightPtM.Y <= fbb.Max.Y - 1e-6)||
-                     (rightPtP.X >= fbb.Min.X + 1e-6 && rightPtP.X <= fbb.Max.X - 1e-6
-                     && rightPtP.Y >= fbb.Min.Y + 1e-6 && rightPtP.Y <= fbb.Max.Y - 1e-6))
+                    if ((rightPtC.X > fbb.Min.X + 1e-6 && rightPtC.X < fbb.Max.X - 1e-6
+                     && rightPtC.Y > fbb.Min.Y + 1e-6 && rightPtC.Y < fbb.Max.Y - 1e-6)||
+                     (rightPtM.X > fbb.Min.X + 1e-6 && rightPtM.X < fbb.Max.X - 1e-6
+                     && rightPtM.Y > fbb.Min.Y + 1e-6 && rightPtM.Y < fbb.Max.Y - 1e-6)||
+                     (rightPtP.X > fbb.Min.X + 1e-6 && rightPtP.X < fbb.Max.X - 1e-6
+                     && rightPtP.Y > fbb.Min.Y + 1e-6 && rightPtP.Y < fbb.Max.Y - 1e-6))
                     {
                         double dz = fbb.Min.Z + 0.0001 - rightPtC.Z;
                         if (dz >= 0 && dz <= threshold) rightSup = true;
