@@ -140,6 +140,13 @@ namespace FerrumAddinDev.LintelCreator_v2
             // Разделяем на экземпляры семейств и витражи
             var windowsAndDoors = windowsAndDoorsList.OfType<FamilyInstance>().ToList();
             var curtains = windowsAndDoorsList.Except(windowsAndDoors).OfType<Wall>().ToList();
+            // Получение всех стен для поиска хостов витражей
+            // 12.09.25 - правильное размещение для витражей не по середине стены
+            List<Element> allWalls = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_Walls)
+                .WhereElementIsNotElementType()
+                .Where(x => x is Wall w && (doc.GetElement(x.GetTypeId()) as WallType).Kind != WallKind.Curtain)
+                .ToList();
 
             // Подготавливаем список плит перекрытия для вычисления опор
             // 30.06.26 - перемычки в модели
@@ -233,36 +240,37 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                     var fbb = solid.GetBoundingBox();
                     // 10.08.25 - изменения в перемычках
-                    var idx = (fl.Location as LocationPoint).Point;
+                    // 12.09.25 - правильное размещение для витражей не по середине стены
+                    var idx = solid.ComputeCentroid();
                     fbb.Min += idx;
                     fbb.Max += idx;
 
                     // 10.08.25 - изменения в перемычках
-                    var leftPtM = leftPtC - threshold * orient.CrossProduct(XYZ.BasisZ);
-                    var leftPtP = leftPtC + threshold * orient.CrossProduct(XYZ.BasisZ);
-                    var rightPtM = rightPtC - threshold * orient.CrossProduct(XYZ.BasisZ);
-                    var rightPtP = rightPtC + threshold * orient.CrossProduct(XYZ.BasisZ);
+                    var leftPtM = leftPtC - threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
+                    var leftPtP = leftPtC + threshold /2  * orient.CrossProduct(XYZ.BasisZ);
+                    var rightPtM = rightPtC - threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
+                    var rightPtP = rightPtC + threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
                     // 10.08.25 - изменения в перемычках
-                    if ((leftPtC.X > fbb.Min.X + 1e-6 && leftPtC.X < fbb.Max.X - 1e-6
-                         && leftPtC.Y > fbb.Min.Y + 1e-6 && leftPtC.Y < fbb.Max.Y - 1e-6)||
-                         (leftPtM.X > fbb.Min.X + 1e-6 && leftPtM.X < fbb.Max.X - 1e-6
-                         && leftPtM.Y > fbb.Min.Y + 1e-6 && leftPtM.Y < fbb.Max.Y - 1e-6)||
-                         (leftPtP.X > fbb.Min.X + 1e-6 && leftPtP.X < fbb.Max.X - 1e-6
-                         && leftPtP.Y > fbb.Min.Y + 1e-6 && leftPtP.Y < fbb.Max.Y - 1e-6))
+                    if ((leftPtC.X > fbb.Min.X + 5e-6 && leftPtC.X < fbb.Max.X - 5e-6
+                         && leftPtC.Y > fbb.Min.Y + 5e-6 && leftPtC.Y < fbb.Max.Y - 5e-6)||
+                         (leftPtM.X > fbb.Min.X + 5e-6 && leftPtM.X < fbb.Max.X - 5e-6
+                         && leftPtM.Y > fbb.Min.Y + 5e-6 && leftPtM.Y < fbb.Max.Y - 5e-6)||
+                         (leftPtP.X > fbb.Min.X + 5e-6 && leftPtP.X < fbb.Max.X - 5e-6
+                         && leftPtP.Y > fbb.Min.Y + 5e-6 && leftPtP.Y < fbb.Max.Y - 5e-6))
                     {
                         double dz = fbb.Min.Z + 0.0001 - leftPtC.Z;
                         if (dz >= 0 && dz <= threshold) leftSup = true;
                     }
 
-                    if ((rightPtC.X > fbb.Min.X + 1e-6 && rightPtC.X < fbb.Max.X - 1e-6
-                     && rightPtC.Y > fbb.Min.Y + 1e-6 && rightPtC.Y < fbb.Max.Y - 1e-6)||
-                     (rightPtM.X > fbb.Min.X + 1e-6 && rightPtM.X < fbb.Max.X - 1e-6
-                     && rightPtM.Y > fbb.Min.Y + 1e-6 && rightPtM.Y < fbb.Max.Y - 1e-6)||
-                     (rightPtP.X > fbb.Min.X + 1e-6 && rightPtP.X < fbb.Max.X - 1e-6
-                     && rightPtP.Y > fbb.Min.Y + 1e-6 && rightPtP.Y < fbb.Max.Y - 1e-6))
+                    if ((rightPtC.X > fbb.Min.X + 5e-6 && rightPtC.X < fbb.Max.X - 5e-6
+                     && rightPtC.Y > fbb.Min.Y + 5e-6 && rightPtC.Y < fbb.Max.Y - 5e-6)||
+                     (rightPtM.X > fbb.Min.X + 5e-6 && rightPtM.X < fbb.Max.X - 5e-6
+                     && rightPtM.Y > fbb.Min.Y + 5e-6 && rightPtM.Y < fbb.Max.Y - 5e-6)||
+                     (rightPtP.X > fbb.Min.X + 5e-6 && rightPtP.X < fbb.Max.X - 5e-6
+                     && rightPtP.Y > fbb.Min.Y + 5e-6 && rightPtP.Y < fbb.Max.Y - 5e-6))
                     {
                         double dz = fbb.Min.Z + 0.0001 - rightPtC.Z;
-                        if (dz >= 0 && dz <= threshold) rightSup = true;
+                        if (dz >= 0.0001 && dz <= threshold) rightSup = true;
                     }
                     if (leftSup && rightSup) break;
                 }
@@ -449,13 +457,6 @@ namespace FerrumAddinDev.LintelCreator_v2
                 
             }
 
-            // Получение всех стен для поиска хостов витражей
-            List<Element> allWalls = new FilteredElementCollector(doc)
-                .OfCategory(BuiltInCategory.OST_Walls)
-                .WhereElementIsNotElementType()
-                .Where(x => x is Wall w && (doc.GetElement(x.GetTypeId()) as WallType).Kind != WallKind.Curtain)
-                .ToList();
-
             // Группировка кластеров в ParentElement
             var groupedElements = new List<ParentElement>();
             var Clusters = new List<List<Element>>();
@@ -484,13 +485,37 @@ namespace FerrumAddinDev.LintelCreator_v2
                 // Границы
                 var xBounds = group.Select(el =>
                 {
-                    var bb = el.get_BoundingBox(null);
-                    var center = el is FamilyInstance ? (el.Location as LocationPoint).Point :
-                    ((el.Location as LocationCurve).Curve.GetEndPoint(0) + (el.Location as LocationCurve).Curve.GetEndPoint(1)) / 2;
-                    var width = el is FamilyInstance ? el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0 :
-                        Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0);
-                    var dir = el is FamilyInstance ? (el as FamilyInstance).HandOrientation : ((el.Location as LocationCurve).Curve as Line).Direction;
-                    return (center - width / 2 * dir, center + width / 2 * dir);
+                    // 12.09.25 - правильное размещение для витражей не по середине стены
+
+                    if (el is FamilyInstance fi)
+                    {
+                        var center = (el.Location as LocationPoint).Point;
+                        var width = el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0;
+                        var dir = (el as FamilyInstance).HandOrientation;
+                        return (center - width / 2 * dir, center + width / 2 * dir);
+                    }
+                    else
+                    {
+                        var width = Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0);
+                        var dir = ((el.Location as LocationCurve).Curve as Line).Direction;
+                        var hostWall = allWalls.Cast<Wall>()
+                            .FirstOrDefault(w => w.FindInserts(false, false, true, false)
+                                .Any(id => id == el.Id));
+                        var curve = (el.Location as LocationCurve)?.Curve as Line;
+                        var p1 = curve.GetEndPoint(0);
+                        var p2 = curve.GetEndPoint(1);
+                        var wcenter = (p1 + p2) / 2;
+                        var opts = new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Fine };
+                        var geom = hostWall.get_Geometry(opts);
+                        Solid solid = (Solid)geom
+                        .OrderByDescending(s => (s as Solid).Volume)
+                        .FirstOrDefault();
+                        var p = solid.ComputeCentroid();
+                        p = p - p.Z * XYZ.BasisZ + curve.GetEndPoint(0).Z * XYZ.BasisZ;
+                        var center = Line.CreateUnbound(p - 100 * curve.Direction, curve.Direction).Project(wcenter).XYZPoint;
+                        return (center - width / 2 * dir, center + width / 2 * dir);
+
+                    }
                 });
 
                 double mergedWidth = double.MinValue;
