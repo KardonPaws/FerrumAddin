@@ -383,13 +383,24 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
                     else if (el is Wall wall)
                     {
-                        var curve = (wall.Location as LocationCurve)?.Curve as Line;
-                        if (curve == null) return null;
+                        // 19.09.25 - обновление определения центра
+                        var hostWall = allWalls.Cast<Wall>()
+                             .FirstOrDefault(w => w.FindInserts(false, false, true, false)
+                                 .Any(id => id == el.Id));
+                        var curve = (el.Location as LocationCurve)?.Curve as Line;
                         var p1 = curve.GetEndPoint(0);
                         var p2 = curve.GetEndPoint(1);
-                        center = (p1 + p2) / 2;
-                        width = curve.Length;
+                        var wcenter = (p1 + p2) / 2;
+                        var opts = new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Fine };
+                        var geom = hostWall.get_Geometry(opts);
+                        Solid solid = (Solid)geom
+                        .OrderByDescending(s => (s as Solid).Volume)
+                        .FirstOrDefault();
+                        var p = solid.ComputeCentroid();
+                        p = p - p.Z * XYZ.BasisZ + curve.GetEndPoint(0).Z * XYZ.BasisZ;
+                        center = Line.CreateUnbound(p - 100 * curve.Direction, curve.Direction).Project(wcenter).XYZPoint;
                         dir = curve.Direction;
+                        width = curve.Length;
                     }
                     else return null;
 
@@ -705,21 +716,17 @@ namespace FerrumAddinDev.LintelCreator_v2
 
         private static bool ElementHasLintel(ElementsForLintel customEl, Document doc)
         {
-            //28.07.25 - объединение проемов в перемычках
             Element element = customEl.Elements.FirstOrDefault();
-            var bb = element.get_BoundingBox(null);
-            if (bb == null) return false;
-
-            XYZ min = bb.Min;
-            XYZ max = bb.Max;
 
             XYZ center = element is FamilyInstance ? (element.Location as LocationPoint).Point : 
                 (((element.Location as LocationCurve).Curve as Line).GetEndPoint(0) + ((element.Location as LocationCurve).Curve as Line).GetEndPoint(1)) / 2;
-
+            // 19.09.25 - обновление определения центра
+            double height = element is FamilyInstance ? element.LookupParameter("ADSK_Размер_Высота").AsDouble() :
+                element.LookupParameter("Неприсоединенная высота").AsDouble();
             // создаём область немного ниже макс.Z и немного выше на 100 мм
             double mm = 1.0 / 304.8;
-            XYZ searchMin = new XYZ(center.X - 25 * mm, center.Y - 25 * mm, max.Z - 50 * mm);
-            XYZ searchMax = new XYZ(center.X + 25 * mm, center.Y + 25 * mm, max.Z + 10 * mm);
+            XYZ searchMin = new XYZ(center.X - 25 * mm, center.Y - 25 * mm, center.Z + height - 50 * mm);
+            XYZ searchMax = new XYZ(center.X + 25 * mm, center.Y + 25 * mm, center.Z + height + 10 * mm);
 
             var outline = new Outline(searchMin, searchMax);
             var filter = new BoundingBoxIntersectsFilter(outline);
