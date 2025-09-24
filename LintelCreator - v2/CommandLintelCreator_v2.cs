@@ -205,9 +205,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                 {
                     continue;
                 }
-                // 10.08.25 - изменения в перемычках
-                var leftPtC = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2) * orient : center - Math.Abs(orient.DotProduct(center - min)) * orient;
-                var rightPtC = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + Math.Abs(orient.DotProduct(max - center)) * orient;
+                // 24.09.25 - изменения в перемычках
+                var leftPtC = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2) * orient : center - (el as Wall).Width / 2 * orient;
+                var rightPtC = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + (el as Wall).Width / 2 * orient;
                 double threshold = 0;
                 if (el is FamilyInstance inst)
                 {
@@ -250,7 +250,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     var leftPtP = leftPtC + threshold /2  * orient.CrossProduct(XYZ.BasisZ);
                     var rightPtM = rightPtC - threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
                     var rightPtP = rightPtC + threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
-                    // 10.08.25 - изменения в перемычках
+                    // 24.09.25 - изменения в перемычках
                     if ((leftPtC.X > fbb.Min.X + 5e-6 && leftPtC.X < fbb.Max.X - 5e-6
                          && leftPtC.Y > fbb.Min.Y + 5e-6 && leftPtC.Y < fbb.Max.Y - 5e-6)||
                          (leftPtM.X > fbb.Min.X + 5e-6 && leftPtM.X < fbb.Max.X - 5e-6
@@ -259,7 +259,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                          && leftPtP.Y > fbb.Min.Y + 5e-6 && leftPtP.Y < fbb.Max.Y - 5e-6))
                     {
                         double dz = fbb.Min.Z + 0.0001 - leftPtC.Z;
-                        if (dz >= 0 && dz <= threshold) leftSup = true;
+                        if (dz >= 1e-6 && dz <= threshold) leftSup = true;
                     }
 
                     if ((rightPtC.X > fbb.Min.X + 5e-6 && rightPtC.X < fbb.Max.X - 5e-6
@@ -270,7 +270,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                      && rightPtP.Y > fbb.Min.Y + 5e-6 && rightPtP.Y < fbb.Max.Y - 5e-6))
                     {
                         double dz = fbb.Min.Z + 0.0001 - rightPtC.Z;
-                        if (dz >= 0.0001 && dz <= threshold) rightSup = true;
+                        if (dz >= 1e-6 && dz <= threshold) rightSup = true;
                     }
                     if (leftSup && rightSup) break;
                 }
@@ -1549,13 +1549,13 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 //28.07.25 - объединение проемов в перемычках
                                 BoundingBoxXYZ bb = element.Elements.FirstOrDefault().get_BoundingBox(null);
                                 if (bb == null) continue;
-
-                                XYZ minPoint = bb.Min;
+                                // 24.09.25 - изменения в перемычках
+                                XYZ center = (bb.Max + bb.Min) / 2;
                                 XYZ maxPoint = bb.Max;
 
                                 // Увеличиваем BoundingBox вверх для поиска перемычки
-                                XYZ searchMinPoint = new XYZ(minPoint.X - 10 / 304.8, minPoint.Y - 10 / 304.8, maxPoint.Z - 50 / 304.8);
-                                XYZ searchMaxPoint = new XYZ(maxPoint.X + 10 / 304.8, maxPoint.Y + 10 / 304.8, maxPoint.Z + 10 / 304.8); // 100 мм вверх
+                                XYZ searchMinPoint = new XYZ(center.X - 100 / 304.8, center.Y - 100 / 304.8, maxPoint.Z - 50 / 304.8);
+                                XYZ searchMaxPoint = new XYZ(center.X + 100 / 304.8, center.Y + 100 / 304.8, maxPoint.Z + 10 / 304.8); // 100 мм вверх
 
                                 Outline searchOutline = new Outline(searchMinPoint, searchMaxPoint);
                                 BoundingBoxIntersectsFilter searchFilter = new BoundingBoxIntersectsFilter(searchOutline);
@@ -1565,6 +1565,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WherePasses(searchFilter)
                 .Where(x => (x as FamilyInstance).Symbol.FamilyName.Contains("_Перемычки")).ToList();
+
                                 List<ElementId> listToDel = new List<ElementId>();
                                 // Если есть существующая перемычка, пропускаем создание новой
                                 if (lintelCollector.Count() > 0 && lintelCollector.Any(x => x.LookupParameter("ADSK_Группирование")?.AsString() == "ПР"))
