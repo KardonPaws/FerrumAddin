@@ -188,11 +188,12 @@ namespace FerrumAddinDev
                 root = new XElement("Settings");
             }
 
-
-            XElement frmMangerElement = root.Element("frmManger");
+            // 17.10.25 - полное откоючение фм
+            XElement frmMangerElement = root.Element("frmManager");
             if (frmMangerElement == null)
             {
-                frmMangerElement = new XElement("frmManger");
+                frmMangerElement = new XElement("frmManager");
+                frmMangerElement.SetAttributeValue("IsChecked", false);
                 root.Add(frmMangerElement);
             }
             // 23.95.25 - Новый функционал BigPicture для FM
@@ -319,7 +320,7 @@ namespace FerrumAddinDev
 
             DockablePaneId id = new DockablePaneId(new Guid("{3496B5BA-F8C4-403D-AF7E-B95D25F15CED}"));
             // 17.10.25 - полное откоючение фм
-            bool manager = GetElementStates(root).First(x => x.Key.Equals("frmManager")).Value;
+            bool manager = (bool)(GetElementStates(root).Where(x => x.Key.Equals("frmManager"))?.First().Value);
             if (manager)
             {
                 try
