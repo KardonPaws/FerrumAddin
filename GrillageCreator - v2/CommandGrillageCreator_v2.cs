@@ -103,7 +103,7 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                     // Вычисляем средние линии для боковых граней
                     List<Line> centerLines = ComputeCenterLines(allCurves);
-                    CreateModelLines(doc, centerLines);
+                    //CreateModelLines(doc, centerLines);
 
                     centerLines = ExtendLinesToConnect(centerLines, modLength);
                     centerLines = ExtendCenterLines(centerLines, modLength);
@@ -621,6 +621,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
                     if (bottom)
                     {
                         rebar.LookupParameter("ADSK_Главная деталь изделия").Set(1);
+                        // 17.10.25 - главная деталь только одна
+                        bottom = false;
                     }
                 }
                 tx.Commit();
