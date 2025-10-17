@@ -193,7 +193,7 @@ namespace FerrumAddinDev
             if (frmMangerElement == null)
             {
                 frmMangerElement = new XElement("frmManager");
-                frmMangerElement.SetAttributeValue("IsChecked", false);
+                frmMangerElement.SetAttributeValue("IsChecked", true);
                 root.Add(frmMangerElement);
             }
             // 23.95.25 - Новый функционал BigPicture для FM
