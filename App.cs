@@ -318,35 +318,40 @@ namespace FerrumAddinDev
             dockableWindow = dock;
 
             DockablePaneId id = new DockablePaneId(new Guid("{3496B5BA-F8C4-403D-AF7E-B95D25F15CED}"));
-            try
+            // 17.10.25 - полное откоючение фм
+            bool manager = GetElementStates(root).First(x => x.Key.Equals("frmManager")).Value;
+            if (manager)
             {
-                a.RegisterDockablePane(id, "Менеджер семейств Железно_Тест",
-                        dockableWindow as IDockablePaneProvider);
-                if ((admins.Count != 0 && admins.Contains(name)) || AlwaysLoad == true)
+                try
                 {
+                    a.RegisterDockablePane(id, "Менеджер семейств Железно_Тест",
+                            dockableWindow as IDockablePaneProvider);
+                    if ((admins.Count != 0 && admins.Contains(name)) || AlwaysLoad == true)
+                    {
+                    }
+                    else
+                    {
+                        a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
+                        a.ControlledApplication.ElementTypeDuplicating += ControlledApplication_ElementTypeDuplicating;
+                    }
+
+                    a.ControlledApplication.DocumentOpening += ControlledApplication_DocumentOpening;
+                    a.ControlledApplication.DocumentOpened += ControlledApplication_DocumentOpened;
+                    a.ControlledApplication.DocumentClosing += ControlledApplication_DocumentClosing;
+
+                    a.ControlledApplication.DocumentSynchronizingWithCentral += ControlledApplication_DocumentSynchronizingWithCentral;
+                    a.ControlledApplication.DocumentSynchronizedWithCentral += ControlledApplication_DocumentSynchronizedWithCentral;
+
+                    a.ControlledApplication.DocumentChanged += ControlledApplication_DocumentChanged;
+
+                    a.ViewActivated += A_ViewActivated;
+
+                    LoadEvent = ExternalEvent.Create(new LoadEvent());
                 }
-                else
+                catch (Exception ex)
                 {
-                    a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
-                    a.ControlledApplication.ElementTypeDuplicating += ControlledApplication_ElementTypeDuplicating;
+
                 }
-               
-                a.ControlledApplication.DocumentOpening += ControlledApplication_DocumentOpening;
-                a.ControlledApplication.DocumentOpened += ControlledApplication_DocumentOpened;
-                a.ControlledApplication.DocumentClosing += ControlledApplication_DocumentClosing;
-
-                a.ControlledApplication.DocumentSynchronizingWithCentral += ControlledApplication_DocumentSynchronizingWithCentral;
-                a.ControlledApplication.DocumentSynchronizedWithCentral += ControlledApplication_DocumentSynchronizedWithCentral;
-
-                a.ControlledApplication.DocumentChanged += ControlledApplication_DocumentChanged;
-
-                a.ViewActivated += A_ViewActivated;
-                
-                LoadEvent = ExternalEvent.Create(new LoadEvent());
-            }
-            catch (Exception ex)
-            {
-
             }
 
             ButtonConf(root);
