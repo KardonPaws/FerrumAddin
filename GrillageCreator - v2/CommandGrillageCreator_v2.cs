@@ -621,8 +621,6 @@ namespace FerrumAddinDev.GrillageCreator_v2
                     if (bottom)
                     {
                         rebar.LookupParameter("ADSK_Главная деталь изделия").Set(1);
-                        // 17.10.25 - главная деталь только одна
-                        bottom = false;
                     }
                 }
                 tx.Commit();
