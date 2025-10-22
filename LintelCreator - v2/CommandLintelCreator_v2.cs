@@ -387,6 +387,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                         var hostWall = allWalls.Cast<Wall>()
                              .FirstOrDefault(w => w.FindInserts(false, false, true, false)
                                  .Any(id => id == el.Id));
+                        // 22.10.25 - Изменения в перемычках (нет хоста)
+                        if (hostWall == null)
+                            return null;
                         var curve = (el.Location as LocationCurve)?.Curve as Line;
                         var p1 = curve.GetEndPoint(0);
                         var p2 = curve.GetEndPoint(1);
