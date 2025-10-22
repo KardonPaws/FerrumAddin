@@ -64,6 +64,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 foreach (Reference reference in elements)
                 {
                     Element element = doc.GetElement(reference.ElementId);
+                    // 23.10.25 - исправления в ростверках
+                    if (!(element is Floor))
+                        continue;
                     // Получаем SketchId перекрытия
                     Sketch sketch = doc.GetElement((element as Floor).SketchId) as Sketch;
                     if (sketch == null)
@@ -447,8 +450,16 @@ namespace FerrumAddinDev.GrillageCreator_v2
                         Element coverTopBottom = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (Math.Min(WindowGrillageCreator_v2.topOffset, WindowGrillageCreator_v2.bottomOffset) / 304.8 - 25 / 304.8)).FirstOrDefault();
                         if (coverTopBottom != null)
                         {
-                            element.get_Parameter(BuiltInParameter.CLEAR_COVER_TOP).Set(coverTopBottom.Id);
-                            element.get_Parameter(BuiltInParameter.CLEAR_COVER_BOTTOM).Set(coverTopBottom.Id);
+                            // 23.10.25 - исправления в ростверках
+                            try
+                            {
+                                element.get_Parameter(BuiltInParameter.CLEAR_COVER_TOP).Set(coverTopBottom.Id);
+                                element.get_Parameter(BuiltInParameter.CLEAR_COVER_BOTTOM).Set(coverTopBottom.Id);
+                            }
+                            catch
+                            {
+
+                            }
                         }
                         tx.Commit();
                     }
@@ -1159,8 +1170,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 .Select(g => new { Distance = g.Key, Count = g.Count() })
                 .OrderByDescending(g => g.Count)
                 .ThenBy(g => g.Distance);
-
-            return distanceGroups.First().Distance;
+            // 23.10.25 - исправления в ростверках
+            return distanceGroups.FirstOrDefault() == null ? 0 : distanceGroups.FirstOrDefault().Distance;
         }
 
         private double CalculateDistanceToBoundary(Line centerLine, List<Line> profile)
@@ -1241,8 +1252,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
             XYZ p4 = line2.GetEndPoint(1);
 
             // Векторы направлений
-            XYZ dir1 = p2 - p1;
-            XYZ dir2 = p4 - p3;
+            // 23.10.25 - исправления в ростверках
+            XYZ dir1 = line1.Direction;
+            XYZ dir2 = line2.Direction;
 
             double p1_ = line1.GetEndPoint(0).DotProduct(dir1);
             double p2_ = line1.GetEndPoint(1).DotProduct(dir1);
@@ -1395,8 +1407,11 @@ namespace FerrumAddinDev.GrillageCreator_v2
                 Line l = Line.CreateBound(projectedStart, projectedEnd);
                 XYZ minPoint = (line2.GetEndPoint(0) + line2.GetEndPoint(1)) / 2;
                 XYZ dir = Line.CreateBound(minPoint, line1.Project(minPoint).XYZPoint).Direction;
+                // 23.10.25 - исправления в ростверках
+                var p = (line1.Project(minPoint).XYZPoint + minPoint) / 2;
+                var dist = minPoint.DistanceTo(new XYZ(p.X, p.Y, minPoint.Z));
 
-                return l.CreateOffset(minPoint.DistanceTo((line1.Project(minPoint).XYZPoint + minPoint)/2), dir) as Line;
+                return Line.CreateBound(l.GetEndPoint(0) + dir * dist, l.GetEndPoint(1) + dir * dist);
             }
         }
 
