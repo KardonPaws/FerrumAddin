@@ -89,8 +89,9 @@ namespace FerrumAddinDev.FBS
                     pt = new XYZ(pt.X, pt.Y, block.Wall.BaseElevation + zOff + firstRowZ);
 
                     FamilyInstance inst = doc.Create.NewFamilyInstance(pt, symbol, StructuralType.NonStructural);
-                    // 06.09.25 - Заполнить параметр ZH_Этаж_Числовой в фбс
-                    double l = doc.GetElement(inst.LevelId).LookupParameter("ZH_Этаж_Числовой").AsDouble();
+                    // 22.10.25 - Исправления ФБС (нет уровня + имя)
+                    double l = doc.GetElement(inst.LevelId) == null ? doc.GetElement(block.Wall.baseLevel).LookupParameter("ZH_Этаж_Числовой").AsDouble() :
+                        doc.GetElement(inst.LevelId).LookupParameter("ZH_Этаж_Числовой").AsDouble();
                     inst.LookupParameter("ZH_Этаж_Числовой").Set(l);
                     if (familyName != "Кирпичная заделка (керамический кирпич)")
                         blocks.Add(inst);
@@ -189,15 +190,24 @@ namespace FerrumAddinDev.FBS
                 }
                 else
                 {
+                // 22.10.25 - Исправления ФБС (нет уровня + имя)
+                again:
                     if (i != 1)
                     {
                         name = name.Remove(name.Length - 3, 3);
                         name += "(" + i + ")";
+                        existingNames.Add(name);
                         i++;
                     }
                     else
                     {
                         name += " (" + i + ")";
+                        if (existingNames.Contains(name))
+                        {
+                            i++;
+                            goto again;
+                        }
+                        existingNames.Add(name);
                         i++;
                     }
                 }
