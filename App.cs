@@ -277,9 +277,14 @@ namespace FerrumAddinDev
             PushButtonData PilonsDimensions = new PushButtonData("PilonsDimensions", "Размеры по пилонам", 
                 Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "zhConstructionPilonsDimensions24.dll"),
                 "zhConstructionPilonsDimensions24.PilonsDimensions");
+
+            PushButtonData ShaftSections = new PushButtonData("Shaft Sections", "Сечения по вентшахтам",
+                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "zhShaftSections24.dll"),
+                "zhShaftSections24.ShaftSections");
             try
             {
                 panelKR.AddItem(PilonsDimensions);
+                panelKR.AddItem(ShaftSections);
             }
             catch
             {
