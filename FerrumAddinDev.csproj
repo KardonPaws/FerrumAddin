@@ -247,8 +247,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"
-if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)$(OutputPath)*.dll" "$(AppData)\Autodesk\REVIT\Addins\2024"
-copy "$(ProjectDir)\FerrumAddinDev.addin" "$(ProjectDir)\DLL"
+if exist "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev" copy "$(ProjectDir)$(OutputPath)*.dll" "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev"
 copy "$(ProjectDir)$(OutputPath)\FerrumAddinDev.dll" "$(ProjectDir)\DLL"</PostBuildEvent>
   </PropertyGroup>
 </Project>

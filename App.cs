@@ -174,10 +174,10 @@ namespace FerrumAddinDev
                 AlwaysLoad = true;
             }
             AllowLoad = false;
-            downloadDir = a.ControlledApplication.CurrentUserAddinsLocation;
+            downloadDir = Path.Combine(a.ControlledApplication.CurrentUserAddinsLocation, "FerrumDev");
             CheckForUpdates();
             
-            xmlFilePath = a.ControlledApplication.CurrentUserAddinsLocation + "\\Settings.xml";
+            xmlFilePath = a.ControlledApplication.CurrentUserAddinsLocation + "\\FerrumDev\\Settings.xml";
             XElement root;
             if (System.IO.File.Exists(xmlFilePath))
             {
@@ -211,7 +211,7 @@ namespace FerrumAddinDev
             if (frmTabPath == null)
             {
                 frmTabPath = new XElement("TabPath");
-                frmTabPath.SetAttributeValue("Path", a.ControlledApplication.CurrentUserAddinsLocation + "\\TabItems.xml");
+                frmTabPath.SetAttributeValue("Path", a.ControlledApplication.CurrentUserAddinsLocation + "\\FerrumDev\\TabItems.xml");
                 root.Add(frmTabPath);
             }
             TabPath = frmTabPath.Attribute("Path").Value;
