@@ -164,6 +164,7 @@ namespace FerrumAddinDev
                     string line;
                     while ((line = reader.ReadLine()) != null)
                     {
+                        //d
                         admins.Add(line);
                     }
                 }
