@@ -190,12 +190,17 @@ namespace FerrumAddinDev.FBS
                 }
                 else
                 {
-                // 22.10.25 - Исправления ФБС (нет уровня + имя)
+                // 12.11.25 - Исправления ФБС
                 again:
                     if (i != 1)
                     {
                         name = name.Remove(name.Length - 3, 3);
                         name += "(" + i + ")";
+                        if (existingNames.Contains(name))
+                        {
+                            i++;
+                            goto again;
+                        }
                         existingNames.Add(name);
                         i++;
                     }
