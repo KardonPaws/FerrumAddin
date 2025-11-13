@@ -50,7 +50,7 @@
 
         <!-- Первый столбец -->
         <TreeView x:Name="firstColumn1" Grid.Column="0" Margin="5">
-                <Button Content="Обновить" Click="Button_Click_6"/>
+                <Button Content="Обновить" Click="Button_Click_6" IsEnabled="False"/>
             <TreeViewItem Header="Без перемычек"
                 ItemsSource="{Binding openingsWithoutLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
             <TreeViewItem Header="С перемычками"
