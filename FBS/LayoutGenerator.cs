@@ -46,100 +46,232 @@ namespace FerrumAddinDev.FBS
                                 .ThenBy(v => v.WarningCount)
                                 .ToList();
         }
-
+        // 18.11.25 - изменения в ФБС при отступах != 300 и 600
         private static void ComputeCoordZLists(List<WallInfo> walls)
         {
-            // помощник для сравнения с точностью
             const double eps = 1e-6;
 
-            // 1) Сортируем стены по базовой отметке (в мм)
-            var sorted = walls
-                .OrderBy(w => w.BaseElevation * 304.8)
+            // 1) Группируем по BaseElevation в мм и сортируем от самой нижней
+            var groups = walls
+                .GroupBy(w => Math.Round(w.BaseElevation * 304.8)) // ключ группы — базовая отметка в мм
+                .OrderBy(g => g.Key)
                 .ToList();
 
-            // 2) Для каждой стены вычисляем, будет ли у неё первый ряд в +300 мм
-            //    — если у какого-то соседа базовая отметка = моя +300,
-            //      или сосед с той же отметкой уже имеет first300 = true.
+            if (groups.Count == 0)
+                return;
+
+            double bottomBaseMm = groups[0].Key; // самая нижняя отметка
+
+            // словари для first300 и количества "снятых" 600 мм
             var hasFirst300 = new Dictionary<WallInfo, bool>();
-            foreach (var w in sorted)
+
+            foreach (var w in walls)
             {
-                double myBase = w.BaseElevation * 304.8;
-                bool first300 = false;
-
-                // условие 1: сосед стоит ровно на +300 мм
-                foreach (var nb in w.ConnectedWalls)
-                {
-                    double nbBase = nb.BaseElevation * 304.8;
-                    if (Math.Abs(nbBase - (myBase + 300.0)) < eps)
-                    {
-                        first300 = true;
-                        break;
-                    }
-                }
-                if (!first300)
-                {
-                    // условие 2: сосед на той же отметке уже получил first300
-                    foreach (var nb in w.ConnectedWalls)
-                    {
-                        double nbBase = nb.BaseElevation * 304.8;
-                        if (Math.Abs(nbBase - myBase) < eps
-                            && hasFirst300.TryGetValue(nb, out bool nbFirst)
-                            && nbFirst)
-                        {
-                            first300 = true;
-                            break;
-                        }
-                    }
-                }
-
-                hasFirst300[w] = first300;
+                hasFirst300[w] = false;
+                w.first300 = false;
+                w.last300 = false;
             }
 
-            // 3) Теперь для каждой стены строим полный список coordZList
+            // 2) Для всех групп, кроме самой нижней, считаем расстояние от нижней
+            for (int i = 1; i < groups.Count; i++)
+            {
+                var groupWalls = groups[i].ToList();
+
+                // Берём BaseElevation из первой стены группы (все одинаковые в группе)
+                double groupBaseMm = Math.Round(groupWalls[0].BaseElevation * 304.8);
+                double delta = groupBaseMm - bottomBaseMm;
+
+                if (delta <= eps)
+                    continue; // на всякий случай, если вдруг одинаковые или ниже
+
+                // 2) Если расстояние > 600 — вычитаем по 600, пока не станет < 600
+                double diff = delta;
+                int removed = 0;
+                while (diff > 600.0 + eps)
+                {
+                    diff -= 600.0;
+                    removed++;
+                }
+
+                // 3) diff < 300 — смещаем следующую группу на (600 - diff) вверх
+                if (diff < 300)
+                {
+                    double offset = 300.0 - diff;           // на сколько поднять группу
+                    double newBaseMm = groupBaseMm + offset;
+                    double newBaseFeet = newBaseMm / 304.8;
+
+                    foreach (var w in groupWalls)
+                    {
+                        hasFirst300[w] = true;
+                        w.BaseElevation = newBaseFeet;
+                        w.Height = w.Height - offset;
+                        w.first300 = true;
+                    }
+                }
+                // 4) diff = 300 — следующей группе first300 = true
+                else if (Math.Abs(diff - 300.0) < eps)
+                {
+                    foreach (var w in groupWalls)
+                    {
+                        hasFirst300[w] = true;
+                        w.first300 = true;
+                    }
+                }
+                // 5) diff > 300 — следующей группе first300 = true и смещаем на (diff - 300)
+                else if (diff > 300 && diff < 600) // diff > 300 и < 600
+                {
+                    double offset = 600 - diff;           // на сколько поднять группу
+                    double newBaseMm = groupBaseMm + offset;
+                    double newBaseFeet = newBaseMm / 304.8;
+
+                    foreach (var w in groupWalls)
+                    {
+                        w.BaseElevation = newBaseFeet;
+                        w.Height = w.Height - offset;
+                    }
+                }
+            }
+
+            // 6) Формируем coordZList для каждой стены на основе скорректированных BaseElevation и first300
             foreach (var w in walls)
             {
                 w.coordZList.Clear();
 
                 double baseMm = Math.Round(w.BaseElevation * 304.8);
-                double height = w.Height;
+                double height = w.Height; // предполагаю, в мм
 
-                bool first = hasFirst300[w];
+                bool first = hasFirst300.TryGetValue(w, out bool f) && f;
+                w.first300 = first;
+                w.last300 = false;
 
-                // 3.1) Если первый 300-мм ряд, добавляем его
+                // 6.1) Первый 300-мм ряд, если он есть
                 if (first)
                 {
                     w.coordZList.Add(baseMm);
-                    w.first300 = true;
                 }
 
-                // 3.2) Добавляем все «полные» ряды 600 мм, начиная от base+ (first?300:0)
+                // 6.2) Полные ряды по 600 мм
                 double z = baseMm + (first ? 300.0 : 0.0);
-                while (z + 600 <= baseMm + height + eps)
+                while (z + 600.0 <= baseMm + height + eps)
                 {
                     w.coordZList.Add(z);
                     z += 600.0;
                 }
 
-                // 3.3) Если первого 300-мм ряда не было, проверяем условие для «последнего» 300-мм ряда
-                //     высота = 600*x + rem, где rem∈(300,600)
-                if (!first)
-                {
-                    int fullRows = (int)(height / 600.0);
-                    double rem = height - fullRows * 600.0;
-                    if (rem >= 300.0 - eps && rem < 600.0 - eps)
-                    {
-                        w.coordZList.Add(baseMm + fullRows * 600.0 + 300.0);
-                        w.last300 = true;
-                    }
-                }
+                // 6.3) Если первого 300-мм ряда не было — проверяем последний 300-мм ряд
 
-                // 3.4) Сортируем и убираем дубли
+                 int fullRows = (int)((height - (first ? 300.0 : 0.0)) / 600.0);
+                 double rem = (height - (first ? 300.0 : 0.0)) - fullRows * 600.0;
+
+                if (rem >= 300.0 - eps && rem < 600.0 - eps)
+                {
+                    w.coordZList.Add(baseMm + fullRows * 600.0 + 300.0);
+                    w.last300 = true;
+                }
+                
+
+                // 6.4) Убираем дубли и сортируем
                 w.coordZList = w.coordZList
                     .Distinct()
-                    .OrderBy(val => val)
+                    .OrderBy(v => v)
                     .ToList();
             }
         }
+
+
+        //private static void ComputeCoordZLists(List<WallInfo> walls)
+        //{
+        //    // помощник для сравнения с точностью
+        //    const double eps = 1e-6;
+
+        //    // 1) Сортируем стены по базовой отметке (в мм)
+        //    var sorted = walls
+        //        .OrderBy(w => w.BaseElevation * 304.8)
+        //        .ToList();
+
+        //    // 2) Для каждой стены вычисляем, будет ли у неё первый ряд в +300 мм
+        //    //    — если у какого-то соседа базовая отметка = моя +300,
+        //    //      или сосед с той же отметкой уже имеет first300 = true.
+        //    var hasFirst300 = new Dictionary<WallInfo, bool>();
+        //    foreach (var w in sorted)
+        //    {
+        //        double myBase = w.BaseElevation * 304.8;
+        //        bool first300 = false;
+
+        //        // условие 1: сосед стоит ровно на +300 мм
+        //        foreach (var nb in w.ConnectedWalls)
+        //        {
+        //            double nbBase = nb.BaseElevation * 304.8;
+        //            if (Math.Abs(nbBase - (myBase + 300.0)) < eps)
+        //            {
+        //                first300 = true;
+        //                break;
+        //            }
+        //        }
+        //        if (!first300)
+        //        {
+        //            // условие 2: сосед на той же отметке уже получил first300
+        //            foreach (var nb in w.ConnectedWalls)
+        //            {
+        //                double nbBase = nb.BaseElevation * 304.8;
+        //                if (Math.Abs(nbBase - myBase) < eps
+        //                    && hasFirst300.TryGetValue(nb, out bool nbFirst)
+        //                    && nbFirst)
+        //                {
+        //                    first300 = true;
+        //                    break;
+        //                }
+        //            }
+        //        }
+
+        //        hasFirst300[w] = first300;
+        //    }
+
+        //    // 3) Теперь для каждой стены строим полный список coordZList
+        //    foreach (var w in walls)
+        //    {
+        //        w.coordZList.Clear();
+
+        //        double baseMm = Math.Round(w.BaseElevation * 304.8);
+        //        double height = w.Height;
+
+        //        bool first = hasFirst300[w];
+
+        //        // 3.1) Если первый 300-мм ряд, добавляем его
+        //        if (first)
+        //        {
+        //            w.coordZList.Add(baseMm);
+        //            w.first300 = true;
+        //        }
+
+        //        // 3.2) Добавляем все «полные» ряды 600 мм, начиная от base+ (first?300:0)
+        //        double z = baseMm + (first ? 300.0 : 0.0);
+        //        while (z + 600 <= baseMm + height + eps)
+        //        {
+        //            w.coordZList.Add(z);
+        //            z += 600.0;
+        //        }
+
+        //        // 3.3) Если первого 300-мм ряда не было, проверяем условие для «последнего» 300-мм ряда
+        //        //     высота = 600*x + rem, где rem∈(300,600)
+        //        if (!first)
+        //        {
+        //            int fullRows = (int)(height / 600.0);
+        //            double rem = height - fullRows * 600.0;
+        //            if (rem >= 300.0 - eps && rem < 600.0 - eps)
+        //            {
+        //                w.coordZList.Add(baseMm + fullRows * 600.0 + 300.0);
+        //                w.last300 = true;
+        //            }
+        //        }
+
+        //        // 3.4) Сортируем и убираем дубли
+        //        w.coordZList = w.coordZList
+        //            .Distinct()
+        //            .OrderBy(val => val)
+        //            .ToList();
+        //    }
+        //}
 
         private static IEnumerable<LayoutVariant> GenerateVariantsStream(List<WallInfo> walls)
         {

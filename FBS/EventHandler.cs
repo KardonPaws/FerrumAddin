@@ -74,15 +74,17 @@ namespace FerrumAddinDev.FBS
                         {
                             insPoint = (bb.Min + bb.Max) / 2;
                         }
-                        double startz = (bb.Min.Z) * 304.8;
-                        double endz = (bb.Max.Z) * 304.8;
+                        // 18.11.25 - изменения в ФБС при отступах != 300 и 600
+                        double startz = insPoint.Z;
                         XYZ wallDir = (end - start).Normalize();
                         XYZ vec = insPoint - start;
                         double distAlongWall = vec.DotProduct(wallDir);  // in feet
                         double openingCenterMm = distAlongWall * 304.8;
                         // Ширина отверстия
                         double openWidthFt = 0;
+                        double openHeightFt = 0;
                         Parameter widthParam = fi.get_Parameter(BuiltInParameter.WINDOW_WIDTH) ?? fi.get_Parameter(BuiltInParameter.DOOR_WIDTH);
+                        Parameter heightParam_ = fi.get_Parameter(BuiltInParameter.WINDOW_HEIGHT) ?? fi.get_Parameter(BuiltInParameter.DOOR_HEIGHT) ?? fi.get_Parameter(BuiltInParameter.GENERIC_HEIGHT);
                         if (widthParam != null && widthParam.HasValue)
                         {
                             openWidthFt = widthParam.AsDouble();
@@ -94,11 +96,23 @@ namespace FerrumAddinDev.FBS
                             openWidthFt = widthParam.AsDouble();
 
                         }
+
+                        if (heightParam_ != null && heightParam_.HasValue)
+                        {
+                            openHeightFt = heightParam_.AsDouble();
+                        }
+                        else
+                        {
+                            heightParam_ = fi.LookupParameter("ADSK_Размер_Высота");
+                            openHeightFt = heightParam_.AsDouble();
+
+                        }
+                        double endz = startz + openHeightFt;
                         // размеры отверстия
                         double openWidthMm = openWidthFt * 304.8;
                         double openStart = openingCenterMm - openWidthMm / 2;
                         double openEnd = openingCenterMm + openWidthMm / 2;
-                        openings.Add(new OpeningInfo { Start = openStart, End = openEnd, StartZ = startz, EndZ = endz });
+                        openings.Add(new OpeningInfo { Start = openStart, End = openEnd, StartZ = startz * 304.8, EndZ = endz * 304.8 });
                     }
                     openings = openings.OrderBy(op => op.Start).ToList();
                     WallInfo info = new WallInfo
