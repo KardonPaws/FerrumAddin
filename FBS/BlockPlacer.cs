@@ -109,9 +109,11 @@ namespace FerrumAddinDev.FBS
                         inst.LookupParameter("Б")?.Set(thkFt);
                         inst.LookupParameter("А")?.Set(lenFt);
                         inst.LookupParameter("С")?.Set(heightFt);
-                        inst.LookupParameter("ADSK_Группирование").Set("ФБСм");
+                        //27.11.25 - Пропуск параметра ADSK_Группирование в заделках при отсутствии
                         try
                         {
+                            inst.LookupParameter("ADSK_Группирование").Set("ФБСм");
+
                             inst.LookupParameter("Вырезы").Set(0);
                         }
                         catch
