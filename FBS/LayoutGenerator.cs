@@ -400,7 +400,7 @@ namespace FerrumAddinDev.FBS
                         bool leftTurn = startFromLeft; // изменяем по очереди
 
                         List<double> segmentJoints = new List<double>();
-                        while (rightCursor - leftCursor >= AllowedBlockLengths.Min())
+                        while (rightCursor - leftCursor >= 3300)
                         {
                             double available = rightCursor - leftCursor;
                             List<int> possibleBlocks = ((row == 1 && wall.first300) || (row == wall.coordZList.Count() && wall.last300))? new List<int>() { 1200 } :
@@ -466,20 +466,90 @@ namespace FerrumAddinDev.FBS
                             leftTurn = !leftTurn;
                         }
                         double gap = rightCursor - leftCursor;
-                        if (gap > 69)
+                        Dictionary<double, List<double>> gaps = new Dictionary<double, List<double>>()
                         {
-                          
-                            segmentJoints.Add(leftCursor);
-                            variant.Blocks.Add(new BlockPlacement
+                            { 3300, new List<double>(){900, 1200, 900} },
+                            { 3000, new List<double>(){900, 900, 900} },
+                            { 2700, new List<double>(){1200, 1200} },
+                            { 2400, new List<double>(){900, 1200} },
+                            { 2100, new List<double>(){900, 900} },
+                            { 1800, new List<double>(){1200 } },
+                            { 1200, new List<double>(){900} },
+                            { 900, new List<double>(){0} }
+                        };
+                        if ((row == 1 && wall.first300) || (row == wall.coordZList.Count() && wall.last300))
+                        {
+                            gaps = new Dictionary<double, List<double>>()
                             {
-                                Wall = wall,
-                                Row = localRow,
-                                Start = leftCursor,
-                                End = rightCursor,
-                                Length = gap,
-                                IsGapFill = true
-                            });
+                                { 3300, new List<double>(){1200, 1200} },
+                                { 2400, new List<double>(){1200} },
+                                { 0, new List<double>(){0} },
+                            };
                         }
+                        if (gap >= 900)
+                        {
+                            double selected = 0;
+                            foreach (var key in gaps.Keys)
+                            {
+                                if (gap < key && gaps.Keys.ToList()[gaps.Keys.ToList().IndexOf(key) + 1] <= gap)
+                                {
+                                    selected = key;
+                                    break;
+                                }
+                            }
+                            if (selected != 0)
+                                foreach (var chosenBlockLen in gaps[selected])
+                                {
+                                    if (leftTurn)
+                                    {
+                                        double blockStart = leftCursor;
+                                        double blockEnd = leftCursor + chosenBlockLen;
+                                        variant.Blocks.Add(new BlockPlacement
+                                        {
+                                            Wall = wall,
+                                            Row = localRow,
+                                            Length = chosenBlockLen,
+                                            Start = blockStart,
+                                            End = blockEnd
+                                        });
+                                        segmentJoints.Add(blockEnd);
+                                        leftCursor = blockEnd;
+                                    }
+                                    else
+                                    {
+                                        double blockStart = rightCursor - chosenBlockLen;
+                                        double blockEnd = rightCursor;
+                                        variant.Blocks.Add(new BlockPlacement
+                                        {
+                                            Wall = wall,
+                                            Row = localRow,
+                                            Length = chosenBlockLen,
+                                            Start = blockStart,
+                                            End = blockEnd
+                                        });
+                                        segmentJoints.Add(blockStart);
+                                        rightCursor = blockStart;
+                                    }
+                                    leftTurn = !leftTurn;
+                                }
+                        }
+
+                        //if (gap > 69)
+                        //{
+
+                        //    segmentJoints.Add(leftCursor);
+                        //    variant.Blocks.Add(new BlockPlacement
+                        //    {
+                        //        Wall = wall,
+                        //        Row = localRow,
+                        //        Start = leftCursor,
+                        //        End = rightCursor,
+                        //        Length = gap,
+                        //        IsGapFill = true
+                        //    });
+                        //}
+
+
                         foreach (double j in segmentJoints)
                         {
                             if (j > segStart + 1e-6 && j < segEnd - 1e-6)
