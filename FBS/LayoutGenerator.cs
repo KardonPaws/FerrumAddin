@@ -46,6 +46,42 @@ namespace FerrumAddinDev.FBS
                                 .ThenBy(v => v.WarningCount)
                                 .ToList();
         }
+
+        private static bool TryApplyPattern(List<BlockPlacement> segmentBlocks, WallInfo wall, int localRow, double segStart, double segEnd, List<int> pattern)
+        {
+            int patternLength = pattern.Sum();
+            double patternStart = segEnd - patternLength;
+            if (patternStart < segStart - 1e-6)
+                return false;
+
+            var remaining = segmentBlocks
+                .Where(b => b.End <= patternStart + 1e-6)
+                .OrderBy(b => b.Start)
+                .ToList();
+
+            double remainingEnd = remaining.Count > 0 ? remaining.Max(b => b.End) : segStart;
+            if (Math.Abs(remainingEnd - patternStart) > 1e-3)
+                return false;
+
+            segmentBlocks.Clear();
+            segmentBlocks.AddRange(remaining);
+
+            double cursor = patternStart;
+            foreach (int len in pattern)
+            {
+                segmentBlocks.Add(new BlockPlacement
+                {
+                    Wall = wall,
+                    Row = localRow,
+                    Length = len,
+                    Start = cursor,
+                    End = cursor + len
+                });
+                cursor += len;
+            }
+
+            return true;
+        }
         // 18.11.25 - изменения в ФБС при отступах != 300 и 600
         private static void ComputeCoordZLists(List<WallInfo> walls)
         {
@@ -399,7 +435,7 @@ namespace FerrumAddinDev.FBS
                         double rightCursor = segEnd;
                         bool leftTurn = startFromLeft; // изменяем по очереди
 
-                        List<double> segmentJoints = new List<double>();
+                        List<BlockPlacement> segmentBlocks = new List<BlockPlacement>();
                         while (rightCursor - leftCursor >= AllowedBlockLengths.Min())
                         {
                             double available = rightCursor - leftCursor;
@@ -437,7 +473,7 @@ namespace FerrumAddinDev.FBS
                             {
                                 double blockStart = leftCursor;
                                 double blockEnd = leftCursor + chosenBlockLen;
-                                variant.Blocks.Add(new BlockPlacement
+                                segmentBlocks.Add(new BlockPlacement
                                 {
                                     Wall = wall,
                                     Row = localRow,
@@ -445,14 +481,13 @@ namespace FerrumAddinDev.FBS
                                     Start = blockStart,
                                     End = blockEnd
                                 });
-                                segmentJoints.Add(blockEnd);
                                 leftCursor = blockEnd;
                             }
                             else
                             {
                                 double blockStart = rightCursor - chosenBlockLen;
                                 double blockEnd = rightCursor;
-                                variant.Blocks.Add(new BlockPlacement
+                                segmentBlocks.Add(new BlockPlacement
                                 {
                                     Wall = wall,
                                     Row = localRow,
@@ -460,17 +495,25 @@ namespace FerrumAddinDev.FBS
                                     Start = blockStart,
                                     End = blockEnd
                                 });
-                                segmentJoints.Add(blockStart);
                                 rightCursor = blockStart;
                             }
                             leftTurn = !leftTurn;
                         }
+
                         double gap = rightCursor - leftCursor;
-                        if (gap > 69)
+                        bool adjusted = false;
+                        if (gap < 600 && gap >= 300)
                         {
-                          
-                            segmentJoints.Add(leftCursor);
-                            variant.Blocks.Add(new BlockPlacement
+                            adjusted = TryApplyPattern(segmentBlocks, wall, localRow, segStart, segEnd, new List<int> { 900, 900, 900 });
+                        }
+                        else if (gap < 900 && gap >= 600)
+                        {
+                            adjusted = TryApplyPattern(segmentBlocks, wall, localRow, segStart, segEnd, new List<int> { 900, 900, 1200 });
+                        }
+
+                        if (!adjusted && gap > 69 && gap < 300)
+                        {
+                            segmentBlocks.Add(new BlockPlacement
                             {
                                 Wall = wall,
                                 Row = localRow,
@@ -480,6 +523,21 @@ namespace FerrumAddinDev.FBS
                                 IsGapFill = true
                             });
                         }
+
+                        segmentBlocks = segmentBlocks.OrderBy(b => b.Start).ToList();
+                        List<double> segmentJoints = new List<double>();
+                        foreach (var b in segmentBlocks)
+                        {
+                            if (b.Start > segStart + 1e-6)
+                                segmentJoints.Add(b.Start);
+                            if (b.End < segEnd - 1e-6)
+                                segmentJoints.Add(b.End);
+                        }
+                        segmentJoints = segmentJoints.Distinct().ToList();
+
+                        foreach (var b in segmentBlocks)
+                            variant.Blocks.Add(b);
+
                         foreach (double j in segmentJoints)
                         {
                             if (j > segStart + 1e-6 && j < segEnd - 1e-6)
