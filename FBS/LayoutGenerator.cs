@@ -533,21 +533,22 @@ namespace FerrumAddinDev.FBS
                                     leftTurn = !leftTurn;
                                 }
                         }
+                        // 01.12.25 - возврат заделок
+                        gap = rightCursor - leftCursor;
+                        if (gap > 69)
+                        {
 
-                        //if (gap > 69)
-                        //{
-
-                        //    segmentJoints.Add(leftCursor);
-                        //    variant.Blocks.Add(new BlockPlacement
-                        //    {
-                        //        Wall = wall,
-                        //        Row = localRow,
-                        //        Start = leftCursor,
-                        //        End = rightCursor,
-                        //        Length = gap,
-                        //        IsGapFill = true
-                        //    });
-                        //}
+                            segmentJoints.Add(leftCursor);
+                            variant.Blocks.Add(new BlockPlacement
+                            {
+                                Wall = wall,
+                                Row = localRow,
+                                Start = leftCursor,
+                                End = rightCursor,
+                                Length = gap,
+                                IsGapFill = true
+                            });
+                        }
 
 
                         foreach (double j in segmentJoints)
