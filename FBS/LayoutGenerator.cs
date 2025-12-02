@@ -310,6 +310,8 @@ namespace FerrumAddinDev.FBS
 
                     // Обрабатываем проёмы из окон/дверей
                     List<(double start, double end)> openings = new List<(double, double)>();
+                    //02.12.25 - измененный профиль стены + вынос на листы
+                    if (wall.Openings != null)
                     foreach (var op in wall.Openings)
                     {
                         if (op.End > leftBound && op.Start < rightBound && (op.StartZ < wall.coordZList[row-1] + (row == maxBaseRows ? 0 :(wall.coordZList[row] - wall.coordZList[row - 1])) && op.EndZ > wall.coordZList[row-1]))
@@ -607,9 +609,15 @@ namespace FerrumAddinDev.FBS
                 if (actualRowLong == 0)
                     return 0;
                 double shift = longitudinalNeighbor.Thickness;
-                return (actualRowLong % 2 != 0)
-                    ? (wall.Id.Value > longitudinalNeighbor.Id.Value ? -shift : shift)
-                    : (wall.Id.Value > longitudinalNeighbor.Id.Value ? shift: -shift);
+                //02.12.25 - измененный профиль стены + вынос на листы
+                if (wall.Id.Value != longitudinalNeighbor.Id.Value)
+                    return (actualRowLong % 2 != 0)
+                        ? (wall.Id.Value > longitudinalNeighbor.Id.Value ? -shift : shift)
+                        : (wall.Id.Value > longitudinalNeighbor.Id.Value ? shift: -shift);
+                else
+                    return (actualRowLong % 2 != 0)
+                        ? (wall.StartPoint.DotProduct(wall.Direction) > longitudinalNeighbor.StartPoint.DotProduct(longitudinalNeighbor.Direction) ? -shift : shift)
+                        : (wall.StartPoint.DotProduct(wall.Direction) > longitudinalNeighbor.StartPoint.DotProduct(longitudinalNeighbor.Direction) ? shift : -shift);
             }
 
             if (wall.LeftNeighbor == null)

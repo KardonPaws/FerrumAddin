@@ -23,6 +23,13 @@ namespace FerrumAddinDev.FBS
             .OfCategory(BuiltInCategory.OST_StructuralFramingTags)
             .Cast<FamilySymbol>()
             .FirstOrDefault(fs => fs.Family.Name == "ADSK_Марка_Балка" && fs.Name == "Экземпляр_ADSK_Позиция");
+            //02.12.25 - измененный профиль стены + вынос на листы
+            ElementId titleBlockTypeId = new FilteredElementCollector(doc)
+            .OfCategory(BuiltInCategory.OST_TitleBlocks)
+            .OfClass(typeof(FamilySymbol))
+            .Cast<FamilySymbol>().Where(x => x.FamilyName == "ADSK_ОсновнаяНадпись")
+            .Select(s => s.Id)
+            .FirstOrDefault();
 
             View viewTemplate = new FilteredElementCollector(doc).OfClass(typeof(View)).
                     Cast<View>().Where(v => v.IsTemplate && v.Name.Equals("4_К_ФБС_развертки")).FirstOrDefault();
@@ -46,6 +53,8 @@ namespace FerrumAddinDev.FBS
                 List<Element> blocks = new List<Element>();
                 // 1) Создать разрезы по каждо́й стене, в которой есть блоки
                 CreateSectionViewsForVariant(variant, doc, sectionType, allGrids, existingNames, viewTemplate);
+                //02.12.25 - измененный профиль стены + вынос на листы
+                PlaceSectionsOnSheets(variant, doc, titleBlockTypeId);
 
                 // 2) Активировать семейства и размещать блоки
                 Dictionary<string, FamilySymbol> symbolCache = new Dictionary<string, FamilySymbol>();
@@ -171,6 +180,98 @@ namespace FerrumAddinDev.FBS
         }
 
         public static Dictionary<WallInfo, ElementId> views = new Dictionary<WallInfo, ElementId>();
+        //02.12.25 - измененный профиль стены + вынос на листы
+        private static void PlaceSectionsOnSheets(LayoutVariant variant, Document doc, ElementId titleBlockTypeId)
+        {
+            double margin = 0.15; // отступы по периметру
+            double spacing = 0.2; // расстояние между разрезами
+
+            ViewSheet currentSheet = ViewSheet.Create(doc, titleBlockTypeId);
+            FamilyInstance tbInst = new FilteredElementCollector(doc)
+             .OfCategory(BuiltInCategory.OST_TitleBlocks)
+             .WhereElementIsNotElementType()
+             .Cast<FamilyInstance>()
+             .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
+            ElementTransformUtils.MoveElement(doc, tbInst.Id, new XYZ(0.611851776, -0.514511720, 0.000000000));
+
+            doc.Regenerate();
+
+            BoundingBoxXYZ tbBb = tbInst.get_BoundingBox(currentSheet);
+            XYZ tbMin = tbBb.Min;
+            XYZ tbMax = tbBb.Max;
+
+            double sheetWidth = tbMax.X - tbMin.X;
+            double sheetHeight = tbMax.Y - tbMin.Y;
+
+            double cursorX = -sheetWidth / 2 + margin;
+            double cursorY = sheetHeight / 2 - margin;
+            double rowHeight = 0;
+
+            var viewsToPlace = variant.Blocks
+                .Select(b => b.Wall)
+                .Distinct()
+                .Select(w => doc.GetElement(views[w]) as View)
+                .Where(v => v != null)
+                .OrderBy(v => v.Name)
+                .ToList();
+
+            foreach (var view in viewsToPlace)
+            {
+                (double predictedW, double predictedH) = EstimateViewportSize(view);
+
+                // перенос на новую строку при нехватке ширины
+                if (cursorX + predictedW > sheetWidth / 2 - margin)
+                {
+                    cursorX = -sheetWidth / 2 + margin;
+                    cursorY -= rowHeight + spacing;
+                    rowHeight = 0;
+                }
+
+                // создаём новый лист при нехватке высоты
+                if (cursorY - predictedH < -sheetHeight / 2 + margin)
+                {
+                    currentSheet = ViewSheet.Create(doc, titleBlockTypeId);
+
+                    tbInst = new FilteredElementCollector(doc)
+             .OfCategory(BuiltInCategory.OST_TitleBlocks)
+             .WhereElementIsNotElementType()
+             .Cast<FamilyInstance>()
+             .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
+                    ElementTransformUtils.MoveElement(doc, tbInst.Id, new XYZ(0.611851776, -0.514511720, 0.000000000));
+
+                    cursorX = -sheetWidth / 2 + margin;
+                    cursorY = sheetHeight / 2 - margin;
+                    rowHeight = 0;
+                }
+
+                XYZ placementPoint = new XYZ(cursorX + predictedW / 2, cursorY - predictedH / 2, 0);
+
+                if (Viewport.CanAddViewToSheet(doc, currentSheet.Id, view.Id))
+                {
+                    Viewport vp = Viewport.Create(doc, currentSheet.Id, view.Id, placementPoint);
+                    Outline outline = vp.GetBoxOutline();
+                    double actualW = outline.MaximumPoint.X - outline.MinimumPoint.X;
+                    double actualH = outline.MaximumPoint.Y - outline.MinimumPoint.Y;
+
+                    cursorX += actualW + spacing;
+                    rowHeight = Math.Max(rowHeight, actualH);
+                }
+            }
+        }
+
+        private static (double width, double height) EstimateViewportSize(View view)
+        {
+            BoundingBoxXYZ crop = view.CropBox;
+            if (crop == null)
+                return (1.0, 1.0);
+
+            double width = (crop.Max.X - crop.Min.X) / view.Scale;
+            double height = (crop.Max.Y - crop.Min.Y) / view.Scale;
+
+            double reserve = 0.3; // небольшой запас под надписи
+            return (width + reserve, height + reserve);
+        }
+
         // В CreateSectionViewsForVariant передаём wallsInVariant в GenerateSectionName
         private static void CreateSectionViewsForVariant(
     LayoutVariant variant,
