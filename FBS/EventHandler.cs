@@ -214,72 +214,83 @@ namespace FerrumAddinDev.FBS
                     };
                     }
 
-                    foreach (BottomProfileSegment seg in bottomSegments)
+                    // 24.11.25 – лестничный профиль: собираем интервалы по возрастающим отметкам
+                    double wallTopFt = baseElevFt + heightMm / mmPerFt;
+                    List<double> baseLevels = bottomSegments
+                        .Select(s => s.BaseZFt)
+                        .Distinct()
+                        .OrderBy(z => z)
+                        .ToList();
+
+                    for (int i = 0; i < baseLevels.Count; i++)
                     {
-                        double segStartFt = seg.StartFt;
-                        double segEndFt = seg.EndFt;
-                        double segBaseZFt = seg.BaseZFt;
+                        double level = baseLevels[i];
+                        double nextLevel = i == baseLevels.Count - 1
+                            ? wallTopFt
+                            : baseLevels[i + 1];
 
-                        double segHeightMm = (heightMm - (segBaseZFt - start.Z) * 304.8);
+                        // объединяем все отрезки с отметкой ниже или равной текущей
+                        List<(double start, double end)> rawIntervals = bottomSegments
+                            .Where(s => s.BaseZFt <= level)
+                            .Select(s => (
+                                Math.Max(0.0, Math.Min(lengthFt, s.StartFt)),
+                                Math.Max(0.0, Math.Min(lengthFt, s.EndFt))
+                            ))
+                            .Where(se => se.Item2 - se.Item1 > 1e-6)
+                            .ToList();
 
-                        // ограничиваем в пределах стены
-                        segStartFt = Math.Max(0.0, segStartFt);
-                        segEndFt = Math.Min(lengthFt, segEndFt);
-                        if (segEndFt - segStartFt <= 1e-6)
+                        if (rawIntervals.Count == 0)
                             continue;
 
-                        double segStartMm = segStartFt * mmPerFt;
-                        double segEndMm = segEndFt * mmPerFt;
-                        double segLengthMm = (segEndFt - segStartFt) * mmPerFt;
-
-                        // фильтрация и ЛОКАЛЬНЫЕ координаты отверстий
-                        List<OpeningInfo> segOpenings = new List<OpeningInfo>();
-                        double segBaseZMm = segBaseZFt * mmPerFt;
-
-                        foreach (var op in openingsAbsolute)
+                        // слияние перекрывающихся интервалов
+                        List<(double start, double end)> merged = new List<(double start, double end)>();
+                        foreach (var interval in rawIntervals.OrderBy(i => i.start))
                         {
-                            double centerMm = (op.Start + op.End) / 2.0;
-
-                            if (centerMm < segStartMm - 1e-3 || centerMm > segEndMm + 1e-3)
-                                continue;
-
-                            double localStartMm = op.Start - segStartMm;
-                            double localEndMm = op.End - segStartMm;
-                            double localStartZMm = op.StartZ;
-                            double localEndZMm = op.EndZ;
-
-                            segOpenings.Add(new OpeningInfo
+                            if (merged.Count == 0 || interval.start - merged.Last().end > 1e-6)
                             {
-                                Start = localStartMm,
-                                End = localEndMm,
-                                StartZ = localStartZMm,
-                                EndZ = localEndZMm
-                            });
+                                merged.Add(interval);
+                            }
+                            else
+                            {
+                                var last = merged.Last();
+                                merged[merged.Count - 1] = (last.start, Math.Max(last.end, interval.end));
+                            }
                         }
 
-                        List<OpeningInfo> openingsForInfo =
-                            segOpenings.Count > 0 ? segOpenings : null;  // если нет — null
+                        double segHeightMm = (nextLevel - level) * mmPerFt;
 
-                        // Точки начала/конца сегмента на линии стены
-                        XYZ segStartPoint = start + wallDir * segStartFt;
-                        XYZ segEndPoint = start + wallDir * segEndFt;
-
-                        WallInfo infoSeg = new WallInfo
+                        foreach (var interval in merged)
                         {
-                            Id = wall.Id,
-                            StartPoint = segStartPoint,
-                            EndPoint = segEndPoint,
-                            Direction = wallDir,
-                            Length = segLengthMm,
-                            Thickness = thicknessMm,
-                            Height = Math.Round(segHeightMm),
-                            BaseElevation = segBaseZFt,    // отметка по профилю снизу
-                            Openings = openingsForInfo,    // локальные отверстия или null
-                            line = Line.CreateBound(segStartPoint, segEndPoint),
-                            baseLevel = wall.LookupParameter("Зависимость снизу").AsElementId()
-                        };
+                            double segStartFt = interval.start;
+                            double segEndFt = interval.end;
 
-                        wallInfos.Add(infoSeg);
+                            double segLengthMm = (segEndFt - segStartFt) * mmPerFt;
+
+                            // отверстия теперь общие для всех сегментов
+                            List<OpeningInfo> openingsForInfo =
+                                openingsAbsolute.Count > 0 ? openingsAbsolute : null;
+
+                            // Точки начала/конца сегмента на линии стены
+                            XYZ segStartPoint = start + wallDir * segStartFt;
+                            XYZ segEndPoint = start + wallDir * segEndFt;
+
+                            WallInfo infoSeg = new WallInfo
+                            {
+                                Id = wall.Id,
+                                StartPoint = segStartPoint,
+                                EndPoint = segEndPoint,
+                                Direction = wallDir,
+                                Length = segLengthMm,
+                                Thickness = thicknessMm,
+                                Height = Math.Round(segHeightMm),
+                                BaseElevation = level,    // отметка по профилю снизу
+                                Openings = openingsForInfo,    // общие отверстия стены или null
+                                line = Line.CreateBound(segStartPoint, segEndPoint),
+                                baseLevel = wall.LookupParameter("Зависимость снизу").AsElementId()
+                            };
+
+                            wallInfos.Add(infoSeg);
+                        }
                     }
                 }
 
