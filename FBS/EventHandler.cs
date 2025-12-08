@@ -244,7 +244,7 @@ namespace FerrumAddinDev.FBS
 
                         // слияние перекрывающихся интервалов
                         List<(double start, double end)> merged = new List<(double start, double end)>();
-                        foreach (var interval in rawIntervals.OrderBy(i => i.start))
+                        foreach (var interval in rawIntervals.OrderBy(s => s.start))
                         {
                             if (merged.Count == 0 || interval.start - merged.Last().end > 1e-6)
                             {
@@ -264,7 +264,7 @@ namespace FerrumAddinDev.FBS
                             double segStartFt = interval.start;
                             double segEndFt = interval.end;
 
-                            double segLengthMm = (segEndFt - segStartFt) * mmPerFt;
+                            double segLengthMm = Math.Round((segEndFt - segStartFt) * mmPerFt);
 
                             // отверстия теперь общие для всех сегментов
                             List<OpeningInfo> openingsForInfo =

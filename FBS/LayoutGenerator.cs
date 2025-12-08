@@ -113,8 +113,8 @@ namespace FerrumAddinDev.FBS
                 {
                     foreach (var w in groupWalls)
                     {
-                        hasFirst300[w] = true;
-                        w.first300 = true;
+                        hasFirst300[w] = false;
+                        w.first300 = false;
                     }
                 }
                 // 5) diff > 300 — следующей группе first300 = true и смещаем на (diff - 300)
@@ -288,7 +288,6 @@ namespace FerrumAddinDev.FBS
 
             for (int row = 1; row <= maxBaseRows; row++)
             {
-                
                     int localRow = row;
 
                     // Базовые границы – физические границы стены
@@ -391,18 +390,20 @@ namespace FerrumAddinDev.FBS
                         continue;
 
                     // Чередование направления заполнения – если имеются пересечения, фиксируем: нечётный ряд начинаем слева, четный – справа
-                    bool startFromLeft = (wall.LeftNeighbor != null || wall.RightNeighbor != null) ? (localRow % 2 == 1) : true;
+                    bool startFromLeft =  (localRow % 2 == 1);
                     foreach (var seg in fillSegments)
                     {
+                        bool firstBlock = true;
+
                         double segStart = seg.start, segEnd = seg.end;
                         if (segEnd - segStart <= 0)
                             continue;
-                        double leftCursor = segStart;
-                        double rightCursor = segEnd;
+                        double leftCursor = Math.Round(segStart);
+                        double rightCursor = Math.Round(segEnd);
                         bool leftTurn = startFromLeft; // изменяем по очереди
 
                         List<double> segmentJoints = new List<double>();
-                        while (rightCursor - leftCursor >= 3300)
+                        while (Math.Round(rightCursor - leftCursor) >= 4200)
                         {
                             double available = rightCursor - leftCursor;
                             List<int> possibleBlocks = ((row == 1 && wall.first300) || (row == wall.coordZList.Count() && wall.last300))? new List<int>() { 1200 } :
@@ -412,18 +413,30 @@ namespace FerrumAddinDev.FBS
                             int chosenBlockLen = -1;
                             double candidateJoint = 0;
                             List<double> prevJoints = new List<double>();
-                            if (localRow > 1 && variant.JointsByWall.ContainsKey(wall) && variant.JointsByWall[wall].ContainsKey(localRow - 1))
-                                prevJoints = variant.JointsByWall[wall][localRow - 1];
+                            if (localRow > 1 && variant.JointsByWall.ContainsKey(wall.Id.IntegerValue) && variant.JointsByWall[wall.Id.IntegerValue].ContainsKey(localRow - 1))
+                                prevJoints = variant.JointsByWall[wall.Id.IntegerValue][localRow - 1];
 
                             foreach (int len in possibleBlocks)
                             {
-                                candidateJoint = leftTurn ? leftCursor + len : rightCursor - len;
-                                if (!prevJoints.Any(j => Math.Abs(j - candidateJoint) < 100.0))
+                                candidateJoint = leftTurn ? wall.StartPoint.DotProduct(wall.Direction)*304.8 + leftCursor + len : wall.StartPoint.DotProduct(wall.Direction)*304.8 + rightCursor - len;
+                                if (!prevJoints.Any(j => Math.Abs(j - candidateJoint) < 300))
                                 {
                                     chosenBlockLen = len;
                                     break;
                                 }
                             }
+                            //if (firstBlock == true)
+                            //{
+                            //    firstBlock = false;
+                            //    if (rightCursor - leftCursor % 2400 == 1200)
+                            //    {
+                            //        chosenBlockLen = 1200;
+                            //    }
+                            //    else
+                            //    {
+                            //        chosenBlockLen = 900;
+                            //    }
+                            //}
                             if (chosenBlockLen == -1)
                             {
                                 const double shiftDelta = 50.0;
@@ -447,7 +460,7 @@ namespace FerrumAddinDev.FBS
                                     Start = blockStart,
                                     End = blockEnd
                                 });
-                                segmentJoints.Add(blockEnd);
+                                segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockEnd);
                                 leftCursor = blockEnd;
                             }
                             else
@@ -462,85 +475,130 @@ namespace FerrumAddinDev.FBS
                                     Start = blockStart,
                                     End = blockEnd
                                 });
-                                segmentJoints.Add(blockStart);
+                                segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockStart);
                                 rightCursor = blockStart;
                             }
                             leftTurn = !leftTurn;
                         }
-                        double gap = rightCursor - leftCursor;
+                        double gap = Math.Round(rightCursor - leftCursor);
                         Dictionary<double, List<double>> gaps = new Dictionary<double, List<double>>()
                         {
-                            { 3300, new List<double>(){900, 1200, 900} },
+                            { 4200, new List<double>(){900, 900, 900, 1200 } },
+                            { 3900, new List<double>(){1200, 2400} },
+                            { 3600, new List<double>(){900, 2400 } },
+                            { 3300, new List<double>(){1200, 900, 900} },
                             { 3000, new List<double>(){900, 900, 900} },
-                            { 2700, new List<double>(){1200, 1200} },
+                            { 2700, new List<double>(){2400} },
                             { 2400, new List<double>(){900, 1200} },
                             { 2100, new List<double>(){900, 900} },
                             { 1800, new List<double>(){1200 } },
                             { 1200, new List<double>(){900} },
                             { 900, new List<double>(){0} }
                         };
-                        if ((row == 1 && wall.first300) || (row == wall.coordZList.Count() && wall.last300))
+                        if ((row == 1 && wall.first300) || (row == wall.coordZList.Count() && wall.last300)) //32028638
                         {
                             gaps = new Dictionary<double, List<double>>()
                             {
-                                { 3300, new List<double>(){1200, 1200} },
+                                { 4200, new List<double>(){1200, 1200, 1200} },
+                                { 3600, new List<double>(){1200, 1200} },
                                 { 2400, new List<double>(){1200} },
                                 { 0, new List<double>(){0} },
                             };
                         }
                         if (gap >= 900)
                         {
+                            //leftTurn = !leftTurn;
                             double selected = 0;
+                            List<double> chosenGaps = new List<double>();
                             foreach (var key in gaps.Keys)
                             {
                                 if (gap < key && gaps.Keys.ToList()[gaps.Keys.ToList().IndexOf(key) + 1] <= gap)
                                 {
                                     selected = key;
+                                    chosenGaps = gaps[selected];
                                     break;
                                 }
                             }
-                            if (selected != 0)
-                                foreach (var chosenBlockLen in gaps[selected])
+                            while (chosenGaps.Count() > 0)
+                            {
+                                int chosenBlockLen = -1;
+                                double candidateJoint = 0;
+                                List<double> prevJoints = new List<double>();
+                                if (localRow > 1 && variant.JointsByWall.ContainsKey(wall.Id.IntegerValue) && variant.JointsByWall[wall.Id.IntegerValue].ContainsKey(localRow - 1))
+                                    prevJoints = variant.JointsByWall[wall.Id.IntegerValue][localRow - 1];
+                                foreach (int len in chosenGaps)
                                 {
-                                    if (leftTurn)
+                                    candidateJoint = leftTurn ? wall.StartPoint.DotProduct(wall.Direction) * 304.8 + leftCursor + len : wall.StartPoint.DotProduct(wall.Direction) * 304.8 + rightCursor - len;
+                                    if (!prevJoints.Any(j => Math.Abs(j - candidateJoint) < 300))
                                     {
-                                        double blockStart = leftCursor;
-                                        double blockEnd = leftCursor + chosenBlockLen;
-                                        variant.Blocks.Add(new BlockPlacement
-                                        {
-                                            Wall = wall,
-                                            Row = localRow,
-                                            Length = chosenBlockLen,
-                                            Start = blockStart,
-                                            End = blockEnd
-                                        });
-                                        segmentJoints.Add(blockEnd);
-                                        leftCursor = blockEnd;
+                                        chosenBlockLen = len;
+                                        break;
                                     }
-                                    else
-                                    {
-                                        double blockStart = rightCursor - chosenBlockLen;
-                                        double blockEnd = rightCursor;
-                                        variant.Blocks.Add(new BlockPlacement
-                                        {
-                                            Wall = wall,
-                                            Row = localRow,
-                                            Length = chosenBlockLen,
-                                            Start = blockStart,
-                                            End = blockEnd
-                                        });
-                                        segmentJoints.Add(blockStart);
-                                        rightCursor = blockStart;
-                                    }
-                                    leftTurn = !leftTurn;
                                 }
+                                //if (firstBlock == true)
+                                //{
+                                //    firstBlock = false;
+                                //    if (rightCursor - leftCursor % 2400 == 1200)
+                                //    {
+                                //        chosenBlockLen = 1200;
+                                //    }
+                                //    else
+                                //    {
+                                //        chosenBlockLen = 900;
+                                //    }
+                                //}
+                                if (chosenBlockLen == -1)
+                                {
+                                    const double shiftDelta = 50.0;
+                                    if (leftTurn && leftCursor + shiftDelta + chosenGaps.Min() <= Math.Round(rightCursor))
+                                        leftCursor += shiftDelta;
+                                    else if (!leftTurn && rightCursor - shiftDelta - chosenGaps.Min() >= Math.Round(leftCursor))
+                                        rightCursor -= shiftDelta;
+                                    else
+                                        break;
+                                    continue;
+                                }
+                                chosenGaps.Remove(chosenBlockLen);                             
+                                if (leftTurn)
+                                {
+                                    double blockStart = leftCursor;
+                                    double blockEnd = leftCursor + chosenBlockLen;
+                                    variant.Blocks.Add(new BlockPlacement
+                                    {
+                                        Wall = wall,
+                                        Row = localRow,
+                                        Length = chosenBlockLen,
+                                        Start = blockStart,
+                                        End = blockEnd
+                                    });
+                                    segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockEnd);
+                                    leftCursor = blockEnd;
+                                }
+                                else
+                                {
+                                    double blockStart = rightCursor - chosenBlockLen;
+                                    double blockEnd = rightCursor;
+                                    variant.Blocks.Add(new BlockPlacement
+                                    {
+                                        Wall = wall,
+                                        Row = localRow,
+                                        Length = chosenBlockLen,
+                                        Start = blockStart,
+                                        End = blockEnd
+                                    });
+                                    segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockStart);
+                                    rightCursor = blockStart;
+                                }
+                                leftTurn = !leftTurn;
+                            }
+                        
                         }
                         // 01.12.25 - возврат заделок
                         gap = rightCursor - leftCursor;
                         if (gap > 69)
                         {
 
-                            segmentJoints.Add(leftCursor);
+                            segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + leftCursor);
                             variant.Blocks.Add(new BlockPlacement
                             {
                                 Wall = wall,
@@ -555,32 +613,40 @@ namespace FerrumAddinDev.FBS
 
                         foreach (double j in segmentJoints)
                         {
-                            if (j > segStart + 1e-6 && j < segEnd - 1e-6)
+                            if (j > segStart + wall.StartPoint.DotProduct(wall.Direction)*304.8 + 1e-6 && j < segEnd + wall.StartPoint.DotProduct(wall.Direction)*304.8 - 1e-6)
                             {
-                                if (!variant.JointsByWall.ContainsKey(wall))
-                                    variant.JointsByWall[wall] = new Dictionary<int, List<double>>();
-                                if (!variant.JointsByWall[wall].ContainsKey(localRow))
-                                    variant.JointsByWall[wall][localRow] = new List<double>();
-                                variant.JointsByWall[wall][localRow].Add(j);
+                                if (!variant.JointsByWall.ContainsKey(wall.Id.IntegerValue))
+                                    variant.JointsByWall[wall.Id.IntegerValue] = new Dictionary<int, List<double>>();
+                                if (!variant.JointsByWall[wall.Id.IntegerValue].ContainsKey(localRow))
+                                    variant.JointsByWall[wall.Id.IntegerValue][localRow] = new List<double>();
+                                variant.JointsByWall[wall.Id.IntegerValue][localRow].Add(Math.Round(j));
                             }
+                        }
+                        try
+                        {
+                            variant.JointsByWall[wall.Id.IntegerValue][localRow] = (List<double>)variant.JointsByWall[wall.Id.IntegerValue][localRow].Distinct().ToList();
+                        }
+                        catch
+                        {
+
                         }
                     }
 
                     // Проверка вертикальных швов между рядами
-                    if (localRow > 1 &&
-                        variant.JointsByWall.ContainsKey(wall) &&
-                        variant.JointsByWall[wall].ContainsKey(localRow) &&
-                        variant.JointsByWall[wall].ContainsKey(localRow - 1))
-                    {
-                        foreach (double joint in variant.JointsByWall[wall][localRow])
-                        {
-                            foreach (double prevJoint in variant.JointsByWall[wall][localRow - 1])
-                            {
-                                if (Math.Abs(joint - prevJoint) < 100.0)
-                                    variant.ErrorCount++;
-                            }
-                        }
-                    }
+                    //if (localRow > 1 &&
+                    //    variant.JointsByWall.ContainsKey(wall.Id.IntegerValue) &&
+                    //    variant.JointsByWall[wall.Id.IntegerValue].ContainsKey(localRow) &&
+                    //    variant.JointsByWall[wall.Id.IntegerValue].ContainsKey(localRow - 1))
+                    //{
+                    //    foreach (double joint in variant.JointsByWall[wall.Id.IntegerValue][localRow])
+                    //    {
+                    //        foreach (double prevJoint in variant.JointsByWall[wall.Id.IntegerValue][localRow - 1])
+                    //        {
+                    //            if (Math.Abs(joint - prevJoint) < 100.0)
+                    //                variant.ErrorCount++;
+                    //        }
+                    //    }
+                    //}
                 }
             }
             return variant;

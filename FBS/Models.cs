@@ -52,7 +52,7 @@ namespace FerrumAddinDev.FBS
     public class LayoutVariant
     {
         public List<BlockPlacement> Blocks { get; set; } = new List<BlockPlacement>();
-        public Dictionary<WallInfo, Dictionary<int, List<double>>> JointsByWall { get; set; } = new Dictionary<WallInfo, Dictionary<int, List<double>>>();
+        public Dictionary<int, Dictionary<int, List<double>>> JointsByWall { get; set; } = new Dictionary<int, Dictionary<int, List<double>>>();
         public int TotalBlocks { get; set; }
         public int ErrorCount { get; set; }
         public int WarningCount { get; set; }
