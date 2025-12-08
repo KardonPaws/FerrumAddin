@@ -468,39 +468,36 @@ namespace FerrumAddinDev.FBS
                             leftTurn = !leftTurn;
                         }
                         double gap = rightCursor - leftCursor;
-                        Dictionary<double, List<double>> gaps = new Dictionary<double, List<double>>()
+                        List<(double minGap, List<double> blocks)> gapPatterns = new List<(double, List<double>)>
                         {
-                            { 3300, new List<double>(){900, 1200, 900} },
-                            { 3000, new List<double>(){900, 900, 900} },
-                            { 2700, new List<double>(){1200, 1200} },
-                            { 2400, new List<double>(){900, 1200} },
-                            { 2100, new List<double>(){900, 900} },
-                            { 1800, new List<double>(){1200 } },
-                            { 1200, new List<double>(){900} },
-                            { 900, new List<double>(){0} }
+                            (3300, new List<double>{900, 1200, 900}),
+                            (3000, new List<double>{900, 900, 900}),
+                            (2700, new List<double>{1200, 1200}),
+                            (2400, new List<double>{900, 1200}),
+                            (2100, new List<double>{900, 900}),
+                            (1800, new List<double>{1200}),
+                            (1200, new List<double>{900}),
+                            (900,  new List<double>{900})
                         };
+
                         if ((row == 1 && wall.first300) || (row == wall.coordZList.Count() && wall.last300))
                         {
-                            gaps = new Dictionary<double, List<double>>()
+                            gapPatterns = new List<(double, List<double>)>
                             {
-                                { 3300, new List<double>(){1200, 1200} },
-                                { 2400, new List<double>(){1200} },
-                                { 0, new List<double>(){0} },
+                                (3300, new List<double>{1200, 1200}),
+                                (2400, new List<double>{1200})
                             };
                         }
+
                         if (gap >= 900)
                         {
-                            double selected = 0;
-                            foreach (var key in gaps.Keys)
+                            var pattern = gapPatterns
+                                .OrderByDescending(g => g.minGap)
+                                .FirstOrDefault(g => gap >= g.minGap);
+
+                            if (pattern.blocks != null)
                             {
-                                if (gap < key && gaps.Keys.ToList()[gaps.Keys.ToList().IndexOf(key) + 1] <= gap)
-                                {
-                                    selected = key;
-                                    break;
-                                }
-                            }
-                            if (selected != 0)
-                                foreach (var chosenBlockLen in gaps[selected])
+                                foreach (var chosenBlockLen in pattern.blocks)
                                 {
                                     if (leftTurn)
                                     {
@@ -534,6 +531,7 @@ namespace FerrumAddinDev.FBS
                                     }
                                     leftTurn = !leftTurn;
                                 }
+                            }
                         }
                         // 01.12.25 - возврат заделок
                         gap = rightCursor - leftCursor;
