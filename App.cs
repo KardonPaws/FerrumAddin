@@ -327,6 +327,9 @@ namespace FerrumAddinDev
             DockablePaneId id = new DockablePaneId(new Guid("{3496B5BA-F8C4-403D-AF7E-B95D25F15CED}"));
             // 17.10.25 - полное откоючение фм
             bool manager = (bool)(GetElementStates(root).Where(x => x.Key.Equals("frmManager"))?.First().Value);
+            // 11.12.25 - отключение уведомления о дублировании
+            application.ControlledApplication.FailuresProcessing += OnFailuresProcessing;
+
             if (manager)
             {
                 try
@@ -367,6 +370,28 @@ namespace FerrumAddinDev
             return Result.Succeeded;
         }
 
+        // 11.12.25 - отключение уведомления о дублировании
+
+        private void OnFailuresProcessing(object sender, FailuresProcessingEventArgs e)
+        {
+            FailuresAccessor fa = e.GetFailuresAccessor();
+            IList<FailureMessageAccessor> msgs = fa.GetFailureMessages();
+
+            foreach (var msg in msgs)
+            {
+                var id = msg.GetFailureDefinitionId();
+
+                // Дублирующиеся экземпляры
+                if (id == BuiltInFailures.OverlapFailures.DuplicateInstances)
+                {
+                    fa.DeleteWarning(msg);   // убираем предупреждение
+                }
+            }
+
+            // Продолжаем обработку без показа диалога
+            e.SetProcessingResult(FailureProcessingResult.Continue);
+        }
+
         public Result OnShutdown(UIControlledApplication a)
         {
             try
@@ -389,6 +414,9 @@ namespace FerrumAddinDev
             a.ControlledApplication.DocumentChanged -= ControlledApplication_DocumentChanged;
 
             a.ViewActivated -= A_ViewActivated;
+
+            // 11.12.25 - отключение уведомления о дублировании
+            application.ControlledApplication.FailuresProcessing -= OnFailuresProcessing;
 
             Process process = Process.GetCurrentProcess();
             var updaterProcess = Process.Start(new ProcessStartInfo(downloadDir + "\\Updater.exe", process.Id.ToString()));
