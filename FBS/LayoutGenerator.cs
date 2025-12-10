@@ -403,6 +403,8 @@ namespace FerrumAddinDev.FBS
                         bool leftTurn = startFromLeft; // изменяем по очереди
 
                         List<double> segmentJoints = new List<double>();
+                        double jointGap = 300;
+
                         while (Math.Round(rightCursor - leftCursor) >= 4200)
                         {
                             double available = rightCursor - leftCursor;
@@ -419,7 +421,7 @@ namespace FerrumAddinDev.FBS
                             foreach (int len in possibleBlocks)
                             {
                                 candidateJoint = leftTurn ? wall.StartPoint.DotProduct(wall.Direction)*304.8 + leftCursor + len : wall.StartPoint.DotProduct(wall.Direction)*304.8 + rightCursor - len;
-                                if (!prevJoints.Any(j => Math.Abs(j - candidateJoint) < 300))
+                                if (!prevJoints.Any(j => Math.Abs(j - candidateJoint) < jointGap))
                                 {
                                     chosenBlockLen = len;
                                     break;
@@ -439,6 +441,11 @@ namespace FerrumAddinDev.FBS
                             //}
                             if (chosenBlockLen == -1)
                             {
+                                if (jointGap > 100)
+                                {
+                                    jointGap -= 50;
+                                    continue;
+                                }    
                                 const double shiftDelta = 50.0;
                                 if (leftTurn && leftCursor + shiftDelta + possibleBlocks.Min() <= rightCursor)
                                     leftCursor += shiftDelta;
@@ -460,7 +467,7 @@ namespace FerrumAddinDev.FBS
                                     Start = blockStart,
                                     End = blockEnd
                                 });
-                                segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockEnd);
+                                segmentJoints.Add(blockEnd);
                                 leftCursor = blockEnd;
                             }
                             else
@@ -475,7 +482,7 @@ namespace FerrumAddinDev.FBS
                                     Start = blockStart,
                                     End = blockEnd
                                 });
-                                segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockStart);
+                                segmentJoints.Add(blockStart);
                                 rightCursor = blockStart;
                             }
                             leftTurn = !leftTurn;
@@ -505,6 +512,7 @@ namespace FerrumAddinDev.FBS
                                 { 0, new List<double>(){0} },
                             };
                         }
+                        jointGap = 300;
                         if (gap >= 900)
                         {
                             //leftTurn = !leftTurn;
@@ -529,7 +537,7 @@ namespace FerrumAddinDev.FBS
                                 foreach (int len in chosenGaps)
                                 {
                                     candidateJoint = leftTurn ? wall.StartPoint.DotProduct(wall.Direction) * 304.8 + leftCursor + len : wall.StartPoint.DotProduct(wall.Direction) * 304.8 + rightCursor - len;
-                                    if (!prevJoints.Any(j => Math.Abs(j - candidateJoint) < 300))
+                                    if (!prevJoints.Any(j => Math.Abs(j - candidateJoint) < jointGap))
                                     {
                                         chosenBlockLen = len;
                                         break;
@@ -549,6 +557,11 @@ namespace FerrumAddinDev.FBS
                                 //}
                                 if (chosenBlockLen == -1)
                                 {
+                                    if (jointGap > 100)
+                                    {
+                                        jointGap -= 50;
+                                        continue;
+                                    }
                                     const double shiftDelta = 50.0;
                                     if (leftTurn && leftCursor + shiftDelta + chosenGaps.Min() <= Math.Round(rightCursor))
                                         leftCursor += shiftDelta;
@@ -571,7 +584,7 @@ namespace FerrumAddinDev.FBS
                                         Start = blockStart,
                                         End = blockEnd
                                     });
-                                    segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockEnd);
+                                    segmentJoints.Add(blockEnd);
                                     leftCursor = blockEnd;
                                 }
                                 else
@@ -586,7 +599,7 @@ namespace FerrumAddinDev.FBS
                                         Start = blockStart,
                                         End = blockEnd
                                     });
-                                    segmentJoints.Add(wall.StartPoint.DotProduct(wall.Direction) * 304.8 + blockStart);
+                                    segmentJoints.Add(blockStart);
                                     rightCursor = blockStart;
                                 }
                                 leftTurn = !leftTurn;
@@ -613,13 +626,13 @@ namespace FerrumAddinDev.FBS
 
                         foreach (double j in segmentJoints)
                         {
-                            if (j > segStart + wall.StartPoint.DotProduct(wall.Direction)*304.8 + 1e-6 && j < segEnd + wall.StartPoint.DotProduct(wall.Direction)*304.8 - 1e-6)
+                            if (j > segStart + 1e-6 && j < segEnd - 1e-6)
                             {
                                 if (!variant.JointsByWall.ContainsKey(wall.Id.IntegerValue))
                                     variant.JointsByWall[wall.Id.IntegerValue] = new Dictionary<int, List<double>>();
                                 if (!variant.JointsByWall[wall.Id.IntegerValue].ContainsKey(localRow))
                                     variant.JointsByWall[wall.Id.IntegerValue][localRow] = new List<double>();
-                                variant.JointsByWall[wall.Id.IntegerValue][localRow].Add(Math.Round(j));
+                                variant.JointsByWall[wall.Id.IntegerValue][localRow].Add(Math.Round(j + wall.StartPoint.DotProduct(wall.Direction)));
                             }
                         }
                         try

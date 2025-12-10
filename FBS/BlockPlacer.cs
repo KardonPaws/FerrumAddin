@@ -149,7 +149,7 @@ namespace FerrumAddinDev.FBS
                         IndependentTag tag = IndependentTag.Create(
                             doc,
                             tagSym.Id,
-                            views[block.Wall],
+                            views[block.Wall.Id.IntegerValue],
                             new Reference(inst),
                             false,
                             TagOrientation.Horizontal,
@@ -179,20 +179,21 @@ namespace FerrumAddinDev.FBS
             variant.IsPlaced = true;
         }
 
-        public static Dictionary<WallInfo, ElementId> views = new Dictionary<WallInfo, ElementId>();
+        public static Dictionary<int, ElementId> views = new Dictionary<int, ElementId>();
         //02.12.25 - измененный профиль стены + вынос на листы
         private static void PlaceSectionsOnSheets(LayoutVariant variant, Document doc, ElementId titleBlockTypeId)
         {
-            double margin = 0.15; // отступы по периметру
-            double spacing = 0.2; // расстояние между разрезами
+            // Отступы от рамки 
+            double MARGIN = 0.07;  // поля по периметру
+            double GAP = 0.03;  // расстояние между видами по X/Y
 
+            // Функция инициализации нового листа и расчёта рабочей области
             ViewSheet currentSheet = ViewSheet.Create(doc, titleBlockTypeId);
             FamilyInstance tbInst = new FilteredElementCollector(doc)
-             .OfCategory(BuiltInCategory.OST_TitleBlocks)
-             .WhereElementIsNotElementType()
-             .Cast<FamilyInstance>()
-             .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
-            ElementTransformUtils.MoveElement(doc, tbInst.Id, new XYZ(0.611851776, -0.514511720, 0.000000000));
+                .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                .WhereElementIsNotElementType()
+                .Cast<FamilyInstance>()
+                .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
 
             doc.Regenerate();
 
@@ -200,64 +201,91 @@ namespace FerrumAddinDev.FBS
             XYZ tbMin = tbBb.Min;
             XYZ tbMax = tbBb.Max;
 
-            double sheetWidth = tbMax.X - tbMin.X;
-            double sheetHeight = tbMax.Y - tbMin.Y;
+            double freeLeft = tbMin.X + MARGIN;
+            double freeRight = tbMax.X - MARGIN;
+            double freeTop = tbMax.Y - MARGIN;
+            double freeBot = tbMin.Y + MARGIN;
 
-            double cursorX = -sheetWidth / 2 + margin;
-            double cursorY = sheetHeight / 2 - margin;
-            double rowHeight = 0;
+            double cursorX = freeLeft;
+            double cursorY = freeTop;
+            double rowHeight = 0.0;
 
+            // Все виды для варианта (как и было, только дальше используем новую раскладку)
             var viewsToPlace = variant.Blocks
                 .Select(b => b.Wall)
                 .Distinct()
-                .Select(w => doc.GetElement(views[w]) as View)
+                .Select(w => doc.GetElement(views[w.Id.IntegerValue]) as View)
                 .Where(v => v != null)
                 .OrderBy(v => v.Name)
                 .ToList();
 
             foreach (var view in viewsToPlace)
             {
-                (double predictedW, double predictedH) = EstimateViewportSize(view);
-
-                // перенос на новую строку при нехватке ширины
-                if (cursorX + predictedW > sheetWidth / 2 - margin)
+            retry:
+                // Временный вьюпорт в центре рабочей области
+                XYZ tempPoint = new XYZ((freeLeft + freeRight) / 2.0, (freeTop + freeBot) / 2.0, 0);
+                if (!Viewport.CanAddViewToSheet(doc, currentSheet.Id, view.Id))
                 {
-                    cursorX = -sheetWidth / 2 + margin;
-                    cursorY -= rowHeight + spacing;
-                    rowHeight = 0;
+                    // Теоретически не должно случаться, но на всякий случай
+                    continue;
                 }
 
-                // создаём новый лист при нехватке высоты
-                if (cursorY - predictedH < -sheetHeight / 2 + margin)
+                Viewport vp = Viewport.Create(doc, currentSheet.Id, view.Id, tempPoint);
+                doc.Regenerate();
+
+                Outline box = vp.GetBoxOutline();
+                double w = box.MaximumPoint.X - box.MinimumPoint.X;
+                double h = box.MaximumPoint.Y - box.MinimumPoint.Y;
+
+                // Перенос на новую строку, если не влезаем по ширине
+                if (cursorX + w > freeRight)
                 {
+                    cursorX = freeLeft;
+                    cursorY -= rowHeight + GAP;
+                    rowHeight = 0.0;
+                }
+
+                // Если по высоте не влезаем — создаём новый лист, удаляем временный вьюпорт и повторяем
+                if (cursorY - h < freeBot)
+                {
+                    doc.Delete(vp.Id);
+
                     currentSheet = ViewSheet.Create(doc, titleBlockTypeId);
-
                     tbInst = new FilteredElementCollector(doc)
-             .OfCategory(BuiltInCategory.OST_TitleBlocks)
-             .WhereElementIsNotElementType()
-             .Cast<FamilyInstance>()
-             .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
-                    ElementTransformUtils.MoveElement(doc, tbInst.Id, new XYZ(0.611851776, -0.514511720, 0.000000000));
+                        .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                        .WhereElementIsNotElementType()
+                        .Cast<FamilyInstance>()
+                        .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
 
-                    cursorX = -sheetWidth / 2 + margin;
-                    cursorY = sheetHeight / 2 - margin;
-                    rowHeight = 0;
+                    doc.Regenerate();
+
+                    tbBb = tbInst.get_BoundingBox(currentSheet);
+                    tbMin = tbBb.Min;
+                    tbMax = tbBb.Max;
+
+                    freeLeft = tbMin.X + MARGIN;
+                    freeRight = tbMax.X - MARGIN;
+                    freeTop = tbMax.Y - MARGIN;
+                    freeBot = tbMin.Y + MARGIN;
+
+                    cursorX = freeLeft;
+                    cursorY = freeTop;
+                    rowHeight = 0.0;
+
+                    goto retry;
                 }
 
-                XYZ placementPoint = new XYZ(cursorX + predictedW / 2, cursorY - predictedH / 2, 0);
+                // Центр ячейки для текущего вида
+                double cx = cursorX + w / 2.0;
+                double cy = cursorY - h / 2.0;
+                vp.SetBoxCenter(new XYZ(cx, cy, 0));
 
-                if (Viewport.CanAddViewToSheet(doc, currentSheet.Id, view.Id))
-                {
-                    Viewport vp = Viewport.Create(doc, currentSheet.Id, view.Id, placementPoint);
-                    Outline outline = vp.GetBoxOutline();
-                    double actualW = outline.MaximumPoint.X - outline.MinimumPoint.X;
-                    double actualH = outline.MaximumPoint.Y - outline.MinimumPoint.Y;
-
-                    cursorX += actualW + spacing;
-                    rowHeight = Math.Max(rowHeight, actualH);
-                }
+                // Обновляем курсор и высоту строки
+                cursorX += w + GAP;
+                rowHeight = Math.Max(rowHeight, h);
             }
         }
+
 
         private static (double width, double height) EstimateViewportSize(View view)
         {
@@ -281,11 +309,12 @@ namespace FerrumAddinDev.FBS
     HashSet<string> existingNames,
     View viewTemplate)
         {
-            var wallsInVariant = variant.Blocks.Select(b => b.Wall).Distinct();
-            foreach (var wall in wallsInVariant)
+            var wallsInVariant = variant.Blocks.Select(b => b.Wall.Id.Value).Distinct();
+            foreach (var wallId in wallsInVariant)
             {
+                var wall = doc.GetElement(new ElementId(wallId));
                 int i = 1;
-                string name = GenerateSectionName(wall, wallsInVariant.ToList(), allGrids, existingNames);
+                string name = GenerateSectionName(wall, variant.Blocks.Select(b => b.Wall).ToList(), allGrids, existingNames);
                 // 08.07.25 - добавление цифр к разрезам тк при одинаковых именах вылетает
                 if (!existingNames.Contains(name))
                 {
@@ -326,37 +355,47 @@ namespace FerrumAddinDev.FBS
 
                 vs.ViewTemplateId = viewTemplate.Id;
                 vs.Name = name;
-                views.Add(wall, vs.Id);
+                views.Add(wall.Id.IntegerValue, vs.Id);
             }
         }
 
-        private static BoundingBoxXYZ GetSectionBox(WallInfo wall)
+        private static BoundingBoxXYZ GetSectionBox(Element wall)
         {
+            Line line = (wall.Location as LocationCurve).Curve as Line;
             // Концы стены в футах
-            XYZ p0 = wall.line.GetEndPoint(0);
-            XYZ p1 = wall.line.GetEndPoint(1);
+            XYZ p0 = line.GetEndPoint(0);
+            XYZ p1 = line.GetEndPoint(1);
             // Центр
             XYZ midXY = (p0 + p1) / 2.0;
             // Высоты
-            double topZ = (wall.Height / 304.8);
+            double topZ;
+            Parameter heightParam = wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM);
+            if (heightParam != null && heightParam.HasValue)
+            {
+                topZ = heightParam.AsDouble();
+            }
+            else
+            {
+                topZ = (wall.get_BoundingBox(null).Max.Z - wall.get_BoundingBox(null).Min.Z);
+            }
 
             // Запас в футах
             double halfLength = (p1 - p0).GetLength() / 2.0 + 0.5;
             double halfDepth = 0.7;
 
             XYZ upDirection = XYZ.BasisZ;
-            XYZ crossDirection = wall.Direction.CrossProduct(upDirection);
+            XYZ crossDirection = line.Direction.CrossProduct(upDirection);
 
             Transform t = Transform.Identity;
             t.Origin = midXY;
-            t.BasisX = wall.Direction;
+            t.BasisX = line.Direction;
             t.BasisY = upDirection;
             t.BasisZ = crossDirection;
 
             XYZ min = null;
             XYZ max = null; 
 
-            if (wall.Direction.Y == 0)
+            if (line.Direction.Y == 0)
             {
                 min = new XYZ(-halfLength-0.5, - 2.0, 0);
                 max = new XYZ(halfLength, topZ + 1.0, halfDepth);
@@ -386,13 +425,13 @@ namespace FerrumAddinDev.FBS
         }
 
         private static string GenerateSectionName(
-            WallInfo wall,
+            Element wall,
             IEnumerable<WallInfo> wallsInVariant,
             List<Grid> grids,
             HashSet<string> existingNames)
         {
             double tol_ft = 5.0 / 304.8;
-            Line wLine = wall.line;
+            Line wLine = (wall.Location as LocationCurve).Curve as Line;
             XYZ wDir = (wLine.GetEndPoint(1) - wLine.GetEndPoint(0)).Normalize();
 
             // все оси параллельные стене
