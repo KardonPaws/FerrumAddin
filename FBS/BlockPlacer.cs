@@ -179,38 +179,49 @@ namespace FerrumAddinDev.FBS
             variant.IsPlaced = true;
         }
 
+        // 11.12.25 - Заголовки к разрезам ФБС
+        /// <summary>
+        /// Смещает заголовок вьюпорта над рамкой вида на листе.
+        /// Работает для любых размеров вьюпорта. Запас по высоте ~8 мм.
+        /// </summary>
+        private static void PlaceTitleAbove(Viewport vp)
+        {
+            if (vp == null) return;
+
+            // Размер рамки вьюпорта на листе
+            Outline box = vp.GetBoxOutline();
+            double height = box.MaximumPoint.Y - box.MinimumPoint.Y;
+            double width = box.MaximumPoint.X - box.MinimumPoint.X;
+
+            // Небольшой запас вверх (в мм → футы)
+            double pad = UnitUtils.ConvertToInternalUnits(8, UnitTypeId.Millimeters);
+
+            // Текущий оффсет заголовка; смещаем по Y выше рамки
+            XYZ cur = vp.LabelOffset; // координаты листа: +Y вверх
+            vp.LabelOffset = new XYZ(cur.X + width / 2, Math.Abs(cur.Y) + height + pad, 0);
+        }
+
         public static Dictionary<int, ElementId> views = new Dictionary<int, ElementId>();
         //02.12.25 - измененный профиль стены + вынос на листы
         private static void PlaceSectionsOnSheets(LayoutVariant variant, Document doc, ElementId titleBlockTypeId)
         {
+            ElementType vpTypeTitle = new FilteredElementCollector(doc)
+                .OfClass(typeof(ElementType))
+                .Where(x => x.Name.Equals("Заголовок на листе", StringComparison.OrdinalIgnoreCase))
+                .Cast<ElementType>()
+                .FirstOrDefault(x => x.FamilyName.Equals("Видовой экран"));
+
             // Отступы от рамки 
             double MARGIN = 0.07;  // поля по периметру
-            double GAP = 0.03;  // расстояние между видами по X/Y
+            double GAP = 0.03;     // расстояние между видами по X/Y
 
-            // Функция инициализации нового листа и расчёта рабочей области
-            ViewSheet currentSheet = ViewSheet.Create(doc, titleBlockTypeId);
-            FamilyInstance tbInst = new FilteredElementCollector(doc)
-                .OfCategory(BuiltInCategory.OST_TitleBlocks)
-                .WhereElementIsNotElementType()
-                .Cast<FamilyInstance>()
-                .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
+            // Рабочая область листа
+            double freeLeft = 0, freeRight = 0, freeTop = 0, freeBot = 0;
+            double cursorX = 0, cursorY = 0, rowHeight = 0.0;
 
-            doc.Regenerate();
+            ViewSheet currentSheet = InitSheet();
 
-            BoundingBoxXYZ tbBb = tbInst.get_BoundingBox(currentSheet);
-            XYZ tbMin = tbBb.Min;
-            XYZ tbMax = tbBb.Max;
-
-            double freeLeft = tbMin.X + MARGIN;
-            double freeRight = tbMax.X - MARGIN;
-            double freeTop = tbMax.Y - MARGIN;
-            double freeBot = tbMin.Y + MARGIN;
-
-            double cursorX = freeLeft;
-            double cursorY = freeTop;
-            double rowHeight = 0.0;
-
-            // Все виды для варианта (как и было, только дальше используем новую раскладку)
+            // Все виды для варианта
             var viewsToPlace = variant.Blocks
                 .Select(b => b.Wall)
                 .Distinct()
@@ -225,64 +236,102 @@ namespace FerrumAddinDev.FBS
                 // Временный вьюпорт в центре рабочей области
                 XYZ tempPoint = new XYZ((freeLeft + freeRight) / 2.0, (freeTop + freeBot) / 2.0, 0);
                 if (!Viewport.CanAddViewToSheet(doc, currentSheet.Id, view.Id))
-                {
-                    // Теоретически не должно случаться, но на всякий случай
                     continue;
-                }
 
                 Viewport vp = Viewport.Create(doc, currentSheet.Id, view.Id, tempPoint);
                 doc.Regenerate();
 
-                Outline box = vp.GetBoxOutline();
-                double w = box.MaximumPoint.X - box.MinimumPoint.X;
-                double h = box.MaximumPoint.Y - box.MinimumPoint.Y;
+                // Назначаем тип с заголовком
+                if (vpTypeTitle != null)
+                    vp.ChangeTypeId(vpTypeTitle.Id);
+
+                // Включаем заголовок
+                Parameter pShow = vp.get_Parameter(BuiltInParameter.VIEWPORT_ATTR_SHOW_LABEL);
+                if (pShow != null)
+                    pShow.Set(1);
+
+                // Поднимаем заголовок над рамкой
+                PlaceTitleAbove(vp);
+                doc.Regenerate();
+
+                // --- объединённый bounding-box "рамка + заголовок" ---
+                Outline boxView = vp.GetBoxOutline();
+                Outline boxLabel = vp.GetLabelOutline(); // может вернуть null, но обычно нет
+
+                double minX = boxView.MinimumPoint.X;
+                double maxX = boxView.MaximumPoint.X;
+                double minY = boxView.MinimumPoint.Y;
+                double maxY = boxView.MaximumPoint.Y;
+
+                if (boxLabel != null)
+                {
+                    minX = Math.Min(minX, boxLabel.MinimumPoint.X);
+                    maxX = Math.Max(maxX, boxLabel.MaximumPoint.X);
+                    minY = Math.Min(minY, boxLabel.MinimumPoint.Y);
+                    maxY = Math.Max(maxY, boxLabel.MaximumPoint.Y);
+                }
+
+                double width = maxX - minX;      // полная ширина (вид + заголовок)
+                double height = maxY - minY;     // полная высота (включая заголовок)
+
+                XYZ center0 = vp.GetBoxCenter();
+                double leftOffset = minX - center0.X;
+                double topOffset = maxY - center0.Y;
 
                 // Перенос на новую строку, если не влезаем по ширине
-                if (cursorX + w > freeRight)
+                if (cursorX + width > freeRight)
                 {
                     cursorX = freeLeft;
                     cursorY -= rowHeight + GAP;
                     rowHeight = 0.0;
                 }
 
-                // Если по высоте не влезаем — создаём новый лист, удаляем временный вьюпорт и повторяем
-                if (cursorY - h < freeBot)
+                // Если по высоте (с учётом заголовка) не влезаем — новый лист
+                if (cursorY - height < freeBot)
                 {
                     doc.Delete(vp.Id);
-
-                    currentSheet = ViewSheet.Create(doc, titleBlockTypeId);
-                    tbInst = new FilteredElementCollector(doc)
-                        .OfCategory(BuiltInCategory.OST_TitleBlocks)
-                        .WhereElementIsNotElementType()
-                        .Cast<FamilyInstance>()
-                        .FirstOrDefault(fi => fi.OwnerViewId == currentSheet.Id);
-
-                    doc.Regenerate();
-
-                    tbBb = tbInst.get_BoundingBox(currentSheet);
-                    tbMin = tbBb.Min;
-                    tbMax = tbBb.Max;
-
-                    freeLeft = tbMin.X + MARGIN;
-                    freeRight = tbMax.X - MARGIN;
-                    freeTop = tbMax.Y - MARGIN;
-                    freeBot = tbMin.Y + MARGIN;
-
-                    cursorX = freeLeft;
-                    cursorY = freeTop;
-                    rowHeight = 0.0;
-
+                    currentSheet = InitSheet();
                     goto retry;
                 }
 
-                // Центр ячейки для текущего вида
-                double cx = cursorX + w / 2.0;
-                double cy = cursorY - h / 2.0;
+                // Центр рамки вида так, чтобы верх объединённой рамки совпал с cursorY,
+                // а левая граница с cursorX
+                double cx = cursorX - leftOffset;
+                double cy = cursorY - topOffset;
                 vp.SetBoxCenter(new XYZ(cx, cy, 0));
 
-                // Обновляем курсор и высоту строки
-                cursorX += w + GAP;
-                rowHeight = Math.Max(rowHeight, h);
+                // Обновляем курсор и высоту строки (по полной высоте)
+                cursorX += width + GAP;
+                rowHeight = Math.Max(rowHeight, height);
+            }
+
+
+            // --- локальная функция инициализации листа ---
+            ViewSheet InitSheet()
+            {
+                ViewSheet sheet = ViewSheet.Create(doc, titleBlockTypeId);
+                FamilyInstance tbInst = new FilteredElementCollector(doc)
+                    .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                    .WhereElementIsNotElementType()
+                    .Cast<FamilyInstance>()
+                    .FirstOrDefault(fi => fi.OwnerViewId == sheet.Id);
+
+                doc.Regenerate();
+
+                BoundingBoxXYZ tbBb = tbInst.get_BoundingBox(sheet);
+                XYZ tbMin = tbBb.Min;
+                XYZ tbMax = tbBb.Max;
+
+                freeLeft = tbMin.X + MARGIN;
+                freeRight = tbMax.X - MARGIN;
+                freeTop = tbMax.Y - MARGIN;
+                freeBot = tbMin.Y + MARGIN;
+
+                cursorX = freeLeft;
+                cursorY = freeTop;
+                rowHeight = 0.0;
+
+                return sheet;
             }
         }
 
