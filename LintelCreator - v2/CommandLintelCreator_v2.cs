@@ -499,11 +499,22 @@ namespace FerrumAddinDev.LintelCreator_v2
                 // Границы
                 var xBounds = group.Select(el =>
                 {
-                    // 12.09.25 - правильное размещение для витражей не по середине стены
+                    // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
 
                     if (el is FamilyInstance fi)
                     {
-                        var center = (el.Location as LocationPoint).Point;
+                        XYZ center = new XYZ(0, 0, 0);
+                        try
+                        {
+                            center = (el.Location as LocationPoint).Point;
+                        }
+                        catch
+                        {
+                            var bb = el.get_BoundingBox(null);
+                            center = ((bb.Max +  bb.Min) / 2).DotProduct(fi.HandOrientation) * fi.HandOrientation + 
+                            bb.Min.DotProduct(XYZ.BasisZ) * XYZ.BasisZ + 
+                            ((bb.Max + bb.Min) / 2).DotProduct(fi.FacingOrientation) * fi.FacingOrientation;
+                        }
                         var width = el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0;
                         var dir = (el as FamilyInstance).HandOrientation;
                         return (center - width / 2 * dir, center + width / 2 * dir);
@@ -720,12 +731,28 @@ namespace FerrumAddinDev.LintelCreator_v2
         private static bool ElementHasLintel(ElementsForLintel customEl, Document doc)
         {
             Element element = customEl.Elements.FirstOrDefault();
+            // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
 
-            XYZ center = element is FamilyInstance ? (element.Location as LocationPoint).Point : 
-                (((element.Location as LocationCurve).Curve as Line).GetEndPoint(0) + ((element.Location as LocationCurve).Curve as Line).GetEndPoint(1)) / 2;
-            // 19.09.25 - обновление определения центра
-            double height = element is FamilyInstance ? element.LookupParameter("ADSK_Размер_Высота").AsDouble() :
+            XYZ center = new XYZ(0, 0, 0);
+            double height = 0;
+
+            try
+            {
+                center = element is FamilyInstance ? (element.Location as LocationPoint).Point :
+                    (((element.Location as LocationCurve).Curve as Line).GetEndPoint(0) + ((element.Location as LocationCurve).Curve as Line).GetEndPoint(1)) / 2;
+                height = element is FamilyInstance ? element.LookupParameter("ADSK_Размер_Высота").AsDouble() :
                 element.LookupParameter("Неприсоединенная высота").AsDouble();
+            }
+            catch
+            {
+                FamilyInstance fi = element as FamilyInstance;
+                var bb = element.get_BoundingBox(null);
+                center = ((bb.Max + bb.Min) / 2).DotProduct(fi.HandOrientation) * fi.HandOrientation +
+                bb.Min.DotProduct(XYZ.BasisZ) * XYZ.BasisZ +
+                ((bb.Max + bb.Min) / 2).DotProduct(fi.FacingOrientation) * fi.FacingOrientation;
+                height = (bb.Max - bb.Max).DotProduct(XYZ.BasisZ);
+            }
+
             // создаём область немного ниже макс.Z и немного выше на 100 мм
             double mm = 1.0 / 304.8;
             XYZ searchMin = new XYZ(center.X - 25 * mm, center.Y - 25 * mm, center.Z + height - 50 * mm);

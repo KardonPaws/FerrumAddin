@@ -199,24 +199,25 @@ namespace FerrumAddinDev.LintelCreator_v2
                 CommandLintelCreator_v2.lintelCreateEvent.Raise();
         }
 
+        // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
-            CommandLintelCreator2.lintelNumerateEvent.Raise();
+            CommandLintelCreator_v2.lintelNumerateEvent.Raise();
         }
 
         private void Button_Click_2(object sender, RoutedEventArgs e)
         {
-            CommandLintelCreator2.nestedElementsNumberingEvent.Raise();
+            CommandLintelCreator_v2.nestedElementsNumberingEvent.Raise();
         }
 
         private void Button_Click_3(object sender, RoutedEventArgs e)
         {
-            CommandLintelCreator2.createSectionsEvent.Raise();
+            CommandLintelCreator_v2.createSectionsEvent.Raise();
         }
 
         private void Button_Click_4(object sender, RoutedEventArgs e)
         {
-            CommandLintelCreator2.tagLintelsEvent.Raise();
+            CommandLintelCreator_v2.tagLintelsEvent.Raise();
         }
 
         private void CheckBox_Checked(object sender, RoutedEventArgs e)
@@ -257,9 +258,11 @@ namespace FerrumAddinDev.LintelCreator_v2
             }
         }
         public static bool autoMode = false;
+        // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
+
         private void Button_Click_5(object sender, RoutedEventArgs e)
         {
-            CommandLintelCreator2.placeSectionsEvent.Raise();
+            CommandLintelCreator_v2.placeSectionsEvent.Raise();
         }
 
         private void CheckBox_Checked_3(object sender, RoutedEventArgs e)
