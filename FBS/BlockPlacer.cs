@@ -47,6 +47,9 @@ namespace FerrumAddinDev.FBS
                 .Select(vs => vs.Name)
                 .ToHashSet();
 
+            // 19.12.25 - создание словаря при повторном запуске
+            views = new Dictionary<int, ElementId>();
+
             using (Transaction tx = new Transaction(doc, "Размещение блоков ФБС"))
             {
                 tx.Start();
