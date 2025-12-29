@@ -235,7 +235,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         .OrderByDescending(s => (s as Solid).Volume)
                         .FirstOrDefault();
                     }
-                    if (solid == null)
+                    // 29.12.25 - не у всех семейств плит есть геометрия, проверка на объем солида
+                    if (solid == null || solid.Volume == 0)
                         continue;
 
                     var fbb = solid.GetBoundingBox();
