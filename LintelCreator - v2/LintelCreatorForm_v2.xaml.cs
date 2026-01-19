@@ -29,6 +29,10 @@ namespace FerrumAddinDev.LintelCreator_v2
     {
         List<ParentElement> ElementList;
         public static MainViewModel MainViewModel;
+        // 19.01.26 - ошибки в перемычках
+        private List<ElementId> _errorLintelIds = new List<ElementId>();
+        private int _currentErrorIndex = -1;
+        public Document doc_;
 
         public LintelCreatorForm_v2(Document doc, Selection sel, List<ParentElement> openingsWithoutLintel, List<ParentElement> openingsWithLintel, List<Family> families)
         {
@@ -36,6 +40,8 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             var familyWrappers = families.Select(family => new FamilyWrapper(family, doc)).ToList();
             familyWrappers.OrderBy(x => x.FamilyName);
+            // 19.01.26 - ошибки в перемычках
+            doc_ = doc;
 
             // Устанавливаем DataContext для привязки данных
             DataContext = new MainViewModel
@@ -49,6 +55,9 @@ namespace FerrumAddinDev.LintelCreator_v2
             selection = sel;
             autoMode = false;
             recreate = false;
+
+            UpdateErrorsUi();
+
         }
         public static Selection selection;
 
@@ -293,6 +302,104 @@ namespace FerrumAddinDev.LintelCreator_v2
             vm.OnPropertyChanged(nameof(vm.openingsWithoutLintel));
             vm.OnPropertyChanged(nameof(vm.openingsWithLintel));
         }
+        // 19.01.26 - ошибки в перемычках
+        private void Button_FindErrors_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _errorLintelIds = FindErrorLintels(doc_);
+
+                // По требованию: при первом поиске в Revit выбираем ВСЕ ошибочные перемычки
+                if (_errorLintelIds.Count > 0)
+                {
+                    selection.SetElementIds(_errorLintelIds);
+                    _currentErrorIndex = 0;
+                }
+                else
+                {
+                    _currentErrorIndex = -1;
+                }
+
+                UpdateErrorsUi();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Ошибка");
+            }
+        }
+
+        private void Button_PrevError_Click(object sender, RoutedEventArgs e)
+        {
+            if (_errorLintelIds == null || _errorLintelIds.Count == 0) return;
+            if (_currentErrorIndex <= 0) return;
+
+            _currentErrorIndex--;
+            SelectCurrentErrorSingle();
+            UpdateErrorsUi();
+        }
+
+        private void Button_NextError_Click(object sender, RoutedEventArgs e)
+        {
+            if (_errorLintelIds == null || _errorLintelIds.Count == 0) return;
+            if (_currentErrorIndex >= _errorLintelIds.Count - 1) return;
+
+            _currentErrorIndex++;
+            SelectCurrentErrorSingle();
+            UpdateErrorsUi();
+        }
+
+        private void SelectCurrentErrorSingle()
+        {
+            if (_currentErrorIndex < 0 || _currentErrorIndex >= _errorLintelIds.Count) return;
+            selection.SetElementIds(new List<ElementId> { _errorLintelIds[_currentErrorIndex] });
+        }
+
+        private void UpdateErrorsUi()
+        {
+            int count = _errorLintelIds?.Count ?? 0;
+            if (TxtErrorsCount != null) TxtErrorsCount.Text = count.ToString();
+
+            if (TxtErrorsProgress != null)
+            {
+                TxtErrorsProgress.Text = (_currentErrorIndex >= 0 && count > 0)
+                    ? $"{_currentErrorIndex + 1} / {count}"
+                    : "-";
+            }
+
+            bool has = count > 0;
+            if (BtnPrevError != null) BtnPrevError.IsEnabled = has && _currentErrorIndex > 0;
+            if (BtnNextError != null) BtnNextError.IsEnabled = has && _currentErrorIndex >= 0 && _currentErrorIndex < count - 1;
+        }
+
+        private static List<ElementId> FindErrorLintels(Document doc)
+        {
+            // Ошибочные перемычки ищем по имени типа: "Ошибка" (возможен невидимый символ в начале)
+            var found = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                .WhereElementIsNotElementType()
+                .OfType<FamilyInstance>()
+                .Where(fi => fi?.Symbol != null)
+                .Where(fi => fi.Symbol.FamilyName != null && fi.Symbol.FamilyName.Contains("_Перемычки"))
+                .Where(fi => IsErrorTypeName(fi.Symbol.Name))
+                .Select(fi => fi.Id)
+                .ToList();
+
+            return found;
+        }
+
+        /// <summary>
+        /// Проверка имени типа на "Ошибка". Допускается невидимый символ в начале/внутри.
+        /// </summary>
+        public static bool IsErrorTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName)) return false;
+            var cleaned = new string(typeName
+                .Where(c => !char.IsControl(c) && System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
+                .ToArray())
+                .Trim();
+
+            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     public class MainViewModel : INotifyPropertyChanged
@@ -407,6 +514,18 @@ namespace FerrumAddinDev.LintelCreator_v2
         public bool IsReinforcedConcreteChecked { get; set; }
         public bool AllSupports { get; set; }
 
+        // 19.01.26 - ошибки в перемычках
+        public static bool IsErrorTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName)) return false;
+            var cleaned = new string(typeName
+                .Where(c => !char.IsControl(c) && System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
+                .ToArray())
+                .Trim();
+
+            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+        }
+
         public void FilterFamiliesAndTypes()
         {
             if (SelectedFamily == null)
@@ -420,6 +539,9 @@ namespace FerrumAddinDev.LintelCreator_v2
             var filteredTypes = family.OriginalTypes
                         .Where(type =>
                 {
+                    if (IsErrorTypeName(type.Name))
+                        return true;
+
                     var parts = type.Name.Split('_');
                     if (parts.Length < 4) return false;
 
