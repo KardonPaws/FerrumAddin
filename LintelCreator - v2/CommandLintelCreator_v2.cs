@@ -50,7 +50,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             if (windowsAndDoorsList.Count == 0)
             {
                 // 24.05.25 - убраны двери/окна с хостом витража
-                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x=> (x as FamilyInstance).SuperComponent == null).Where(x=>((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
 
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
                 // 29.06.25 - исключен тип 211.002
@@ -94,7 +94,7 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             LintelCreatorForm_v2 form = new LintelCreatorForm_v2(doc, sel, openingsWithoutLintel, openingsWithLintel, lintelFamilysList);
             form.Show();
-           
+
             return Result.Succeeded;
         }
         public static List<List<ParentElement>> RefreshWindow()
@@ -196,7 +196,7 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                 // 29.06.25 - у некоторых семейств нет точки вставки, в try
                 var center = new XYZ(0, 0, 0);
-                var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);               
+                var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);
                 try
                 {
                     center = el is FamilyInstance ? (el.Location as LocationPoint).Point + (max.Z - min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
@@ -206,7 +206,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     continue;
                 }
                 // 24.09.25 - изменения в перемычках
-                var leftPtC = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width/2) * orient : center - (el as Wall).Width / 2 * orient;
+                var leftPtC = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width / 2) * orient : center - (el as Wall).Width / 2 * orient;
                 var rightPtC = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + (el as Wall).Width / 2 * orient;
                 double threshold = 0;
                 if (el is FamilyInstance inst)
@@ -248,14 +248,14 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                     // 10.08.25 - изменения в перемычках
                     var leftPtM = leftPtC - threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
-                    var leftPtP = leftPtC + threshold /2  * orient.CrossProduct(XYZ.BasisZ);
+                    var leftPtP = leftPtC + threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
                     var rightPtM = rightPtC - threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
                     var rightPtP = rightPtC + threshold / 2 * orient.CrossProduct(XYZ.BasisZ);
                     // 24.09.25 - изменения в перемычках
                     if ((leftPtC.X > fbb.Min.X + 5e-6 && leftPtC.X < fbb.Max.X - 5e-6
-                         && leftPtC.Y > fbb.Min.Y + 5e-6 && leftPtC.Y < fbb.Max.Y - 5e-6)||
+                         && leftPtC.Y > fbb.Min.Y + 5e-6 && leftPtC.Y < fbb.Max.Y - 5e-6) ||
                          (leftPtM.X > fbb.Min.X + 5e-6 && leftPtM.X < fbb.Max.X - 5e-6
-                         && leftPtM.Y > fbb.Min.Y + 5e-6 && leftPtM.Y < fbb.Max.Y - 5e-6)||
+                         && leftPtM.Y > fbb.Min.Y + 5e-6 && leftPtM.Y < fbb.Max.Y - 5e-6) ||
                          (leftPtP.X > fbb.Min.X + 5e-6 && leftPtP.X < fbb.Max.X - 5e-6
                          && leftPtP.Y > fbb.Min.Y + 5e-6 && leftPtP.Y < fbb.Max.Y - 5e-6))
                     {
@@ -264,9 +264,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
 
                     if ((rightPtC.X > fbb.Min.X + 5e-6 && rightPtC.X < fbb.Max.X - 5e-6
-                     && rightPtC.Y > fbb.Min.Y + 5e-6 && rightPtC.Y < fbb.Max.Y - 5e-6)||
+                     && rightPtC.Y > fbb.Min.Y + 5e-6 && rightPtC.Y < fbb.Max.Y - 5e-6) ||
                      (rightPtM.X > fbb.Min.X + 5e-6 && rightPtM.X < fbb.Max.X - 5e-6
-                     && rightPtM.Y > fbb.Min.Y + 5e-6 && rightPtM.Y < fbb.Max.Y - 5e-6)||
+                     && rightPtM.Y > fbb.Min.Y + 5e-6 && rightPtM.Y < fbb.Max.Y - 5e-6) ||
                      (rightPtP.X > fbb.Min.X + 5e-6 && rightPtP.X < fbb.Max.X - 5e-6
                      && rightPtP.Y > fbb.Min.Y + 5e-6 && rightPtP.Y < fbb.Max.Y - 5e-6))
                     {
@@ -358,7 +358,7 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             // Объединяем все группы и возвращаем итоговый список
             //var groupedElements = windowGroups.Concat(curtainGroups);
-            
+
             //28.07.25 - объединение проемов в перемычках
             const double proximityThreshold = 380.0 / 304.8; // в футах
 
@@ -375,6 +375,13 @@ namespace FerrumAddinDev.LintelCreator_v2
                     XYZ center;
                     double width;
                     XYZ dir;
+                    // Для объединения по вертикали используем границы bounding box по Z
+                    double zMin;
+                    double zMax;
+
+                    var bb0 = el.get_BoundingBox(null);
+                    zMin = bb0 != null ? bb0.Min.Z : 0;
+                    zMax = bb0 != null ? bb0.Max.Z : 0;
 
                     if (el is FamilyInstance inst)
                     {
@@ -405,6 +412,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         center = Line.CreateUnbound(p - 100 * curve.Direction, curve.Direction).Project(wcenter).XYZPoint;
                         dir = curve.Direction;
                         width = curve.Length;
+                        // Для витражей точка центра считается на высоте базовой линии,
+                        // поэтому zMin/zMax берём из BoundingBox выше.
                     }
                     else return null;
 
@@ -417,6 +426,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         Width = width,
                         Center = center,
                         Direction = dir,
+                        ZMin = zMin,
+                        ZMax = zMax,
                         SupportType = supportInfo.TryGetValue(el, out var val) ? val.SupportType : 0,
                         SupDirection = supportInfo.TryGetValue(el, out var val2) ? val2.Direction : XYZ.Zero
                     };
@@ -424,53 +435,97 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .Where(x => x != null)
                 .ToList();
 
-            // Кластеризация по Min/Max
-            var clusters = new List<List<Element>>();
-            var currentCluster = new List<Element>();
-            double currentMax = double.MinValue;
+            //23.01.26 - объединение проемов в перемычках вверх-вниз
 
-            foreach (var item in allOpenings)
+            int n = allOpenings.Count;
+            var dsu = new int[n];
+            for (int i = 0; i < n; i++) dsu[i] = i;
+
+            Func<int, int> find = null;
+            find = (a) => dsu[a] == a ? a : (dsu[a] = find(dsu[a]));
+            Action<int, int> unite = (a, b) =>
             {
-                XYZ p1Min, p1Max, p2Min, p2Max;
-                p1Min = item.Center - item.Direction * item.Width/2;
-                p1Max = item.Center + item.Direction * item.Width / 2;
-                if (clusters.Count > 0)
-                {
-                    int ind = clusters.IndexOf(clusters.Where(x => x.Any(y => y.Id == item.Element.Id)).FirstOrDefault());
-                    if (ind != -1)
-                    {
-                        currentCluster = clusters[ind];
-                    }
-                    else
-                    {
-                        clusters.Add(new List<Element>() { item.Element });
-                        currentCluster = clusters.Last();
-                    }
-                }
-                else
-                {
-                    clusters.Add(new List<Element>() { item.Element });
-                    currentCluster = clusters.Last();
-                }
-                foreach (var secondIt in allOpenings)
-                {
-                    if (secondIt == item || (!secondIt.Direction.IsAlmostEqualTo(item.Direction) && !secondIt.Direction.IsAlmostEqualTo(item.Direction * -1)))
-                    {
-                        continue;
-                    }
+                int ra = find(a);
+                int rb = find(b);
+                if (ra != rb) dsu[rb] = ra;
+            };
 
-                    p2Min = secondIt.Center - secondIt.Direction * secondIt.Width / 2;
-                    p2Max = secondIt.Center + secondIt.Direction * secondIt.Width / 2;
-                    if (p1Min.DistanceTo(p2Min) <= 380 / 304.8 || p1Min.DistanceTo(p2Max) <= 380 / 304.8 || 
-                        p1Max.DistanceTo(p2Min) <= 380 / 304.8 || p1Max.DistanceTo(p2Max) <= 380 / 304.8)
+            // Вспомогательные функции
+            Func<double, double, double, double, bool> overlaps = (aMin, aMax, bMin, bMax) =>
+            {
+                double minA = Math.Min(aMin, aMax);
+                double maxA = Math.Max(aMin, aMax);
+                double minB = Math.Min(bMin, bMax);
+                double maxB = Math.Max(bMin, bMax);
+                return !(maxA < minB - 1e-6 || maxB < minA - 1e-6);
+            };
+            Func<double, double, double, double, double> gap = (aMin, aMax, bMin, bMax) =>
+            {
+                double minA = Math.Min(aMin, aMax);
+                double maxA = Math.Max(aMin, aMax);
+                double minB = Math.Min(bMin, bMax);
+                double maxB = Math.Max(bMin, bMax);
+                if (overlaps(minA, maxA, minB, maxB)) return 0.0;
+                return Math.Max(0.0, Math.Max(minB - maxA, minA - maxB));
+            };
+
+            for (int i = 0; i < n; i++)
+            {
+                var a = allOpenings[i];
+
+                // Направление проёма
+                var da = new XYZ(a.Direction.X, a.Direction.Y, 0);
+                if (da.GetLength() < 1e-9) continue;
+                da = da.Normalize();
+
+                var aP1 = a.Center - da * a.Width / 2;
+                var aP2 = a.Center + da * a.Width / 2;
+                double aUMin = aP1.DotProduct(da);
+                double aUMax = aP2.DotProduct(da);
+                double aVMin = a.ZMin;
+                double aVMax = a.ZMax;
+
+                for (int j = i + 1; j < n; j++)
+                {
+                    var b = allOpenings[j];
+
+                    var db = new XYZ(b.Direction.X, b.Direction.Y, 0);
+                    if (db.GetLength() < 1e-9) continue;
+                    db = db.Normalize();
+
+                    // Объединяем только элементы одной ориентации
+                    if (Math.Abs(da.DotProduct(db)) < 0.999) continue;
+
+                    var bP1 = b.Center - db * b.Width / 2;
+                    var bP2 = b.Center + db * b.Width / 2;
+                    double bUMin = bP1.DotProduct(da);
+                    double bUMax = bP2.DotProduct(da);
+
+                    double bVMin = b.ZMin;
+                    double bVMax = b.ZMax;
+
+                    bool overlapU = overlaps(aUMin, aUMax, bUMin, bUMax);
+                    bool overlapV = overlaps(aVMin, aVMax, bVMin, bVMax);
+                    double gapU = gap(aUMin, aUMax, bUMin, bUMax);
+                    double gapV = gap(aVMin, aVMax, bVMin, bVMax);
+
+                    if ((overlapU && overlapV) || (gapU <= proximityThreshold && overlapV) || (gapV <= proximityThreshold && overlapU))
                     {
-                        int ind = clusters.IndexOf(currentCluster);
-                        clusters[ind].Add(secondIt.Element);
-                        currentCluster = clusters[ind];
+                        unite(i, j);
                     }
                 }
-                
             }
+
+            // Собираем компоненты связности в кластеры
+            var clusters = new List<List<Element>>();
+            var byRoot = new Dictionary<int, List<Element>>();
+            for (int i = 0; i < n; i++)
+            {
+                int r = find(i);
+                if (!byRoot.ContainsKey(r)) byRoot[r] = new List<Element>();
+                byRoot[r].Add(allOpenings[i].Element);
+            }
+            clusters = byRoot.Values.ToList();
 
             // Группировка кластеров в ParentElement
             var groupedElements = new List<ParentElement>();
@@ -512,8 +567,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         catch
                         {
                             var bb = el.get_BoundingBox(null);
-                            center = ((bb.Max +  bb.Min) / 2).DotProduct(fi.HandOrientation) * fi.HandOrientation + 
-                            bb.Min.DotProduct(XYZ.BasisZ) * XYZ.BasisZ + 
+                            center = ((bb.Max + bb.Min) / 2).DotProduct(fi.HandOrientation) * fi.HandOrientation +
+                            bb.Min.DotProduct(XYZ.BasisZ) * XYZ.BasisZ +
                             ((bb.Max + bb.Min) / 2).DotProduct(fi.FacingOrientation) * fi.FacingOrientation;
                         }
                         var width = el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0;
@@ -547,15 +602,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                 double mergedWidth = double.MinValue;
                 List<XYZ> mergedPoints = new List<XYZ>();
                 List<XYZ> farPoints = new List<XYZ>();
-                
-                foreach ( var x in xBounds )
+
+                foreach (var x in xBounds)
                 {
                     mergedPoints.Add(x.Item1);
                     mergedPoints.Add(x.Item2);
                 }
-                foreach (var x in mergedPoints )
+                foreach (var x in mergedPoints)
                 {
-                    foreach ( var y in mergedPoints)
+                    foreach (var y in mergedPoints)
                     {
                         if (x == y)
                         {
@@ -608,7 +663,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 }
                 if (wallsDict.Keys.All(x => x.Id != wallType.Id))
                 {
-                    wallsDict.Add(wallType, new List<ElementsForLintel>() { new ElementsForLintel() { Elements = group, ElementsId = group.Select(g => g.Id).ToList(), Location = (farPoints[0] + farPoints[1])/2 } });
+                    wallsDict.Add(wallType, new List<ElementsForLintel>() { new ElementsForLintel() { Elements = group, ElementsId = group.Select(g => g.Id).ToList(), Location = (farPoints[0] + farPoints[1]) / 2 } });
                 }
                 else
                 {
@@ -648,7 +703,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                             }
                             else
                             {
-                                groupedElements[ind].SupportDirection.Add(pEl.SupportDirection.Where(x=>x.Key.Id == KeyToAdd.Id).First().Key, pEl.SupportDirection.Where(x => x.Key.Id == KeyToAdd.Id).First().Value);
+                                groupedElements[ind].SupportDirection.Add(pEl.SupportDirection.Where(x => x.Key.Id == KeyToAdd.Id).First().Key, pEl.SupportDirection.Where(x => x.Key.Id == KeyToAdd.Id).First().Value);
                             }
                         }
                         groupedElements[ind].SupportDirection.Concat(pEl.SupportDirection);
@@ -659,7 +714,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     groupedElements.Add(pEl);
                 }
             }
-                
+
             openingsWithoutLintel = new List<ParentElement>();
             openingsWithLintel = new List<ParentElement>();
 
@@ -667,13 +722,16 @@ namespace FerrumAddinDev.LintelCreator_v2
             {
                 // создаём «пустые» оболочки, копируя метаданные, но не копируя Walls
                 //28.07.25 - объединение проемов в перемычках
-                var noLintelParent = new ParentElement { Name = parent.Name, 
-                    TypeName = parent.TypeName, 
-                    Width = parent.Width, 
-                    Walls = new Dictionary<WallType, List<ElementsForLintel>>(), 
-                    ChildElements = parent.ChildElements, 
-                    SupportDirection = parent.SupportDirection, 
-                    SupportType = parent.SupportType };
+                var noLintelParent = new ParentElement
+                {
+                    Name = parent.Name,
+                    TypeName = parent.TypeName,
+                    Width = parent.Width,
+                    Walls = new Dictionary<WallType, List<ElementsForLintel>>(),
+                    ChildElements = parent.ChildElements,
+                    SupportDirection = parent.SupportDirection,
+                    SupportType = parent.SupportType
+                };
                 var withLintelParent = new ParentElement
                 {
                     Name = parent.Name,
@@ -765,7 +823,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             var found = new FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WherePasses(filter)
-                .Where(x=> (x as FamilyInstance).Symbol.FamilyName.Contains("_Перемычки"));
+                .Where(x => (x as FamilyInstance).Symbol.FamilyName.Contains("_Перемычки"));
 
             // параметр "ADSK_Группирование" == "ПР" обозначает уже созданную перемычку
             return found
@@ -1145,7 +1203,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                         var firstElement = group.FirstOrDefault();
                         if (firstElement == null) continue;
 
-                        
+
 
                         // Определение размера разреза
                         LocationPoint locationPoint = firstElement.Location as LocationPoint;
@@ -1171,13 +1229,13 @@ namespace FerrumAddinDev.LintelCreator_v2
                         XYZ crossDirection = direction.CrossProduct(upDirection).Negate();
 
                         // Определение центра перемычки
-                        XYZ center = (firstElement.get_BoundingBox(null).Max + (firstElement.get_BoundingBox(null).Min + XYZ.BasisZ*2000/304.8))/2;
+                        XYZ center = (firstElement.get_BoundingBox(null).Max + (firstElement.get_BoundingBox(null).Min + XYZ.BasisZ * 2000 / 304.8)) / 2;
 
                         Transform t = Transform.Identity;
                         t.Origin = center;
-                        t.BasisX = crossDirection;       
+                        t.BasisX = crossDirection;
                         t.BasisY = upDirection;
-                        t.BasisZ = direction;    
+                        t.BasisZ = direction;
 
                         // Размеры разреза с учетом отступов в футах
                         double offsetX = 100 / 304.8; // 100 мм по X (влево и вправо)
@@ -1186,15 +1244,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                         // Размеры элемента
                         double elementWidth = firstElement.get_BoundingBox(null).Max.X - firstElement.get_BoundingBox(null).Min.X;
                         double elementHeight = firstElement.get_BoundingBox(null).Max.Y - firstElement.get_BoundingBox(null).Min.Y;
-                        double elementDepth = firstElement.get_BoundingBox(null).Max.Z - firstElement.get_BoundingBox(null).Min.Z - 1900/304.8;
-                        
+                        double elementDepth = firstElement.get_BoundingBox(null).Max.Z - firstElement.get_BoundingBox(null).Min.Z - 1900 / 304.8;
+
                         BoundingBoxXYZ boundingBox = new BoundingBoxXYZ();
                         boundingBox.Transform = t;
 
                         // Настройка границ BoundingBox с учетом отступов
                         if (Math.Abs(rotationAngle) < 1e-6 || Math.Abs(rotationAngle - Math.PI) < 1e-6)
                         {
-                            boundingBox.Min = new XYZ(-elementHeight / 2 - offsetX, -elementDepth/2 - offsetZ, 0); // Отступы по краям
+                            boundingBox.Min = new XYZ(-elementHeight / 2 - offsetX, -elementDepth / 2 - offsetZ, 0); // Отступы по краям
                             boundingBox.Max = new XYZ(elementHeight / 2 + offsetX, elementDepth / 2 + offsetZ, offsetZ);   // Отступы по краям
                         }
                         else if (Math.Abs(rotationAngle - Math.PI / 2) < 1e-6 || Math.Abs(rotationAngle - 3 * Math.PI / 2) < 1e-6)
@@ -1203,8 +1261,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                             boundingBox.Max = new XYZ(elementWidth / 2 + offsetX, elementDepth / 2 + offsetZ, offsetZ);   // Отступы по краям
                         }
 
-                            // Создание разреза
-                            ViewSection section = ViewSection.CreateSection(doc, sectionViewType.Id, boundingBox);
+                        // Создание разреза
+                        ViewSection section = ViewSection.CreateSection(doc, sectionViewType.Id, boundingBox);
                         if (section == null)
                             continue;
 
@@ -1242,16 +1300,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 }
                         }
                         if (lower0)
-                                section.Name = positionName + " ниже 0.000";
-                            else
-                                section.Name = positionName + " выше 0.000";
+                            section.Name = positionName + " ниже 0.000";
+                        else
+                            section.Name = positionName + " выше 0.000";
 
-                            
-                        
+
+
                         section.LookupParameter("Шаблон вида").Set(viewSection.Id);
                         section.LookupParameter("Масштаб вида").Set(20);
                     }
-                    var views = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x=> x.Name.Contains("Пр") && x.Name.Contains("0.000_")).ToList();
+                    var views = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains("Пр") && x.Name.Contains("0.000_")).ToList();
                     foreach (var view in views)
                     {
                         view.Name = view.Name.Replace("_", "");
@@ -1364,7 +1422,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                         );
                         XYZ centerLeft = new XYZ(
                             boundingBox.Min.X - 315 / 304.8,
-                            (boundingBox.Max.Y + boundingBox.Min.Y)/2,
+                            (boundingBox.Max.Y + boundingBox.Min.Y) / 2,
                             boundingBox.Max.Z
                         );
 
@@ -1457,7 +1515,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                             (newTag2 as Dimension).TextPosition = (boundingBox.Max + boundingBox.Min) / 2 - 0.8 * XYZ.BasisX;
                         }
 
-                        
+
                     }
 
                     trans.Commit();
@@ -1496,8 +1554,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                 return;
 
             var req = CommandLintelCreator_v2.PendingRequests.Dequeue();
-            
-                   // подставляем его в ViewModel
+
+            // подставляем его в ViewModel
             var vm = LintelCreatorForm_v2.MainViewModel;
             vm.SelectedParentElement = req.ParentElement;
             vm.SelectedWallTypeName = req.WallType.Name;
@@ -1509,7 +1567,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                        .Cast<Level>()
                                        .Where(l => l.Elevation >= 0)
                                        .OrderBy(l => l.Elevation)
-                                       .ToList().Select(x =>x.Elevation).ToList();
+                                       .ToList().Select(x => x.Elevation).ToList();
 
             using (TransactionGroup trans = new TransactionGroup(doc, "Добавление перемычек"))
             {
@@ -1537,11 +1595,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                         return;
                     }
 
-                    
+
 
                     // Получение выбранного типа стены из радиокнопки
                     var selectedWallType = mainViewModel.SelectedWallTypeName;
-                    if (selectedWallType == null || !selectedParentElement.Walls.Keys.Select(x=>x.Name).Contains(selectedWallType))
+                    if (selectedWallType == null || !selectedParentElement.Walls.Keys.Select(x => x.Name).Contains(selectedWallType))
                     {
                         MessageBox.Show("Пожалуйста, выберите тип стены через радиобокс.", "Ошибка");
                         trans.RollBack();
@@ -1571,10 +1629,6 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 }
 
                                 FamilyInstance newLintel = null;
-
-                                // Получаем уровен 
-                                //28.07.25 - объединение проемов в перемычках
-                                Level level = doc.GetElement(element.Elements.FirstOrDefault().LevelId) as Level;
 
                                 // Рассчитываем BoundingBox текущего элемента
                                 //28.07.25 - объединение проемов в перемычках
@@ -1613,7 +1667,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     else
                                     {
                                         //28.07.25 - объединение проемов в перемычках
-                                        output += "У элемента " + string.Join("+", element.Elements.Select(x=>x.Id)) + " уже создана перемычка, создание пропущено\n";
+                                        output += "У элемента " + string.Join("+", element.Elements.Select(x => x.Id)) + " уже создана перемычка, создание пропущено\n";
                                         continue;
                                     }
                                 }
@@ -1627,31 +1681,48 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 }
 
                                 double height = 0;
+                                double topZ = double.MinValue;
+                                double locZ = double.MinValue;
+                                double BestZ = double.MinValue;
                                 XYZ locationPoint = null;
                                 XYZ translation = null;
-                                //28.07.25 - объединение проемов в перемычках
-                                if (element.Elements.FirstOrDefault() is Wall)
-                                {
-                                    // 10.08.25 - изменения в перемычках
-                                    height = element.Elements.FirstOrDefault().LookupParameter("Неприсоединенная высота").AsDouble();
-                                    locationPoint = element.Location - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ + element.Elements.FirstOrDefault().LookupParameter("Смещение снизу").AsDouble() * XYZ.BasisZ;
-                                }
-                                else
-                                {
-                                    height = element.Elements.FirstOrDefault().LookupParameter("ADSK_Размер_Высота").AsDouble();
-                                    locationPoint = element.Location - level.Elevation * XYZ.BasisZ + height * XYZ.BasisZ;
 
+
+                                // Получаем уровен 
+                                //23.01.26 - объединение проемов в перемычках вверх-вниз
+                                Level level = null;
+                                
+                                foreach (var opEl in element.Elements)
+                                {
+                                    Level l_ = null;
+                                    if (opEl is Wall)
+                                    {
+                                        height = opEl.LookupParameter("Неприсоединенная высота").AsDouble();
+                                        l_ = doc.GetElement(opEl.LevelId) as Level;
+                                        locZ = ((opEl.Location as LocationCurve).Curve as Line).GetEndPoint(0).Z - l_.ProjectElevation + height + element.Elements.FirstOrDefault().LookupParameter("Смещение снизу").AsDouble();
+                                    }
+                                    else
+                                    {
+                                        height = opEl.LookupParameter("ADSK_Размер_Высота").AsDouble();
+                                        l_ = doc.GetElement(opEl.LevelId) as Level;
+                                        locZ = (opEl.Location as LocationPoint).Point.Z - l_.ProjectElevation + height;
+                                    }
+                                    if (locZ + l_.ProjectElevation > BestZ)
+                                        { topZ = locZ; level = l_; BestZ = locZ + l_.ProjectElevation; }
                                 }
+
+                                // Вставляем перемычку строго по верхней отметке проёма
+                                locationPoint = new XYZ(element.Location.X, element.Location.Y, topZ);
 
                                 // Создаем экземпляр перемычки
                                 newLintel = doc.Create.NewFamilyInstance(locationPoint, selectedType, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
-                                
+
                                 if (newLintel == null)
                                 {
                                     tr.RollBack();
                                     continue;
                                 }
-                                
+
                                 XYZ baseOrientation;
                                 //28.07.25 - объединение проемов в перемычках
                                 if (selectedParentElement.SupportType == 1
@@ -1703,7 +1774,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 // Переделать удаление списков - тут удалять из списка Walls сам элемент, после группы проверять колиество элементов и удалять если нет
                                 // 20.06.25 - изменения в созданных элементах в окне
                                 lintelCreated.Add(element);
-                                
+
                                 tr.Commit();
                             }
                         }
@@ -1774,7 +1845,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show( ex.Message, "Ошибка");
+                    MessageBox.Show(ex.Message, "Ошибка");
                     trans.RollBack();
                 }
             }
