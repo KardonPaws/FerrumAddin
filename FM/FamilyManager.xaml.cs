@@ -833,7 +833,9 @@ namespace FerrumAddinDev
             string firstMenuItemPath = root.Descendants("MenuItem").FirstOrDefault()?.Element("Path")?.Value;
             if (firstMenuItemPath == null)
             {
-                throw new InvalidOperationException("Не удалось найти первый элемент MenuItem.Path");
+                // 26.01.26 - изменено уведомление при отсутствии пути
+                System.Windows.MessageBox.Show("Не удалось найти первый элемент MenuItem.Path", "Ошибка");
+                return;
             }
             string pathFam = System.IO.Path.GetFullPath(System.IO.Path.Combine(firstMenuItemPath, "..", "..", ".."));
 
