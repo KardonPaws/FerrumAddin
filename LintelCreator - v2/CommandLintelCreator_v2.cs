@@ -49,10 +49,10 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             if (windowsAndDoorsList.Count == 0)
             {
-                // 24.05.25 - убраны двери/окна с хостом витража
-                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
+                //26.01.26 - исправлена ширина проемов
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall) != null).Where(x => ((x as FamilyInstance).Host as Wall)?.WallType.Kind != WallKind.Curtain));
 
-                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall).WallType.Kind != WallKind.Curtain));
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall) != null).Where(x => ((x as FamilyInstance).Host as Wall)?.WallType.Kind != WallKind.Curtain));
                 // 29.06.25 - исключен тип 211.002
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f => !f.Name.Contains("Лоджий")).Where(f =>
@@ -368,9 +368,10 @@ namespace FerrumAddinDev.LintelCreator_v2
                 {
                     string name = el is FamilyInstance fi ? fi.Symbol.FamilyName : el.Name;
                     string typeName = el is FamilyInstance fi2 ? fi2.Symbol.Name : "Витраж";
+                    // 26.01.26 - исправлена ширина проемов
                     string widthStr = el is FamilyInstance fi3 ?
                         fi3.LookupParameter("ADSK_Размер_Ширина")?.AsValueString() ?? "0" :
-                        Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0).ToString();
+                        Math.Round((el.LookupParameter("Длина")?.AsDouble() ?? 0) * 304.8).ToString();
 
                     XYZ center;
                     double width;
@@ -473,15 +474,32 @@ namespace FerrumAddinDev.LintelCreator_v2
             {
                 var a = allOpenings[i];
 
-                // Направление проёма
+                //26.01.26 - исправлена ширина проемов
+                // Направление проёма (U)
                 var da = new XYZ(a.Direction.X, a.Direction.Y, 0);
                 if (da.GetLength() < 1e-9) continue;
                 da = da.Normalize();
 
+                // Перпендикуляр в плане (W) — отличает разные стены/полосы
+                var na = da.CrossProduct(XYZ.BasisZ); // (da.X, da.Y, 0) x (0,0,1) => (da.Y, -da.X, 0)
+                if (na.GetLength() < 1e-9) continue;
+                na = na.Normalize();
+
+                // Концы проёма по ширине (вдоль U)
                 var aP1 = a.Center - da * a.Width / 2;
                 var aP2 = a.Center + da * a.Width / 2;
-                double aUMin = aP1.DotProduct(da);
-                double aUMax = aP2.DotProduct(da);
+
+                // Диапазон по U
+                double aUMin = Math.Min(aP1.DotProduct(da), aP2.DotProduct(da));
+                double aUMax = Math.Max(aP1.DotProduct(da), aP2.DotProduct(da));
+
+                // Диапазон по W (перпендикулярно стене в плане)
+                double aW1 = aP1.DotProduct(na);
+                double aW2 = aP2.DotProduct(na);
+                double aWMin = Math.Min(aW1, aW2);
+                double aWMax = Math.Max(aW1, aW2);
+
+                // Диапазон по Z
                 double aVMin = a.ZMin;
                 double aVMax = a.ZMax;
 
@@ -493,23 +511,41 @@ namespace FerrumAddinDev.LintelCreator_v2
                     if (db.GetLength() < 1e-9) continue;
                     db = db.Normalize();
 
-                    // Объединяем только элементы одной ориентации
+                    // Объединяем только одинаковую ориентацию (параллельны в плане)
                     if (Math.Abs(da.DotProduct(db)) < 0.999) continue;
 
+                    // Считаем b тоже в координатах (da, na), чтобы сравнивать в одном базисе
                     var bP1 = b.Center - db * b.Width / 2;
                     var bP2 = b.Center + db * b.Width / 2;
-                    double bUMin = bP1.DotProduct(da);
-                    double bUMax = bP2.DotProduct(da);
+
+                    // U для b — именно по da, а не по db (важно при противоположном направлении)
+                    double bUMin = Math.Min(bP1.DotProduct(da), bP2.DotProduct(da));
+                    double bUMax = Math.Max(bP1.DotProduct(da), bP2.DotProduct(da));
+
+                    // W для b — по na (т.е. “в какую стену попали”)
+                    double bW1 = bP1.DotProduct(na);
+                    double bW2 = bP2.DotProduct(na);
+                    double bWMin = Math.Min(bW1, bW2);
+                    double bWMax = Math.Max(bW1, bW2);
 
                     double bVMin = b.ZMin;
                     double bVMax = b.ZMax;
 
                     bool overlapU = overlaps(aUMin, aUMax, bUMin, bUMax);
+                    bool overlapW = overlaps(aWMin, aWMax, bWMin, bWMax);
                     bool overlapV = overlaps(aVMin, aVMax, bVMin, bVMax);
+
                     double gapU = gap(aUMin, aUMax, bUMin, bUMax);
+                    double gapW = gap(aWMin, aWMax, bWMin, bWMax);
                     double gapV = gap(aVMin, aVMax, bVMin, bVMax);
 
-                    if ((overlapU && overlapV) || (gapU <= proximityThreshold && overlapV) || (gapV <= proximityThreshold && overlapU))
+                    // Теперь объединяем только если близко/пересекается сразу по ТРЁМ осям:
+                    // U (вдоль), W (между стенами/полосами), Z (по высоте).
+                    bool nearU = overlapU || gapU <= proximityThreshold;
+                    bool nearW = overlapW || gapW <= proximityThreshold;
+                    bool nearV = overlapV || gapV <= proximityThreshold;
+
+                    if (nearU && nearW && nearV)
                     {
                         unite(i, j);
                     }
@@ -536,6 +572,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 var g = group.Distinct();
                 Clusters.Add(g.ToList());
             }
+            //26.01.26 - исправлена ширина проемов
             foreach (var group in Clusters)
             {
                 var meta = group.Select(el =>
@@ -544,7 +581,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     string typeName = el is FamilyInstance fi2 ? fi2.Symbol.Name : "Витраж";
                     string widthStr = el is FamilyInstance fi3 ?
                         fi3.LookupParameter("ADSK_Размер_Ширина")?.AsValueString() ?? "0" :
-                        Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0).ToString();
+                        Math.Round((el.LookupParameter("Длина")?.AsDouble() ?? 0) * 304.8).ToString();
 
                     var dir = supportInfo.TryGetValue(el, out var val) ? val.Direction : XYZ.Zero;
                     int supportType = supportInfo.TryGetValue(el, out var val2) ? val2.SupportType : 0;
@@ -552,14 +589,42 @@ namespace FerrumAddinDev.LintelCreator_v2
                     return new { el, name, typeName, widthStr, supportType, dir };
                 }).ToList();
 
-                // Границы
-                var xBounds = group.Select(el =>
+                // Границы (ширина кластера считается по проекции в плане, а не по 3D-диагонали)
+                // Общая ось кластера (U) в плане
+                XYZ uDir = XYZ.BasisX;
                 {
-                    // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
+                    var firstFi = group.OfType<FamilyInstance>().FirstOrDefault();
+                    if (firstFi != null)
+                    {
+                        uDir = new XYZ(firstFi.HandOrientation.X, firstFi.HandOrientation.Y, 0);
+                    }
+                    else
+                    {
+                        var firstWall = group.OfType<Wall>().FirstOrDefault();
+                        if (firstWall != null)
+                        {
+                            var ln = ((firstWall.Location as LocationCurve)?.Curve as Line);
+                            if (ln != null) uDir = new XYZ(ln.Direction.X, ln.Direction.Y, 0);
+                        }
+                    }
 
+                    if (uDir.GetLength() > 1e-9) uDir = uDir.Normalize();
+                }
+
+                double uMin = double.PositiveInfinity;
+                double uMax = double.NegativeInfinity;
+                XYZ pMin = XYZ.Zero;
+                XYZ pMax = XYZ.Zero;
+
+                foreach (var el in group)
+                {
+                    XYZ center = XYZ.Zero;
+                    XYZ dir = XYZ.Zero;
+                    double width = 0.0;
+
+                    // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
                     if (el is FamilyInstance fi)
                     {
-                        XYZ center = new XYZ(0, 0, 0);
                         try
                         {
                             center = (el.Location as LocationPoint).Point;
@@ -567,66 +632,88 @@ namespace FerrumAddinDev.LintelCreator_v2
                         catch
                         {
                             var bb = el.get_BoundingBox(null);
-                            center = ((bb.Max + bb.Min) / 2).DotProduct(fi.HandOrientation) * fi.HandOrientation +
-                            bb.Min.DotProduct(XYZ.BasisZ) * XYZ.BasisZ +
-                            ((bb.Max + bb.Min) / 2).DotProduct(fi.FacingOrientation) * fi.FacingOrientation;
+                            center = (bb.Max + bb.Min) / 2;
                         }
-                        var width = el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0;
-                        var dir = (el as FamilyInstance).HandOrientation;
-                        return (center - width / 2 * dir, center + width / 2 * dir);
+
+                        width = el.LookupParameter("ADSK_Размер_Ширина")?.AsDouble() ?? 0.0;
+                        dir = new XYZ(fi.HandOrientation.X, fi.HandOrientation.Y, 0);
+                    }
+                    else if (el is Wall w)
+                    {
+                        var curve = (el.Location as LocationCurve)?.Curve as Line;
+                        if (curve == null) continue;
+
+                        // Ширина витража берём по геометрической длине, без округлений
+                        width = curve.Length;
+                        dir = new XYZ(curve.Direction.X, curve.Direction.Y, 0);
+
+                        // 12.09.25 - правильное размещение для витражей не по середине стены
+                        var hostWall = allWalls.Cast<Wall>()
+                            .FirstOrDefault(ww => ww.FindInserts(false, false, true, false)
+                                .Any(id => id == el.Id));
+
+                        if (hostWall != null)
+                        {
+                            var p1 = curve.GetEndPoint(0);
+                            var p2 = curve.GetEndPoint(1);
+                            var wcenter = (p1 + p2) / 2;
+
+                            var opts = new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Fine };
+                            var geom = hostWall.get_Geometry(opts);
+
+                            Solid solid = geom
+                                .OfType<Solid>()
+                                .OrderByDescending(s => s.Volume)
+                                .FirstOrDefault();
+
+                            if (solid != null)
+                            {
+                                var p = solid.ComputeCentroid();
+                                p = p - p.Z * XYZ.BasisZ + curve.GetEndPoint(0).Z * XYZ.BasisZ;
+                                center = Line.CreateUnbound(p - 100 * curve.Direction, curve.Direction).Project(wcenter).XYZPoint;
+                            }
+                            else
+                            {
+                                center = wcenter;
+                            }
+                        }
+                        else
+                        {
+                            // запасной вариант
+                            var p1 = curve.GetEndPoint(0);
+                            var p2 = curve.GetEndPoint(1);
+                            center = (p1 + p2) / 2;
+                        }
                     }
                     else
                     {
-                        var width = Math.Round(el.LookupParameter("Длина")?.AsDouble() ?? 0);
-                        var dir = ((el.Location as LocationCurve).Curve as Line).Direction;
-                        var hostWall = allWalls.Cast<Wall>()
-                            .FirstOrDefault(w => w.FindInserts(false, false, true, false)
-                                .Any(id => id == el.Id));
-                        var curve = (el.Location as LocationCurve)?.Curve as Line;
-                        var p1 = curve.GetEndPoint(0);
-                        var p2 = curve.GetEndPoint(1);
-                        var wcenter = (p1 + p2) / 2;
-                        var opts = new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Fine };
-                        var geom = hostWall.get_Geometry(opts);
-                        Solid solid = (Solid)geom
-                        .OrderByDescending(s => (s as Solid).Volume)
-                        .FirstOrDefault();
-                        var p = solid.ComputeCentroid();
-                        p = p - p.Z * XYZ.BasisZ + curve.GetEndPoint(0).Z * XYZ.BasisZ;
-                        var center = Line.CreateUnbound(p - 100 * curve.Direction, curve.Direction).Project(wcenter).XYZPoint;
-                        return (center - width / 2 * dir, center + width / 2 * dir);
-
-                    }
-                });
-
-                double mergedWidth = double.MinValue;
-                List<XYZ> mergedPoints = new List<XYZ>();
-                List<XYZ> farPoints = new List<XYZ>();
-
-                foreach (var x in xBounds)
-                {
-                    mergedPoints.Add(x.Item1);
-                    mergedPoints.Add(x.Item2);
-                }
-                foreach (var x in mergedPoints)
-                {
-                    foreach (var y in mergedPoints)
-                    {
-                        if (x == y)
-                        {
-                            continue;
-                        }
-                        var dist = x.DistanceTo(y);
-                        if (dist > mergedWidth)
-                        {
-                            mergedWidth = dist;
-                            farPoints = new List<XYZ>() { x, y };
-                        }
+                        continue;
                     }
 
+                    if (dir.GetLength() < 1e-9 || width <= 1e-9) continue;
+                    dir = dir.Normalize();
+
+                    // Концы проёма/витража по ширине (вдоль dir)
+                    var e1 = center - dir * (width / 2.0);
+                    var e2 = center + dir * (width / 2.0);
+
+                    // Проекция на ось кластера (uDir в плане)
+                    double u1 = e1.DotProduct(uDir);
+                    double u2 = e2.DotProduct(uDir);
+
+                    double lo = Math.Min(u1, u2);
+                    double hi = Math.Max(u1, u2);
+
+                    if (lo < uMin) { uMin = lo; pMin = (u1 <= u2) ? e1 : e2; }
+                    if (hi > uMax) { uMax = hi; pMax = (u1 >= u2) ? e1 : e2; }
                 }
+
+                bool uValid = !(double.IsInfinity(uMin) || double.IsNaN(uMin) || double.IsInfinity(uMax) || double.IsNaN(uMax));
+                double mergedWidth = uValid ? (uMax - uMin) : 0.0;
+                List<XYZ> farPoints = new List<XYZ>() { pMin, pMax };
 
                 var distinctNames = meta.Select(x => x.name).Distinct().OrderBy(s => s).ToList();
+
                 var mergedName = string.Join(" + ", distinctNames);
 
                 var mergedTypeNames = meta.Select(x => x.typeName).Distinct().OrderBy(s => s).ToList();
@@ -1691,7 +1778,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 // Получаем уровен 
                                 //23.01.26 - объединение проемов в перемычках вверх-вниз
                                 Level level = null;
-                                
+
                                 foreach (var opEl in element.Elements)
                                 {
                                     Level l_ = null;
@@ -1708,7 +1795,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                         locZ = (opEl.Location as LocationPoint).Point.Z - l_.ProjectElevation + height;
                                     }
                                     if (locZ + l_.ProjectElevation > BestZ)
-                                        { topZ = locZ; level = l_; BestZ = locZ + l_.ProjectElevation; }
+                                    { topZ = locZ; level = l_; BestZ = locZ + l_.ProjectElevation; }
                                 }
 
                                 // Вставляем перемычку строго по верхней отметке проёма
