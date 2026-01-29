@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Forms;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
+using View = Autodesk.Revit.DB.View;
 
 namespace FerrumAddinDev.LintelCreator_v2
 {
@@ -1360,31 +1361,36 @@ namespace FerrumAddinDev.LintelCreator_v2
                         var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName)).FirstOrDefault();
                         if (view != null)
                         {
-                            // 30.06.26 - перемычки в модели
-                            var framingElements_ = new FilteredElementCollector(doc)
+                            // 29.01.26 - уникальное имя для разреза
+                            var framingElements_ = new FilteredElementCollector(doc,view.Id)
                             .OfCategory(BuiltInCategory.OST_StructuralFraming)
                             .WhereElementIsNotElementType()
                             .Cast<FamilyInstance>()
                             .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
                             .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
                             .ToList().FirstOrDefault();
-
-                            string positionName_ = framingElements_.LookupParameter("ADSK_Позиция").AsString();
-                            bool lower0_ = framingElements_.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
-
                             if (framingElements_ != null)
-                                if (positionName == positionName_)
-                                {
-                                    doc.Delete(section.Id);
-                                    continue;
-                                }
-                                else
-                                {
-                                    if (lower0_)
-                                        view.Name = positionName_ + " ниже 0.000_";
+                            {
+                                string positionName_ = framingElements_.LookupParameter("ADSK_Позиция").AsString();
+                                bool lower0_ = framingElements_.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
+
+                                    if (positionName == positionName_)
+                                    {
+                                        doc.Delete(section.Id);
+                                        continue;
+                                    }
                                     else
-                                        view.Name = positionName_ + " выше 0.000_";
-                                }
+                                    {
+                                        if (lower0_)
+                                            view.Name = MakeUniqueViewName(doc, positionName_ + " ниже 0.000_");
+                                        else
+                                            view.Name = MakeUniqueViewName(doc, positionName_ + " выше 0.000_");
+                                    }
+                            }
+                            else
+                            {
+                                doc.Delete(view.Id);
+                            }
                         }
                         if (lower0)
                             section.Name = positionName + " ниже 0.000";
@@ -1399,7 +1405,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     var views = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains("Пр") && x.Name.Contains("0.000_")).ToList();
                     foreach (var view in views)
                     {
-                        view.Name = view.Name.Replace("_", "");
+                        view.Name = MakeUniqueViewName(doc, view.Name.Replace("_", ""));
                     }
 
                     trans.Commit();
@@ -1411,6 +1417,30 @@ namespace FerrumAddinDev.LintelCreator_v2
                 }
             }
         }
+        // 29.01.26 - уникальное имя для разреза
+        private static string MakeUniqueViewName(Document doc, string desiredName)
+        {
+            // Собираем все имена видов (без шаблонов)
+            var names = new FilteredElementCollector(doc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .Where(v => !v.IsTemplate)
+                .Select(v => v.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (!names.Contains(desiredName))
+                return desiredName;
+
+            int i = 1;
+            while (true)
+            {
+                string candidate = $"{desiredName} ({i})";
+                if (!names.Contains(candidate))
+                    return candidate;
+                i++;
+            }
+        }
+
 
         public string GetName()
         {
