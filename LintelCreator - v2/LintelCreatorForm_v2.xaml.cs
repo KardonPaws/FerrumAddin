@@ -535,14 +535,47 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             var family = SelectedFamily;
             family.RestoreOriginalTypes();
-            // 29.06.25 - уьран проход по всем семействам, только выбранное
-            var filteredTypes = family.OriginalTypes
-                        .Where(type =>
+            // 03.02.26 - изменен фильтр для перемычек + создание базовых разрезов и шаблонов
+
+            int GetSupportCategory(string[] nameParts)
+            {
+                if (nameParts == null || nameParts.Length < 4) return 0;
+                string s1 = nameParts[3] ?? string.Empty;
+                bool left = s1.Any(char.IsUpper);
+
+                if (nameParts.Length == 4)
+                    return left ? 1 : 0;
+
+                string s2 = nameParts[nameParts.Length - 1] ?? string.Empty;
+                bool right = s2.Any(char.IsUpper);
+
+                if (left && right) return 2;
+                if (left || right) return 1;
+                return 0;
+            }
+
+            var candidates = family.OriginalTypes
+                .Select(type =>
                 {
+                    var parts = type.Name.Split('_');
+                    return new
+                    {
+                        Type = type,
+                        Parts = parts,
+                        SupportCategory = GetSupportCategory(parts)
+                    };
+                })
+                .ToList();
+
+            var baseFiltered = candidates
+                .Where(x =>
+                {
+                    var type = x.Type;
+
                     if (IsErrorTypeName(type.Name))
                         return true;
 
-                    var parts = type.Name.Split('_');
+                    var parts = x.Parts;
                     if (parts.Length < 4) return false;
 
                     // 1. Проверка высоты кирпича
@@ -573,26 +606,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
 
                     // 4. Опирание
-                    bool hasOneSupport = false;
-                    bool hasTwoSupports = false;
-                    var support = parts[3];
-                    if (parts.Count() == 4)
-                    {
-                        hasOneSupport = support.Any(char.IsUpper);
-                    }
-                    else
-                    {
-                        hasOneSupport = (support.Count(char.IsUpper) > 0 && parts[parts.Count() - 1].Count(char.IsUpper) == 0) ||
-                        (support.Count(char.IsUpper) == 0 && parts[parts.Count() - 1].Count(char.IsUpper) > 0);
-                        hasTwoSupports = support.Any(char.IsUpper) && parts[parts.Count() - 1].Any(char.IsUpper);
-                    }
-
-                    if (!AllSupports)
-                    {
-                        if (SelectedParentElement.SupportType == 0 && (hasOneSupport || hasTwoSupports)) return false;
-                        if (SelectedParentElement.SupportType == 1 && !hasOneSupport) return false;
-                        if (SelectedParentElement.SupportType == 2 && !hasTwoSupports) return false;
-                    }
+                    // Здесь НЕ фильтруем жёстко, потому что нужен приоритетный подбор с fallback:
+                    // - Проём без опирания (0): сначала 0, если нет — 1, если нет — 2
+                    // - Проём с 1 опиранием (1): сначала 1, если нет — 2
+                    // - Проём с 2 опираниями (2): только 2
+                    // Фильтрацию по этим правилам применяем после базовых условий.
 
                     // 5. Наличие опорных подушек
                     if (HasSupportPads)
@@ -620,6 +638,58 @@ namespace FerrumAddinDev.LintelCreator_v2
                     return true;
                 })
                 .ToList();
+
+            // Применяем правило опирания (если AllSupports=false). Иначе просто сортируем.
+            List<FamilySymbol> filteredTypes;
+            if (!AllSupports && SelectedParentElement != null)
+            {
+                int parentSupport = SelectedParentElement.SupportType;
+
+                // Определяем доступные категории после базовой фильтрации
+                bool has0 = baseFiltered.Any(t => t.SupportCategory == 0);
+                bool has1 = baseFiltered.Any(t => t.SupportCategory == 1);
+                bool has2 = baseFiltered.Any(t => t.SupportCategory == 2);
+
+                int chosenCategory;
+                if (parentSupport == 2)
+                {
+                    chosenCategory = 2;
+                }
+                else if (parentSupport == 1)
+                {
+                    // сначала 1 опирание, если нет — 2
+                    chosenCategory = has1 ? 1 : (has2 ? 2 : 1);
+                }
+                else
+                {
+                    // parentSupport == 0: сначала 0, если нет — 1, если нет — 2
+                    if (has0) chosenCategory = 0;
+                    else if (has1) chosenCategory = 1;
+                    else chosenCategory = 2;
+                }
+
+                filteredTypes = baseFiltered
+                    .Where(t => t.SupportCategory == chosenCategory)
+                    .Select(t => t.Type)
+                    .ToList();
+            }
+            else
+            {
+                // AllSupports=true: показываем всё
+                int parentSupport = SelectedParentElement?.SupportType ?? 0;
+                // Для типа 0: 0->1->2, для 1: 1->2->0, для 2: 2->1->0
+                int SupportSortKey(int cat)
+                {
+                    if (parentSupport == 2) return cat == 2 ? 0 : (cat == 1 ? 1 : 2);
+                    if (parentSupport == 1) return cat == 1 ? 0 : (cat == 2 ? 1 : 2);
+                    return cat; // 0,1,2
+                }
+
+                filteredTypes = baseFiltered
+                    .OrderBy(t => SupportSortKey(t.SupportCategory))
+                    .Select(t => t.Type)
+                    .ToList();
+            }
 
             // Обновляем доступные типы
             SelectedFamily.Types = new ObservableCollection<FamilySymbol>(filteredTypes);

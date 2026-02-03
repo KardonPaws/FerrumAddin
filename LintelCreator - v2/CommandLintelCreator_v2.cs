@@ -1240,6 +1240,30 @@ namespace FerrumAddinDev.LintelCreator_v2
         {
             Document doc = app.ActiveUIDocument.Document;
 
+            // Получение всех перемычек
+            var framingElements = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                .WhereElementIsNotElementType()
+                .Cast<FamilyInstance>()
+        .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
+                .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
+                .ToList();
+
+            // Группировка перемычек по параметру ADSK_Позиция
+            var groupedElements = framingElements.OrderBy(el => el.LookupParameter("ADSK_Позиция").AsString()).GroupBy(el => el.LookupParameter("ADSK_Позиция").AsString());
+            // 03.02.26 - изменен фильтр для перемычек + создание базовых разрезов и шаблонов
+            using (Transaction tr = new Transaction(doc, "Назначение линии видимости"))
+            {
+                tr.Start();
+
+                foreach (var element in groupedElements)
+                {
+                    var d = element.First().LookupParameter("Видимость.Глубина").AsDouble();
+                    if (d < 2000/304.8)
+                        element.First().LookupParameter("Видимость.Глубина").Set(2000 / 304.8);
+                }
+                tr.Commit();
+            }
 
             using (Transaction trans = new Transaction(doc, "Создание разрезов для перемычек"))
             {
@@ -1247,18 +1271,6 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                 try
                 {
-                    // Получение всех перемычек
-                    var framingElements = new FilteredElementCollector(doc)
-                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
-                        .WhereElementIsNotElementType()
-                        .Cast<FamilyInstance>()
-                .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
-                        .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
-                        .ToList();
-
-                    // Группировка перемычек по параметру ADSK_Позиция
-                    var groupedElements = framingElements.OrderBy(el => el.LookupParameter("ADSK_Позиция").AsString()).GroupBy(el => el.LookupParameter("ADSK_Позиция").AsString());
-
                     // Шаблон для разрезов
                     ViewFamilyType sectionViewType = new FilteredElementCollector(doc)
                     .OfClass(typeof(ViewFamilyType))
@@ -1268,9 +1280,22 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                     if (sectionViewType == null)
                     {
-                        MessageBox.Show("Не найден разрез 'Номер вида'.", "Ошибка");
-                        trans.RollBack();
-                        return;
+                        // Берём любой существующий тип разреза как базу
+                        var baseSectionType = new FilteredElementCollector(doc)
+                            .OfClass(typeof(ViewFamilyType))
+                            .Cast<ViewFamilyType>()
+                            .FirstOrDefault(x => x.ViewFamily == ViewFamily.Section);
+
+                        if (baseSectionType == null)
+                        {
+                            MessageBox.Show("Не найден ни один тип разреза.", "Ошибка");
+                            trans.RollBack();
+                            return;
+                        }
+
+                        // Дублируем и переименовываем
+                        ElementType newTypeId = baseSectionType.Duplicate("Номер вида");
+                        sectionViewType = doc.GetElement(newTypeId.Id) as ViewFamilyType;
                     }
 
                     ViewSection viewSection = new FilteredElementCollector(doc)
@@ -1280,13 +1305,30 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                     if (viewSection == null)
                     {
-                        MessageBox.Show("Не найден шаблон разреза '4_К_Пр'.", "Ошибка");
-                        trans.RollBack();
-                        return;
+                        // Попробуем продублировать любой другой шаблон-разрез (самый безопасный способ)
+                        var anySectionTemplate = new FilteredElementCollector(doc)
+                            .OfClass(typeof(ViewSection))
+                            .Cast<ViewSection>()
+                            .FirstOrDefault(v => v.IsTemplate);
+
+                        if (anySectionTemplate != null)
+                        {
+                            ElementId dupId = ElementTransformUtils.CopyElement(doc, anySectionTemplate.Id, XYZ.Zero).FirstOrDefault();
+                            viewSection = doc.GetElement(dupId) as ViewSection;
+                            viewSection.Name = "4_К_Пр";
+                        }
+                        else
+                        {
+                            MessageBox.Show("Не найден ни один шаблон разреза.", "Ошибка");
+                            trans.RollBack();
+                            return;
+                        }
                     }
 
-                    // Создание разрезов для каждой уникальной группы
-                    foreach (var group in groupedElements)
+
+
+                        // Создание разрезов для каждой уникальной группы
+                        foreach (var group in groupedElements)
                     {
                         var firstElement = group.FirstOrDefault();
                         if (firstElement == null) continue;
@@ -1329,7 +1371,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                         double offsetX = 100 / 304.8; // 100 мм по X (влево и вправо)
                         double offsetZ = 200 / 304.8; // 200 мм по Z (вверх и вниз)
 
-                        // Размеры элемента
+                        // Размеры элемента                       
                         double elementWidth = firstElement.get_BoundingBox(null).Max.X - firstElement.get_BoundingBox(null).Min.X;
                         double elementHeight = firstElement.get_BoundingBox(null).Max.Y - firstElement.get_BoundingBox(null).Min.Y;
                         double elementDepth = firstElement.get_BoundingBox(null).Max.Z - firstElement.get_BoundingBox(null).Min.Z - 1900 / 304.8;
@@ -1362,7 +1404,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                         if (view != null)
                         {
                             // 29.01.26 - уникальное имя для разреза
-                            var framingElements_ = new FilteredElementCollector(doc,view.Id)
+                            var framingElements_ = new FilteredElementCollector(doc, view.Id)
                             .OfCategory(BuiltInCategory.OST_StructuralFraming)
                             .WhereElementIsNotElementType()
                             .Cast<FamilyInstance>()
@@ -1374,18 +1416,18 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 string positionName_ = framingElements_.LookupParameter("ADSK_Позиция").AsString();
                                 bool lower0_ = framingElements_.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
 
-                                    if (positionName == positionName_)
-                                    {
-                                        doc.Delete(section.Id);
-                                        continue;
-                                    }
+                                if (positionName == positionName_)
+                                {
+                                    doc.Delete(section.Id);
+                                    continue;
+                                }
+                                else
+                                {
+                                    if (lower0_)
+                                        view.Name = MakeUniqueViewName(doc, positionName_ + " ниже 0.000_");
                                     else
-                                    {
-                                        if (lower0_)
-                                            view.Name = MakeUniqueViewName(doc, positionName_ + " ниже 0.000_");
-                                        else
-                                            view.Name = MakeUniqueViewName(doc, positionName_ + " выше 0.000_");
-                                    }
+                                        view.Name = MakeUniqueViewName(doc, positionName_ + " выше 0.000_");
+                                }
                             }
                             else
                             {
