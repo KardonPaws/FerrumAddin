@@ -33,8 +33,9 @@ namespace FerrumAddinDev.LintelCreator_v2
         private List<ElementId> _errorLintelIds = new List<ElementId>();
         private int _currentErrorIndex = -1;
         public Document doc_;
+        //04.01.26 - ошибочные перемычки перемещены
 
-        public LintelCreatorForm_v2(Document doc, Selection sel, List<ParentElement> openingsWithoutLintel, List<ParentElement> openingsWithLintel, List<Family> families)
+        public LintelCreatorForm_v2(Document doc, Selection sel, List<ParentElement> openingsWithoutLintel, List<ParentElement> openingsWithLintel, List<ParentElement> openingsWithErrorLintel, List<Family> families)
         {
             InitializeComponent();
 
@@ -48,16 +49,14 @@ namespace FerrumAddinDev.LintelCreator_v2
             {
                 FilteredFamilies = new ObservableCollection<FamilyWrapper>(familyWrappers),
                 openingsWithoutLintel = new ObservableCollection<ParentElement>(openingsWithoutLintel.Where(x=>x.Walls.Count()>0)),
-                openingsWithLintel = new ObservableCollection<ParentElement>(openingsWithLintel.Where(x => x.Walls.Count() > 0))
+                openingsWithLintel = new ObservableCollection<ParentElement>(openingsWithLintel.Where(x => x.Walls.Count() > 0)),
+               openingsWithErrorLintel = new ObservableCollection<ParentElement>(openingsWithErrorLintel.Where(x => x.Walls.Count() > 0))
 
             };
             MainViewModel = DataContext as MainViewModel;
             selection = sel;
             autoMode = false;
             recreate = false;
-
-            UpdateErrorsUi();
-
         }
         public static Selection selection;
 
@@ -319,56 +318,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                 {
                     _currentErrorIndex = -1;
                 }
-
-                UpdateErrorsUi();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message, "Ошибка");
             }
-        }
-
-        private void Button_PrevError_Click(object sender, RoutedEventArgs e)
-        {
-            if (_errorLintelIds == null || _errorLintelIds.Count == 0) return;
-            if (_currentErrorIndex <= 0) return;
-
-            _currentErrorIndex--;
-            SelectCurrentErrorSingle();
-            UpdateErrorsUi();
-        }
-
-        private void Button_NextError_Click(object sender, RoutedEventArgs e)
-        {
-            if (_errorLintelIds == null || _errorLintelIds.Count == 0) return;
-            if (_currentErrorIndex >= _errorLintelIds.Count - 1) return;
-
-            _currentErrorIndex++;
-            SelectCurrentErrorSingle();
-            UpdateErrorsUi();
-        }
-
-        private void SelectCurrentErrorSingle()
-        {
-            if (_currentErrorIndex < 0 || _currentErrorIndex >= _errorLintelIds.Count) return;
-            selection.SetElementIds(new List<ElementId> { _errorLintelIds[_currentErrorIndex] });
-        }
-
-        private void UpdateErrorsUi()
-        {
-            int count = _errorLintelIds?.Count ?? 0;
-            if (TxtErrorsCount != null) TxtErrorsCount.Text = count.ToString();
-
-            if (TxtErrorsProgress != null)
-            {
-                TxtErrorsProgress.Text = (_currentErrorIndex >= 0 && count > 0)
-                    ? $"{_currentErrorIndex + 1} / {count}"
-                    : "-";
-            }
-
-            bool has = count > 0;
-            if (BtnPrevError != null) BtnPrevError.IsEnabled = has && _currentErrorIndex > 0;
-            if (BtnNextError != null) BtnNextError.IsEnabled = has && _currentErrorIndex >= 0 && _currentErrorIndex < count - 1;
         }
 
         private static List<ElementId> FindErrorLintels(Document doc)
@@ -413,6 +367,9 @@ namespace FerrumAddinDev.LintelCreator_v2
         // Список элементов из TreeView
         public ObservableCollection<ParentElement> openingsWithoutLintel { get; set; }
         public ObservableCollection<ParentElement> openingsWithLintel { get; set; }
+        //04.01.26 - ошибочные перемычки перемещены
+        public ObservableCollection<ParentElement> openingsWithErrorLintel { get; set; }
+
 
         // Список отфильтрованных семейств
         public ObservableCollection<FamilyWrapper> FilteredFamilies
@@ -553,6 +510,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 if (left || right) return 1;
                 return 0;
             }
+            //04.01.26 - ошибочные перемычки перемещены
 
             var candidates = family.OriginalTypes
                 .Select(type =>
@@ -562,7 +520,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     {
                         Type = type,
                         Parts = parts,
-                        SupportCategory = GetSupportCategory(parts)
+                        SupportCategory = type.Name == "Ошибка"? 2 : GetSupportCategory(parts)
                     };
                 })
                 .ToList();

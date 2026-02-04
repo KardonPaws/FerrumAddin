@@ -2,7 +2,6 @@
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Selection;
 using FerrumAddinDev.FM;
-using FerrumAddinDev.LintelCreator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -76,7 +75,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         return code != 211.002;
                     }).ToList());
             }
-            GroupWindowsAndDoors(windowsAndDoorsList, doc, out var openingsWithoutLintel, out var openingsWithLintel);
+            //04.01.26 - ошибочные перемычки перемещены
+            GroupWindowsAndDoors(windowsAndDoorsList, doc, out var openingsWithoutLintel, out var openingsWithLintel, out var openingsWithErrorLintel);
             List<Family> lintelFamilysList = new FilteredElementCollector(doc)
                 .OfClass(typeof(Family))
                 .Cast<Family>()
@@ -92,8 +92,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                 message = "В проекте не найдены семейства перемычек! Загрузите семейства с наличием ''Перемычки составные'' в парметре типа ''Модель''.";
                 return Result.Cancelled;
             }
-
-            LintelCreatorForm_v2 form = new LintelCreatorForm_v2(doc, sel, openingsWithoutLintel, openingsWithLintel, lintelFamilysList);
+            //04.01.26 - ошибочные перемычки перемещены
+            LintelCreatorForm_v2 form = new LintelCreatorForm_v2(doc, sel, openingsWithoutLintel, openingsWithLintel, openingsWithErrorLintel, lintelFamilysList);
             form.Show();
 
             return Result.Succeeded;
@@ -133,10 +133,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                         return code != 211.002;
                     }).ToList());
             }
-            GroupWindowsAndDoors(windowsAndDoorsList, doc, out var openingsWithoutLintel, out var openingsWithLintel);
-            return new List<List<ParentElement>> { openingsWithoutLintel, openingsWithLintel };
+            //04.01.26 - ошибочные перемычки перемещены
+            GroupWindowsAndDoors(windowsAndDoorsList, doc, out var openingsWithoutLintel, out var openingsWithLintel, out var openingsWithErrorLintel);
+            return new List<List<ParentElement>> { openingsWithoutLintel, openingsWithLintel, openingsWithErrorLintel };
         }
-        private static void GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc, out List<ParentElement> openingsWithoutLintel, out List<ParentElement> openingsWithLintel)
+        private static void GroupWindowsAndDoors(List<Element> windowsAndDoorsList, Document doc, out List<ParentElement> openingsWithoutLintel, out List<ParentElement> openingsWithLintel, out List<ParentElement> openingsWithErrorLintel)
         {
             // Разделяем на экземпляры семейств и витражи
             var windowsAndDoors = windowsAndDoorsList.OfType<FamilyInstance>().ToList();
@@ -802,9 +803,10 @@ namespace FerrumAddinDev.LintelCreator_v2
                     groupedElements.Add(pEl);
                 }
             }
-
+            //04.01.26 - ошибочные перемычки перемещены
             openingsWithoutLintel = new List<ParentElement>();
             openingsWithLintel = new List<ParentElement>();
+            openingsWithErrorLintel = new List<ParentElement>();
 
             foreach (var parent in groupedElements)
             {
@@ -830,6 +832,17 @@ namespace FerrumAddinDev.LintelCreator_v2
                     SupportDirection = parent.SupportDirection,
                     SupportType = parent.SupportType
                 };
+                //04.01.26 - ошибочные перемычки перемещены
+                var errorLintelParent = new ParentElement
+                {
+                    Name = parent.Name,
+                    TypeName = parent.TypeName,
+                    Width = parent.Width,
+                    Walls = new Dictionary<WallType, List<ElementsForLintel>>(),
+                    ChildElements = parent.ChildElements,
+                    SupportDirection = parent.SupportDirection,
+                    SupportType = parent.SupportType
+                };
 
                 foreach (var kv in parent.Walls)
                 {
@@ -846,12 +859,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
                     // разделить элементы на два списка по наличию перемычки
                     var without = elems.Where(el => !ElementHasLintel(el, doc)).ToList();
-                    var with = elems.Where(el => ElementHasLintel(el, doc)).ToList();
+                    var withError = elems.Where(el => ElementHasErrorLintel(el, doc)).ToList();
+                    var withGood = elems.Where(el => ElementHasLintel(el, doc) && !ElementHasErrorLintel(el, doc)).ToList();
 
                     if (without.Any())
                         noLintelParent.Walls.Add(wallType, without);
-                    if (with.Any())
-                        withLintelParent.Walls.Add(wallType, with);
+                    if (withGood.Any())
+                        withLintelParent.Walls.Add(wallType, withGood);
+                    if (withError.Any())
+                        errorLintelParent.Walls.Add(wallType, withError);
+
                 }
 
                 // Добавляем непустые группы в итоговые списки
@@ -859,6 +876,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                     openingsWithoutLintel.Add(noLintelParent);
                 if (withLintelParent.Walls.Any())
                     openingsWithLintel.Add(withLintelParent);
+                if (errorLintelParent.Walls.Any())
+                    openingsWithErrorLintel.Add(errorLintelParent);
             }
 
             openingsWithoutLintel = openingsWithoutLintel
@@ -873,31 +892,66 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ThenBy(p => p.Width)
                 .ThenBy(p => p.SupportType)
                 .ToList();
+
+            openingsWithErrorLintel = openingsWithErrorLintel
+                .OrderBy(p => p.Name)
+                .ThenBy(p => p.TypeName)
+                .ThenBy(p => p.Width)
+                .ThenBy(p => p.SupportType)
+                .ToList();
         }
 
         private static bool ElementHasLintel(ElementsForLintel customEl, Document doc)
         {
-            Element element = customEl.Elements.FirstOrDefault();
-            // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
+            return GetLintelsForElement(customEl, doc).Any();
+        }
 
+        private static bool ElementHasErrorLintel(ElementsForLintel customEl, Document doc)
+        {
+            return GetLintelsForElement(customEl, doc)
+                .Any(fi => IsErrorTypeName(fi.Symbol?.Name));
+        }
+
+        private static bool IsErrorTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName)) return false;
+            var cleaned = new string(typeName
+                .Where(c => !char.IsControl(c) &&
+                            System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
+                .ToArray())
+                .Trim();
+
+            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+        }
+
+
+        private static IEnumerable<FamilyInstance> GetLintelsForElement(ElementsForLintel customEl, Document doc)
+        {
+            Element element = customEl.Elements.FirstOrDefault();
+            if (element == null) return Enumerable.Empty<FamilyInstance>();
+
+            // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
             XYZ center = new XYZ(0, 0, 0);
             double height = 0;
 
             try
             {
-                center = element is FamilyInstance ? (element.Location as LocationPoint).Point :
-                    (((element.Location as LocationCurve).Curve as Line).GetEndPoint(0) + ((element.Location as LocationCurve).Curve as Line).GetEndPoint(1)) / 2;
-                height = element is FamilyInstance ? element.LookupParameter("ADSK_Размер_Высота").AsDouble() :
-                element.LookupParameter("Неприсоединенная высота").AsDouble();
+                center = element is FamilyInstance
+                    ? (element.Location as LocationPoint).Point
+                    : (((element.Location as LocationCurve).Curve as Line).GetEndPoint(0) + ((element.Location as LocationCurve).Curve as Line).GetEndPoint(1)) / 2;
+
+                height = element is FamilyInstance
+                    ? element.LookupParameter("ADSK_Размер_Высота").AsDouble()
+                    : element.LookupParameter("Неприсоединенная высота").AsDouble();
             }
             catch
             {
                 FamilyInstance fi = element as FamilyInstance;
                 var bb = element.get_BoundingBox(null);
                 center = ((bb.Max + bb.Min) / 2).DotProduct(fi.HandOrientation) * fi.HandOrientation +
-                bb.Min.DotProduct(XYZ.BasisZ) * XYZ.BasisZ +
-                ((bb.Max + bb.Min) / 2).DotProduct(fi.FacingOrientation) * fi.FacingOrientation;
-                height = (bb.Max - bb.Max).DotProduct(XYZ.BasisZ);
+                         bb.Min.DotProduct(XYZ.BasisZ) * XYZ.BasisZ +
+                         ((bb.Max + bb.Min) / 2).DotProduct(fi.FacingOrientation) * fi.FacingOrientation;
+                height = (bb.Max - bb.Min).DotProduct(XYZ.BasisZ);
             }
 
             // создаём область немного ниже макс.Z и немного выше на 100 мм
@@ -911,12 +965,13 @@ namespace FerrumAddinDev.LintelCreator_v2
             var found = new FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WherePasses(filter)
-                .Where(x => (x as FamilyInstance).Symbol.FamilyName.Contains("_Перемычки"));
+                .WhereElementIsNotElementType()
+                .OfType<FamilyInstance>()
+                .Where(fi => fi?.Symbol != null)
+                .Where(fi => fi.Symbol.FamilyName != null && fi.Symbol.FamilyName.Contains("_Перемычки"));
 
             // параметр "ADSK_Группирование" == "ПР" обозначает уже созданную перемычку
-            return found
-                .OfType<Element>()
-                .Any(e => e.LookupParameter("ADSK_Группирование")?.AsString() == "ПР");
+            return found.Where(fi => fi.LookupParameter("ADSK_Группирование")?.AsString() == "ПР");
         }
 
         // Вспомогательный компаратор для удаления дубликатов по ElementId
@@ -1965,9 +2020,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 vm.openingsWithoutLintel.Remove(noLintelParent);
                             }
                         }
+                        //04.01.26 - ошибочные перемычки перемещены
+                        bool isErrorLintelType = IsErrorTypeName(selectedType.Name);
+                        var targetCollection = isErrorLintelType ? vm.openingsWithErrorLintel : vm.openingsWithLintel;
 
-                        // Переносим все обработанные элементы в openingsWithLintel
-                        var withParent = vm.openingsWithLintel.FirstOrDefault(p =>
+                        var withParent = targetCollection.FirstOrDefault(p =>
                             p.Name == selectedParentElement.Name
                             && p.TypeName == selectedParentElement.TypeName
                             && p.Width == selectedParentElement.Width
@@ -1987,7 +2044,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 //28.07.25 - объединение проемов в перемычках
                                 Walls = new Dictionary<WallType, List<ElementsForLintel>>()
                             };
-                            vm.openingsWithLintel.Add(withParent);
+                            targetCollection.Add(withParent);
                         }
 
                         // добавляем к существующему или новому ParentElement
@@ -2020,7 +2077,17 @@ namespace FerrumAddinDev.LintelCreator_v2
             }
 
         }
+        //04.01.26 - ошибочные перемычки перемещены
+        private static bool IsErrorTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName)) return false;
+            var cleaned = new string(typeName
+                .Where(c => !char.IsControl(c) && System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
+                .ToArray())
+                .Trim();
 
+            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+        }
 
         public string GetName()
         {

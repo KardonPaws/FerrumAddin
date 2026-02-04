@@ -58,6 +58,10 @@
                 ItemsSource="{Binding openingsWithoutLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
             <TreeViewItem Header="С перемычками"
                 ItemsSource="{Binding openingsWithLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
+            <!--//04.01.26 - ошибочные перемычки перемещены -->
+
+            <TreeViewItem Header="Ошибки"
+    ItemsSource="{Binding openingsWithErrorLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
         </TreeView>
 
         <!-- Второй столбец -->
@@ -117,33 +121,6 @@
             <CheckBox Grid.Row="5" Content="Автоматическая простановка" Checked="CheckBox_Checked_2" Unchecked="CheckBox_Checked_2"/>
         </Grid>
         <!--// 19.01.26 - ошибки в перемычках -->
-        <Border Grid.Row="1" Grid.ColumnSpan="3" Margin="5,2,5,2" BorderBrush="#FFBDBDBD" BorderThickness="1" CornerRadius="4" Padding="6" Height="40">
-            <Grid Height="31">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <Button Grid.Column="0" x:Name="BtnFindErrors" Content="Найти ошибки" VerticalAlignment="Center" Margin="0,0,10,0" Click="Button_FindErrors_Click"/>
-
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0">
-                    <TextBlock Text="Ошибочных перемычек:" Margin="0,0,6,0"/>
-                    <TextBlock x:Name="TxtErrorsCount" Text="0" FontWeight="Bold"/>
-                </StackPanel>
-
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0">
-                    <TextBlock Text="Текущая:" Margin="0,0,6,0"/>
-                    <TextBlock x:Name="TxtErrorsProgress" Text="-" FontWeight="Bold"/>
-                </StackPanel>
-
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnPrevError" Content="◀ Пред" Width="70" Margin="0,0,6,0" Click="Button_PrevError_Click" IsEnabled="False"/>
-                    <Button x:Name="BtnNextError" Content="След ▶" Width="70" Click="Button_NextError_Click" IsEnabled="False"/>
-                </StackPanel>
-            </Grid>
-        </Border>
         <WrapPanel Orientation="Horizontal" Grid.Row="2" Grid.ColumnSpan="2" Margin="5">
             <CheckBox Checked="CheckBox_Checked" Unchecked="CheckBox_Checked" Content="Разбивать перемычки выше и ниже отм. 0,000" Margin="0,0,5,0" />
             <Button Content="Нумерация" Margin="0,0,5,0" Click="Button_Click_1"  />
