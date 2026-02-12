@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.Remoting.Messaging;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Forms;
@@ -1040,8 +1041,22 @@ namespace FerrumAddinDev.LintelCreator_v2
                     .ToList();
 
                 // Фильтрация разрезов по именам ("выше 0" или "ниже 0")
-                var sectionsAbove = sections.Where(s => s.Name.Contains("выше 0")).ToList();
-                var sectionsBelow = sections.Where(s => s.Name.Contains("ниже 0")).ToList();
+                //12.02.26 - марки под углом + нумерация + разрезы
+                int ExtractNumber(string name)
+                {
+                    var match = Regex.Match(name, @"Пр-(\d+)");
+                    return match.Success ? int.Parse(match.Groups[1].Value) : int.MaxValue;
+                }
+
+                var sectionsAbove = sections
+                    .Where(s => s.Name.Contains("выше 0"))
+                    .OrderBy(s => ExtractNumber(s.Name))
+                    .ToList();
+
+                var sectionsBelow = sections
+                    .Where(s => s.Name.Contains("ниже 0"))
+                    .OrderBy(s => ExtractNumber(s.Name))
+                    .ToList();
 
                 // Размещение разрезов на листе
                 placeSections(doc, sectionsAbove, scheduleGroups, "Ведомость_Пр_выше 0,00");
@@ -1118,22 +1133,20 @@ namespace FerrumAddinDev.LintelCreator_v2
                         int positionCounter2 = 1;
                         foreach (var group in groupedElements)
                         {
+                            //12.02.26 - марки под углом + нумерация + разрезы
+                            bool v1 = false;
                             foreach (var element in group)
                             {
                                 if (element.LookupParameter("ZH_Этаж_Числовой").AsInteger() > 0)
                                 {
                                     string positionValue = $"Пр-{positionCounter1}";
 
-
-                                    // Назначение значения параметру ADSK_Позиция
+                                   // Назначение значения параметру ADSK_Позиция
                                     var positionParam = element.LookupParameter("ADSK_Позиция");
                                     if (positionParam != null && positionParam.IsReadOnly == false)
                                     {
                                         positionParam.Set(positionValue);
                                     }
-
-
-                                    positionCounter1++;
                                 }
                                 else
                                 {
@@ -1146,10 +1159,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     {
                                         positionParam.Set(positionValue);
                                     }
-
-
-                                    positionCounter2++;
+                                    v1 = true;
                                 }
+                            }
+                            if (v1)
+                            {
+                                positionCounter2++;
+                            }
+                            else
+                            {
+                                positionCounter1++;
                             }
                         }
                     }
@@ -1624,48 +1643,80 @@ namespace FerrumAddinDev.LintelCreator_v2
                     // Маркировка всех перемычек
                     foreach (var lintel in lintelInstances)
                     {
-                        // Получение центра перемычки
-                        BoundingBoxXYZ boundingBox = lintel.get_BoundingBox(null);
-                        if (boundingBox == null) continue;
+                        //12.02.26 - марки под углом + нумерация + разрезы
+                        FamilyInstance fi = (FamilyInstance)lintel;
+                        View view = doc.ActiveView;
 
-                        //Изменить логику простановки (сейчас поверх перемычки)
-                        XYZ centerTop = new XYZ(
-                            (boundingBox.Min.X + boundingBox.Max.X) / 2,
-                            (boundingBox.Max.Y + 495 / 304.8),
-                            boundingBox.Max.Z
-                        );
-                        XYZ centerLeft = new XYZ(
-                            boundingBox.Min.X - 315 / 304.8,
-                            (boundingBox.Max.Y + boundingBox.Min.Y) / 2,
-                            boundingBox.Max.Z
-                        );
+                        XYZ vd = view.ViewDirection.Normalize();
+                        XYZ up = view.UpDirection.Normalize();
+                        XYZ right = view.RightDirection.Normalize();
 
-                        // Создание марки
-                        IndependentTag newTag = null;
-                        if ((lintel as FamilyInstance).HandOrientation.X == 1)
+                        XYZ hand = fi.HandOrientation;
+                        XYZ handProj = hand - vd.Multiply(hand.DotProduct(vd));
+                        if (handProj.GetLength() < 1e-9) handProj = right;
+                        handProj = handProj.Normalize();
+
+                        double rot = Math.Atan2(handProj.DotProduct(up), handProj.DotProduct(right)); // (-pi..pi)
+
+                        if (rot < 0) rot += 2.0 * Math.PI;
+
+                        XYZ facing = fi.FacingOrientation;
+                        const double tol = 1e-6;
+                        if (Math.Abs(Math.Abs(facing.Y) - 1.0) < tol) rot = 0.0;
+                        else if (Math.Abs(Math.Abs(facing.X) - 1.0) < tol) rot = Math.PI / 2.0;
+
+                        XYZ facingProj = facing - vd.Multiply(facing.DotProduct(vd));
+                        if (facingProj.GetLength() < 1e-9) facingProj = up;
+                        facingProj = facingProj.Normalize();
+
+                        if (facingProj.DotProduct(up) < 0) facingProj = facingProj.Negate();
+
+                        // точка вставки
+                        XYZ insertPt = (fi.Location as LocationPoint)?.Point ?? XYZ.Zero;
+
+                        // bbox
+                        BoundingBoxXYZ bb = lintel.get_BoundingBox(view) ?? lintel.get_BoundingBox(null);
+
+                        // одинаковый размер вдоль направления: 8 углов bbox
+                        XYZ[] corners = new XYZ[]
                         {
-                            newTag = IndependentTag.Create(
+    new XYZ(bb.Min.X, bb.Min.Y, bb.Min.Z),
+    new XYZ(bb.Min.X, bb.Min.Y, bb.Max.Z),
+    new XYZ(bb.Min.X, bb.Max.Y, bb.Min.Z),
+    new XYZ(bb.Min.X, bb.Max.Y, bb.Max.Z),
+    new XYZ(bb.Max.X, bb.Min.Y, bb.Min.Z),
+    new XYZ(bb.Max.X, bb.Min.Y, bb.Max.Z),
+    new XYZ(bb.Max.X, bb.Max.Y, bb.Min.Z),
+    new XYZ(bb.Max.X, bb.Max.Y, bb.Max.Z),
+                        };
+
+                        double minP = double.PositiveInfinity, maxP = double.NegativeInfinity;
+                        foreach (var c in corners)
+                        {
+                            double p = c.DotProduct(facingProj);
+                            if (p < minP) minP = p;
+                            if (p > maxP) maxP = p;
+                        }
+                        double halfAlong = 0.5 * (maxP - minP);
+
+                        // Смещение
+                        double gap = 250.0 / 304.8;
+
+                        XYZ tagPoint = insertPt + facingProj.Multiply(halfAlong + gap);
+
+                        IndependentTag newTag = IndependentTag.Create(
                             doc,
                             tagType.Id,
-                            doc.ActiveView.Id,
+                            view.Id,
                             new Reference(lintel),
                             false,
-                            TagOrientation.Horizontal,
-                            centerTop
+                            TagOrientation.AnyModelDirection,
+                            tagPoint
                         );
-                        }
-                        else
-                        {
-                            newTag = IndependentTag.Create(
-                            doc,
-                            tagType.Id,
-                            doc.ActiveView.Id,
-                            new Reference(lintel),
-                            false,
-                            TagOrientation.Vertical,
-                            centerLeft
-                        );
-                        }
+
+                        newTag.RotationAngle = rot;
+
+
 
                         if (newTag == null)
                         {
@@ -1673,15 +1724,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                             continue;
                         }
 
-                        centerTop = new XYZ(
-                            (boundingBox.Min.X + boundingBox.Max.X) / 2,
-                            (boundingBox.Max.Y + 150 / 304.8),
-                            boundingBox.Max.Z
+                        XYZ centerTop = new XYZ(
+                            (bb.Min.X + bb.Max.X) / 2,
+                            (bb.Max.Y + 150 / 304.8),
+                            bb.Max.Z
                         );
-                        centerLeft = new XYZ(
-                            boundingBox.Min.X - 150 / 304.8,
-                            (boundingBox.Max.Y + boundingBox.Min.Y) / 2,
-                            boundingBox.Max.Z
+                        XYZ centerLeft = new XYZ(
+                            bb.Min.X - 150 / 304.8,
+                            (bb.Max.Y + bb.Min.Y) / 2,
+                            bb.Max.Z
                         );
 
                         // Создание высотной отметки
@@ -1706,7 +1757,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                             }
 
                             newTag2.SpotDimensionType = tagType2;
-                            (newTag2 as Dimension).TextPosition = (boundingBox.Max + boundingBox.Min) / 2 + 1.15 * XYZ.BasisY;
+                            (newTag2 as Dimension).TextPosition = (bb.Max + bb.Min) / 2 + 1.15 * XYZ.BasisY;
                         }
                         else
                         {
@@ -1726,7 +1777,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                             }
 
                             newTag2.SpotDimensionType = tagType2Vert;
-                            (newTag2 as Dimension).TextPosition = (boundingBox.Max + boundingBox.Min) / 2 - 0.8 * XYZ.BasisX;
+                            (newTag2 as Dimension).TextPosition = (bb.Max + bb.Min) / 2 - 0.8 * XYZ.BasisX;
                         }
 
 
