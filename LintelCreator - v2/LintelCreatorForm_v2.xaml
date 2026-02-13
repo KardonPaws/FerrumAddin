@@ -58,9 +58,9 @@
                 ItemsSource="{Binding openingsWithoutLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
             <TreeViewItem Header="С перемычками"
                 ItemsSource="{Binding openingsWithLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
-            <!--//04.01.26 - ошибочные перемычки перемещены -->
+            <!--//13.02.26 - Ошибки в перемычках  переименованы в Не подобрано -->
 
-            <TreeViewItem Header="Ошибки"
+            <TreeViewItem Header="Не подобрано"
     ItemsSource="{Binding openingsWithErrorLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
         </TreeView>
 

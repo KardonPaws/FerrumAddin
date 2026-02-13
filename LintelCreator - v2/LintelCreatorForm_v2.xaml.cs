@@ -285,9 +285,8 @@ namespace FerrumAddinDev.LintelCreator_v2
             // 2. разбираем результат
             var withoutLintel = result[0];
             var withLintel = result[1];
-
-
-
+            // 13.02.26 - Ошибки в перемычках  переименованы в Не подобрано
+            var errorLintel = result[2];
             var vm = MainViewModel;
             vm.openingsWithoutLintel.Clear();
             foreach (var e0 in withoutLintel)
@@ -296,6 +295,10 @@ namespace FerrumAddinDev.LintelCreator_v2
             vm.openingsWithLintel.Clear();
             foreach (var e1 in withLintel)
                 vm.openingsWithLintel.Add(e1);
+
+            vm.openingsWithErrorLintel.Clear();
+            foreach (var e2 in errorLintel)
+                vm.openingsWithErrorLintel.Add(e2);
 
             // 4. уведомляем интерфейс
             vm.OnPropertyChanged(nameof(vm.openingsWithoutLintel));

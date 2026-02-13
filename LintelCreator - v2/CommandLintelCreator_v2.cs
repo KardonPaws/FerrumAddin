@@ -2071,6 +2071,24 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 vm.openingsWithoutLintel.Remove(noLintelParent);
                             }
                         }
+                        // 13.02.26 - Ошибки в перемычках  переименованы в Не подобрано
+                        if (vm.openingsWithErrorLintel.Contains(selectedParentElement))
+                        {
+                            var noLintelParent = vm.openingsWithErrorLintel
+                                [vm.openingsWithErrorLintel.IndexOf(selectedParentElement)];
+
+                            // если для этого типа стены больше не осталось элементов — убираем ключ
+                            if (noLintelParent.Walls.TryGetValue(wallTypeKey, out var remaining)
+                                && remaining.Count == 0)
+                            {
+                                noLintelParent.Walls.Remove(wallTypeKey);
+                            }
+                            // если словарь словарей пуст — убираем весь ParentElement
+                            if (noLintelParent.Walls.Count == 0)
+                            {
+                                vm.openingsWithErrorLintel.Remove(noLintelParent);
+                            }
+                        }
                         //04.01.26 - ошибочные перемычки перемещены
                         bool isErrorLintelType = IsErrorTypeName(selectedType.Name);
                         var targetCollection = isErrorLintelType ? vm.openingsWithErrorLintel : vm.openingsWithLintel;
