@@ -5,6 +5,7 @@ using FerrumAddinDev.FM;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.Remoting.Messaging;
 using System.Text;
@@ -1570,13 +1571,18 @@ namespace FerrumAddinDev.LintelCreator_v2
 
     public class TagLintels : IExternalEventHandler
     {
+        //16.02.26 - отметка для марок перемычек
+        private static string FormatProjectElevationMeters(double meters)
+        {
+            return meters.ToString("+0.000;-0.000",new CultureInfo("ru-RU"));
+        }
         public void Execute(UIApplication app)
         {
             Document doc = app.ActiveUIDocument.Document;
             UIDocument uidoc = app.ActiveUIDocument;
             if (doc.ActiveView.ViewType != ViewType.FloorPlan)
             {
-                MessageBox.Show("Перейдите на план этажа для создания разрезов", "Ошибка");
+                MessageBox.Show("Перейдите на план этажа для создания марок", "Ошибка");
                 return;
             }
 
@@ -1587,13 +1593,15 @@ namespace FerrumAddinDev.LintelCreator_v2
                 try
                 {
                     // Сбор всех перемычек
-                    // 30.06.26 - перемычки в модели
+                    //16.02.26 - отметка для марок перемычек
                     var lintelInstances = new FilteredElementCollector(doc)
                         .OfCategory(BuiltInCategory.OST_StructuralFraming)
                         .WhereElementIsNotElementType()
                         .Cast<FamilyInstance>()
                 .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
                         .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
+                        .Where(x => x.Symbol.FamilyName == "01_1_ZH_СК_ЖБ_Перемычки")
+                        .Where(x => x.LevelId == doc.ActiveView.GenLevel.Id)
                         .ToList();
 
                     if (lintelInstances.Count == 0)
@@ -1608,31 +1616,10 @@ namespace FerrumAddinDev.LintelCreator_v2
                         .OfClass(typeof(FamilySymbol))
                         .OfType<FamilySymbol>().FirstOrDefault(tag => tag.FamilyName == "ADSK_Марка_Балка" && tag.Name == "Экземпляр_ADSK_Позиция");
 
-                    var tagType2 = new FilteredElementCollector(doc)
-                        .OfClass(typeof(SpotDimensionType))
-                        .OfType<SpotDimensionType>().FirstOrDefault(tag => tag.FamilyName == "Высотные отметки" && tag.Name == "ADSK_Проектная_без всего");
-
-                    var tagType2Vert = new FilteredElementCollector(doc)
-                        .OfClass(typeof(SpotDimensionType))
-                        .OfType<SpotDimensionType>().FirstOrDefault(tag => tag.FamilyName == "Высотные отметки" && tag.Name == "ADSK_Проектная_без всего_(В)");
-
 
                     if (tagType == null)
                     {
                         MessageBox.Show("Не найден тип марки 'Экземпляр_ADSK_Позиция' для семейства 'ADSK_Марка_Балка'.", "Ошибка");
-                        trans.RollBack();
-                        return;
-                    }
-                    if (tagType2 == null)
-                    {
-                        MessageBox.Show("Не найден тип марки 'ADSK_Проектная_без всего' для семейства 'Высотные отметки'.", "Ошибка");
-                        trans.RollBack();
-                        return;
-                    }
-
-                    if (tagType2Vert == null)
-                    {
-                        MessageBox.Show("Не найден тип марки 'ADSK_Проектная_без всего_(В)' для семейства 'Высотные отметки'.", "Ошибка");
                         trans.RollBack();
                         return;
                     }
@@ -1650,6 +1637,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         //12.02.26 - марки под углом + нумерация + разрезы
                         FamilyInstance fi = (FamilyInstance)lintel;
                         View view = doc.ActiveView;
+                        //16.02.26 - отметка для марок перемычек
+                        fi.LookupParameter("ZH_Отм_низ конструкции").Set(FormatProjectElevationMeters(Math.Round((doc.GetElement(fi.LevelId) as Level).Elevation * 0.3048 + fi.LookupParameter("Смещение от главной модели").AsDouble() * 0.3048, 6)));
 
                         XYZ vd = view.ViewDirection.Normalize();
                         XYZ up = view.UpDirection.Normalize();
@@ -1724,67 +1713,9 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                         if (newTag == null)
                         {
-                            MessageBox.Show("Не удалось создать марку для перемычки.", "Ошибка");
+                            //MessageBox.Show("Не удалось создать марку для перемычки.", "Ошибка");
                             continue;
                         }
-
-                        XYZ centerTop = new XYZ(
-                            (bb.Min.X + bb.Max.X) / 2,
-                            (bb.Max.Y + 150 / 304.8),
-                            bb.Max.Z
-                        );
-                        XYZ centerLeft = new XYZ(
-                            bb.Min.X - 150 / 304.8,
-                            (bb.Max.Y + bb.Min.Y) / 2,
-                            bb.Max.Z
-                        );
-
-                        // Создание высотной отметки
-                        Reference ref_ = null;
-                        ref_ = lintel.GetReferences(FamilyInstanceReferenceType.Bottom).First();
-                        SpotDimension newTag2 = null;
-                        if ((lintel as FamilyInstance).HandOrientation.X == 1)
-                        {
-                            newTag2 = doc.Create.NewSpotElevation(
-                            doc.ActiveView,
-                            ref_,
-                            (lintel.Location as LocationPoint).Point,
-                            ((lintel.Location as LocationPoint).Point + centerTop) / 2,
-                            centerTop,
-                            new XYZ(0, 0, 0),
-                            false
-                        );
-                            if (newTag2 == null)
-                            {
-                                MessageBox.Show("Не удалось создать высотную отметку для перемычки.", "Ошибка");
-                                continue;
-                            }
-
-                            newTag2.SpotDimensionType = tagType2;
-                            (newTag2 as Dimension).TextPosition = (bb.Max + bb.Min) / 2 + 1.15 * XYZ.BasisY;
-                        }
-                        else
-                        {
-                            newTag2 = doc.Create.NewSpotElevation(
-                            doc.ActiveView,
-                            ref_,
-                            (lintel.Location as LocationPoint).Point,
-                            ((lintel.Location as LocationPoint).Point + centerLeft) / 2,
-                            centerLeft,
-                            new XYZ(0, 0, 0),
-                            false
-                        );
-                            if (newTag2 == null)
-                            {
-                                MessageBox.Show("Не удалось создать высотную отметку для перемычки.", "Ошибка");
-                                continue;
-                            }
-
-                            newTag2.SpotDimensionType = tagType2Vert;
-                            (newTag2 as Dimension).TextPosition = (bb.Max + bb.Min) / 2 - 0.8 * XYZ.BasisX;
-                        }
-
-
                     }
 
                     trans.Commit();
