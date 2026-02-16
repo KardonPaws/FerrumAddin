@@ -849,7 +849,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                 {
                     var wallType = kv.Key;
                     var elems = kv.Value;
-                    if (wallType.Name.ToLower().Contains("_пгп_"))
+                    // 16.02.26 - игнорирование стен гкл и фсд + изменения нумерации
+                    var wallName = wallType.Name.ToLower();
+                    if (wallName.Contains("_пгп_") || wallName.Contains("_гкл_") || wallName.Contains("_фсд_"))
                     {
                         continue;
                     }
@@ -1133,8 +1135,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                         int positionCounter2 = 1;
                         foreach (var group in groupedElements)
                         {
-                            //12.02.26 - марки под углом + нумерация + разрезы
+                            // 16.02.26 - игнорирование стен гкл и фсд + изменения нумерации
                             bool v1 = false;
+                            bool v2 = false;
                             foreach (var element in group)
                             {
                                 if (element.LookupParameter("ZH_Этаж_Числовой").AsInteger() > 0)
@@ -1147,6 +1150,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     {
                                         positionParam.Set(positionValue);
                                     }
+                                    v1 = true;
                                 }
                                 else
                                 {
@@ -1159,16 +1163,16 @@ namespace FerrumAddinDev.LintelCreator_v2
                                     {
                                         positionParam.Set(positionValue);
                                     }
-                                    v1 = true;
+                                    v2 = true;
                                 }
                             }
                             if (v1)
                             {
-                                positionCounter2++;
-                            }
-                            else
-                            {
                                 positionCounter1++;
+                            }
+                            if (v2)
+                            {
+                                positionCounter2++;
                             }
                         }
                     }
