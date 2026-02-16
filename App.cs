@@ -304,6 +304,18 @@ namespace FerrumAddinDev
 
             }
 
+            PushButtonData SlabsLayout = new PushButtonData("SlabsLayout", "Раскладка плит перекрытий",
+                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "zhSlabsLayout24.dll"),
+                "zhSlabsLayout24.SlabsLayout");
+            try
+            {
+                panelKR.AddItem(SlabsLayout);
+            }
+            catch
+            {
+
+            }
+
             panelControl = a.CreateRibbonPanel(tabName, "Управление");
             panelControl.Visible = false;
 
