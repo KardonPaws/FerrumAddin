@@ -937,9 +937,12 @@ namespace FerrumAddinDev.LintelCreator_v2
             // 16.12.25 - у некоторых семейств нет точки вставки, определение по BoundingBox
             XYZ center = new XYZ(0, 0, 0);
             double height = 0;
+            //18.02.26 - изменения в перемычках
+            double down = 0;
 
             try
             {
+                down = element is FamilyInstance ? 0 : element.LookupParameter("Смещение снизу").AsDouble();
                 center = element is FamilyInstance
                     ? (element.Location as LocationPoint).Point
                     : (((element.Location as LocationCurve).Curve as Line).GetEndPoint(0) + ((element.Location as LocationCurve).Curve as Line).GetEndPoint(1)) / 2;
@@ -960,8 +963,9 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             // создаём область немного ниже макс.Z и немного выше на 100 мм
             double mm = 1.0 / 304.8;
-            XYZ searchMin = new XYZ(center.X - 25 * mm, center.Y - 25 * mm, center.Z + height - 50 * mm);
-            XYZ searchMax = new XYZ(center.X + 25 * mm, center.Y + 25 * mm, center.Z + height + 10 * mm);
+            //18.02.26 - изменения в перемычках
+            XYZ searchMin = new XYZ(center.X - 25 * mm, center.Y - 25 * mm, center.Z + down + height - 50 * mm);
+            XYZ searchMax = new XYZ(center.X + 25 * mm, center.Y + 25 * mm, center.Z + down + height + 10 * mm);
 
             var outline = new Outline(searchMin, searchMax);
             var filter = new BoundingBoxIntersectsFilter(outline);
@@ -1072,14 +1076,15 @@ namespace FerrumAddinDev.LintelCreator_v2
         private void placeSections(Document doc, List<ViewSection> sections,
         Dictionary<string, List<ScheduleSheetInstance>> scheduleGroups, string scheduleName)
         {
-            if (!scheduleGroups.ContainsKey(scheduleName)) return;
+            //18.02.26 - изменения в перемычках
+            if (!scheduleGroups.Keys.Any(x => x.Contains(scheduleName))) return;
             ElementId elId = new FilteredElementCollector(doc)
                 .OfClass(typeof(ElementType))
                 .Where(x => (x as ElementType).FamilyName == "Видовой экран")
                 .Where(x => x.Name == "Без названия")
                 .First().Id;
 
-            var scheduleInstances = scheduleGroups[scheduleName];
+            var scheduleInstances = scheduleGroups[scheduleGroups.Keys.Where(x => x.Contains(scheduleName)).FirstOrDefault()];
             int sectionIndex = 0;
 
             // Использовать только первую ScheduleSheetInstance для размещения
@@ -1141,7 +1146,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                             bool v2 = false;
                             foreach (var element in group)
                             {
-                                if (element.LookupParameter("ZH_Этаж_Числовой").AsInteger() > 0)
+                                //18.02.26 - изменения в перемычках
+                                if (element.LookupParameter("ZH_Этаж_Числовой").AsDouble() > 0)
                                 {
                                     string positionValue = $"Пр-{positionCounter1}";
 
@@ -1157,8 +1163,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 {
                                     string positionValue = $"Пр-{positionCounter2}";
 
-
                                     // Назначение значения параметру ADSK_Позиция
+                                    var id = element.Id;
                                     var positionParam = element.LookupParameter("ADSK_Позиция");
                                     if (positionParam != null && positionParam.IsReadOnly == false)
                                     {
@@ -1220,6 +1226,8 @@ namespace FerrumAddinDev.LintelCreator_v2
         public void Execute(UIApplication app)
         {
             Document doc = app.ActiveUIDocument.Document;
+            //18.02.26 - изменения в перемычках
+            bool check = LintelCreatorForm_v2.check;
 
             using (Transaction trans = new Transaction(doc, "Нумерация вложенных элементов"))
             {
@@ -1227,74 +1235,174 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                 try
                 {
-                    // Сбор всех элементов категории OST_StructuralFraming
-                    var framingElements = new FilteredElementCollector(doc)
-                        .OfCategory(BuiltInCategory.OST_StructuralFraming)
-                        .WhereElementIsNotElementType()
-                        .Cast<FamilyInstance>()
-                .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
-                        .ToList();
-                    Dictionary<string, int> dict = new Dictionary<string, int>();
-                    int nestedCounter = 1;
-                    Dictionary<string, List<Element>> nestedNames = new Dictionary<string, List<Element>>();
-                    foreach (var element in framingElements)
+                    if (!check)
                     {
-                        if (element.SuperComponent == null)
+                        // Сбор всех элементов категории OST_StructuralFraming
+                        var framingElements = new FilteredElementCollector(doc)
+                            .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                            .WhereElementIsNotElementType()
+                            .Cast<FamilyInstance>()
+                    .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
+                            .ToList();
+                        Dictionary<string, int> dict = new Dictionary<string, int>();
+                        int nestedCounter = 1;
+                        Dictionary<string, List<Element>> nestedNames = new Dictionary<string, List<Element>>();
+                        foreach (var element in framingElements)
                         {
-                            var subElements = element.GetSubComponentIds();
-                            if (subElements.Count == 0)
+                            if (element.SuperComponent == null)
                             {
-                                // no nested families
-                                continue;
-                            }
-                            else
-                            {
-                                // has nested families
-                                foreach (var aSubElemId in subElements)
+                                var subElements = element.GetSubComponentIds();
+                                if (subElements.Count == 0)
                                 {
-                                    var nestedElement = doc.GetElement(aSubElemId);
-                                    if (nestedElement is FamilyInstance)
+                                    // no nested families
+                                    continue;
+                                }
+                                else
+                                {
+                                    // has nested families
+                                    foreach (var aSubElemId in subElements)
                                     {
-                                        if (nestedNames.Keys.Contains(nestedElement.Name))
+                                        var nestedElement = doc.GetElement(aSubElemId);
+                                        if (nestedElement is FamilyInstance)
                                         {
-                                            nestedNames[nestedElement.Name].Add(nestedElement);
+                                            if (nestedNames.Keys.Contains(nestedElement.Name))
+                                            {
+                                                nestedNames[nestedElement.Name].Add(nestedElement);
+                                            }
+                                            else
+                                            {
+                                                nestedNames.Add(nestedElement.Name, new List<Element> { nestedElement });
+                                            }
                                         }
-                                        else
-                                        {
-                                            nestedNames.Add(nestedElement.Name, new List<Element> { nestedElement });
-                                        }
-                                        //var positionParam = nestedElement.LookupParameter("ADSK_Позиция");
-                                        //if (positionParam != null && positionParam.IsReadOnly == false)
-                                        //{
-                                        //    if (dict.Keys.Contains(nestedElement.Name))
-                                        //    {
-                                        //        positionParam.Set(dict[nestedElement.Name].ToString());
-                                        //    }
-                                        //    else
-                                        //    {
-                                        //        positionParam.Set(nestedCounter.ToString());
-                                        //        dict.Add(nestedElement.Name, nestedCounter);
-                                        //        nestedCounter++;
-                                        //    }
-                                        //}
-                                        //nestedCounter++;
                                     }
                                 }
                             }
                         }
-                    }
-                    nestedNames = nestedNames.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
-                    foreach (var nestedElement in nestedNames.Values)
-                    {
-                        foreach (var el in nestedElement)
+                        nestedNames = nestedNames.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
+                        foreach (var nestedElement in nestedNames.Values)
                         {
-                            var positionParam = el.LookupParameter("ADSK_Позиция");
-                            if (positionParam != null && positionParam.IsReadOnly == false)
+                            foreach (var el in nestedElement)
                             {
-                                positionParam.Set(nestedCounter.ToString());
+                                var positionParam = el.LookupParameter("ADSK_Позиция");
+                                if (positionParam != null && positionParam.IsReadOnly == false)
+                                {
+                                    positionParam.Set(nestedCounter.ToString());
+                                }
+                            }
+                            nestedCounter++;
+                        }
+                    }
+                    //18.02.26 - изменения в перемычках
+                    else
+                    {
+                        // Сбор всех элементов категории OST_StructuralFraming
+                        var framingElementsUp = new FilteredElementCollector(doc)
+                            .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                            .WhereElementIsNotElementType()
+                            .Cast<FamilyInstance>()
+                    .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР").Where(x => x.LookupParameter("ZH_Этаж_Числовой").AsDouble() > 0)
+                            .ToList();
+                        var framingElementsDown = new FilteredElementCollector(doc)
+                            .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                            .WhereElementIsNotElementType()
+                            .Cast<FamilyInstance>()
+                    .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР").Where(x => x.LookupParameter("ZH_Этаж_Числовой").AsDouble() < 0)
+                            .ToList();
+                        Dictionary<string, int> dict = new Dictionary<string, int>();
+                        int nestedCounterUp = 1;
+                        int nestedCounterDown = 1;
+
+                        Dictionary<string, List<Element>> nestedNamesUp = new Dictionary<string, List<Element>>();
+                        foreach (var element in framingElementsUp)
+                        {
+                            if (element.SuperComponent == null)
+                            {
+                                var subElements = element.GetSubComponentIds();
+                                if (subElements.Count == 0)
+                                {
+                                    // no nested families
+                                    continue;
+                                }
+                                else
+                                {
+                                    // has nested families
+                                    foreach (var aSubElemId in subElements)
+                                    {
+                                        var nestedElement = doc.GetElement(aSubElemId);
+                                        if (nestedElement is FamilyInstance)
+                                        {
+                                            if (nestedNamesUp.Keys.Contains(nestedElement.Name))
+                                            {
+                                                nestedNamesUp[nestedElement.Name].Add(nestedElement);
+                                            }
+                                            else
+                                            {
+                                                nestedNamesUp.Add(nestedElement.Name, new List<Element> { nestedElement });
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                        nestedCounter++;
+                        nestedNamesUp = nestedNamesUp.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
+                        foreach (var nestedElement in nestedNamesUp.Values)
+                        {
+                            foreach (var el in nestedElement)
+                            {
+                                var positionParam = el.LookupParameter("ADSK_Позиция");
+                                if (positionParam != null && positionParam.IsReadOnly == false)
+                                {
+                                    positionParam.Set(nestedCounterUp.ToString());
+                                }
+                            }
+                            nestedCounterUp++;
+                        }
+
+                        Dictionary<string, List<Element>> nestedNamesDown = new Dictionary<string, List<Element>>();
+                        foreach (var element in framingElementsDown)
+                        {
+                            if (element.SuperComponent == null)
+                            {
+                                var subElements = element.GetSubComponentIds();
+                                if (subElements.Count == 0)
+                                {
+                                    // no nested families
+                                    continue;
+                                }
+                                else
+                                {
+                                    // has nested families
+                                    foreach (var aSubElemId in subElements)
+                                    {
+                                        var nestedElement = doc.GetElement(aSubElemId);
+                                        if (nestedElement is FamilyInstance)
+                                        {
+                                            if (nestedNamesDown.Keys.Contains(nestedElement.Name))
+                                            {
+                                                nestedNamesDown[nestedElement.Name].Add(nestedElement);
+                                            }
+                                            else
+                                            {
+                                                nestedNamesDown.Add(nestedElement.Name, new List<Element> { nestedElement });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        nestedNamesDown = nestedNamesDown.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
+                        foreach (var nestedElement in nestedNamesDown.Values)
+                        {
+                            foreach (var el in nestedElement)
+                            {
+                                var positionParam = el.LookupParameter("ADSK_Позиция");
+                                if (positionParam != null && positionParam.IsReadOnly == false)
+                                {
+                                    positionParam.Set(nestedCounterDown.ToString());
+                                }
+                            }
+                            nestedCounterDown++;
+                        }
                     }
 
                     trans.Commit();
@@ -1329,7 +1437,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .ToList();
 
             // Группировка перемычек по параметру ADSK_Позиция
-            var groupedElements = framingElements.OrderBy(el => el.LookupParameter("ADSK_Позиция").AsString()).GroupBy(el => el.LookupParameter("ADSK_Позиция").AsString());
+            var groupedElements = framingElements.OrderBy(el => el.LookupParameter("ADSK_Позиция").AsString()).GroupBy(el => el.LookupParameter("ADSK_Позиция").AsString() + (el.LookupParameter("ZH_Этаж_Числовой").AsDouble() > 0).ToString());
             // 03.02.26 - изменен фильтр для перемычек + создание базовых разрезов и шаблонов
             using (Transaction tr = new Transaction(doc, "Назначение линии видимости"))
             {
@@ -1477,9 +1585,10 @@ namespace FerrumAddinDev.LintelCreator_v2
 
                         // Установка имени разреза
                         string positionName = firstElement.LookupParameter("ADSK_Позиция").AsString();
-                        bool lower0 = firstElement.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
+                        //18.02.26 - изменения в перемычках
+                        bool lower0 = firstElement.LookupParameter("ZH_Этаж_Числовой").AsDouble() < 0;
 
-                        var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName)).FirstOrDefault();
+                        var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName) && x.Name.Contains(lower0 ? "ниже" : "выше")).FirstOrDefault();
                         if (view != null)
                         {
                             // 29.01.26 - уникальное имя для разреза
@@ -1612,9 +1721,10 @@ namespace FerrumAddinDev.LintelCreator_v2
                     }
 
                     // Поиск типа марки
+                    //18.02.26 - изменения в перемычках
                     var tagType = new FilteredElementCollector(doc)
                         .OfClass(typeof(FamilySymbol))
-                        .OfType<FamilySymbol>().FirstOrDefault(tag => tag.FamilyName == "ADSK_Марка_Балка" && tag.Name == "Экземпляр_ADSK_Позиция");
+                        .OfType<FamilySymbol>().FirstOrDefault(tag => tag.FamilyName == "ADSK_Марка_Балка" && tag.Name == "ZH_Перемычка");
 
 
                     if (tagType == null)
@@ -1717,6 +1827,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                             continue;
                         }
                     }
+                    //18.02.26 - изменения в перемычках
+                    doc.Regenerate();
 
                     trans.Commit();
                 }
