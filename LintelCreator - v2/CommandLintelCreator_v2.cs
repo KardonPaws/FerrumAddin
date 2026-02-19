@@ -1131,9 +1131,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                     .OrderBy(f => f.Symbol.Name) // Сортировка элементов по имени символа
                     .ToList();
 
-                    // Группировка элементов по символу
-                    var groupedElements = framingElements.GroupBy(el => el.Symbol.Id)
-                                                         .OrderBy(group => doc.GetElement(group.Key).Name);
+                    // 19.02.26 - изменена сортировка
+                    var groupedElements = framingElements.GroupBy(el => el.Symbol.Id).OrderBy(group => group.FirstOrDefault().LookupParameter("ADSK_Обозначение"))
+                                                         .ThenBy(group => doc.GetElement(group.Key).Name);
 
                     if (check)
                     {
