@@ -574,22 +574,23 @@ namespace FerrumAddinDev.LintelCreator_v2
                     // Фильтрацию по этим правилам применяем после базовых условий.
 
                     // 5. Наличие опорных подушек
-                    if (HasSupportPads)
-                    {
-                        if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() != 1 &&
-                            type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() != 1)
-                        {
-                            return false;
-                        }
-                    }
-                    else
-                    {
-                        if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() == 1 &&
-                            type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() == 1)
-                        {
-                            return false;
-                        }
-                    }
+                    // 24.02.26 - изменена сортировка
+                    //if (HasSupportPads)
+                    //{
+                    //    if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() != 1 &&
+                    //        type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() != 1)
+                    //    {
+                    //        return false;
+                    //    }
+                    //}
+                    //else
+                    //{
+                    //    if (type.LookupParameter("ОП-1-Л.Видимость")?.AsInteger() == 1 &&
+                    //        type.LookupParameter("ОП-1-П.Видимость")?.AsInteger() == 1)
+                    //    {
+                    //        return false;
+                    //    }
+                    //}
 
                     // 6. Материал перемычки
                     // 29.06.25 - исправлен фильтр

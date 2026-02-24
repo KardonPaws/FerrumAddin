@@ -1131,9 +1131,18 @@ namespace FerrumAddinDev.LintelCreator_v2
                     .OrderBy(f => f.Symbol.Name) // Сортировка элементов по имени символа
                     .ToList();
 
-                    // 19.02.26 - изменена сортировка
-                    var groupedElements = framingElements.GroupBy(el => el.Symbol.Id).OrderBy(group => group.FirstOrDefault().LookupParameter("ADSK_Обозначение"))
-                                                         .ThenBy(group => doc.GetElement(group.Key).Name);
+                    // 24.02.26 - изменена сортировка
+                    var alphaNum = new AlphanumComparatorFastString();
+
+                    string GetTypeName(ElementId symbolId)
+                    {
+                        var sym = doc.GetElement(symbolId) as FamilySymbol;
+                        return sym?.Name ?? string.Empty;
+                    }
+
+                    var groupedElements = framingElements
+                        .GroupBy(el => el.Symbol.Id)
+                        .OrderBy(g => GetTypeName(g.Key), alphaNum);                             
 
                     if (check)
                     {
@@ -1226,8 +1235,25 @@ namespace FerrumAddinDev.LintelCreator_v2
         public void Execute(UIApplication app)
         {
             Document doc = app.ActiveUIDocument.Document;
-            //18.02.26 - изменения в перемычках
+            // 24.02.26 - изменена сортировка
             bool check = LintelCreatorForm_v2.check;
+            var alphaNum = new AlphanumComparatorFastString();
+
+            string GetTypeParamString(ElementId symbolId, string paramName)
+            {
+                var sym = doc.GetElement(symbolId) as FamilySymbol;
+                if (sym == null) return string.Empty;
+
+                var p = sym.LookupParameter(paramName);
+                var s = p?.AsString() ?? p?.AsValueString() ?? string.Empty;
+                return (s ?? string.Empty).Trim();
+            }
+
+            string GetTypeName(ElementId symbolId)
+            {
+                var sym = doc.GetElement(symbolId) as FamilySymbol;
+                return (sym?.Name ?? string.Empty).Trim();
+            }
 
             using (Transaction trans = new Transaction(doc, "Нумерация вложенных элементов"))
             {
@@ -1246,48 +1272,43 @@ namespace FerrumAddinDev.LintelCreator_v2
                             .ToList();
                         Dictionary<string, int> dict = new Dictionary<string, int>();
                         int nestedCounter = 1;
-                        Dictionary<string, List<Element>> nestedNames = new Dictionary<string, List<Element>>();
+                        // 24.02.26 - изменена сортировка
+                        Dictionary<ElementId, List<Element>> nestedTypes = new Dictionary<ElementId, List<Element>>();
+
                         foreach (var element in framingElements)
                         {
-                            if (element.SuperComponent == null)
+                            if (element.SuperComponent != null) continue;
+
+                            var subElements = element.GetSubComponentIds();
+                            if (subElements.Count == 0) continue;
+
+                            foreach (var aSubElemId in subElements)
                             {
-                                var subElements = element.GetSubComponentIds();
-                                if (subElements.Count == 0)
-                                {
-                                    // no nested families
-                                    continue;
-                                }
+                                var nestedElement = doc.GetElement(aSubElemId) as FamilyInstance;
+                                if (nestedElement == null) continue;
+
+                                var symId = nestedElement.Symbol.Id;
+
+                                if (nestedTypes.ContainsKey(symId))
+                                    nestedTypes[symId].Add(nestedElement);
                                 else
-                                {
-                                    // has nested families
-                                    foreach (var aSubElemId in subElements)
-                                    {
-                                        var nestedElement = doc.GetElement(aSubElemId);
-                                        if (nestedElement is FamilyInstance)
-                                        {
-                                            if (nestedNames.Keys.Contains(nestedElement.Name))
-                                            {
-                                                nestedNames[nestedElement.Name].Add(nestedElement);
-                                            }
-                                            else
-                                            {
-                                                nestedNames.Add(nestedElement.Name, new List<Element> { nestedElement });
-                                            }
-                                        }
-                                    }
-                                }
+                                    nestedTypes.Add(symId, new List<Element> { nestedElement });
                             }
                         }
-                        nestedNames = nestedNames.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
-                        foreach (var nestedElement in nestedNames.Values)
+
+                        // сортировка: 1) ADSK_Обозначение (тип), 2) имя типа
+                        var nestedTypesSorted = nestedTypes
+                            .OrderBy(kv => GetTypeParamString(kv.Key, "ADSK_Обозначение"), alphaNum)
+                            .ThenBy(kv => GetTypeName(kv.Key), alphaNum)
+                            .ToList();
+
+                        foreach (var group in nestedTypesSorted)
                         {
-                            foreach (var el in nestedElement)
+                            foreach (var el in group.Value)
                             {
                                 var positionParam = el.LookupParameter("ADSK_Позиция");
-                                if (positionParam != null && positionParam.IsReadOnly == false)
-                                {
+                                if (positionParam != null && !positionParam.IsReadOnly)
                                     positionParam.Set(nestedCounter.ToString());
-                                }
                             }
                             nestedCounter++;
                         }
@@ -1311,95 +1332,80 @@ namespace FerrumAddinDev.LintelCreator_v2
                         Dictionary<string, int> dict = new Dictionary<string, int>();
                         int nestedCounterUp = 1;
                         int nestedCounterDown = 1;
+                        Dictionary<ElementId, List<Element>> nestedTypesUp = new Dictionary<ElementId, List<Element>>();
 
-                        Dictionary<string, List<Element>> nestedNamesUp = new Dictionary<string, List<Element>>();
                         foreach (var element in framingElementsUp)
                         {
-                            if (element.SuperComponent == null)
+                            if (element.SuperComponent != null) continue;
+
+                            var subElements = element.GetSubComponentIds();
+                            if (subElements.Count == 0) continue;
+
+                            foreach (var aSubElemId in subElements)
                             {
-                                var subElements = element.GetSubComponentIds();
-                                if (subElements.Count == 0)
-                                {
-                                    // no nested families
-                                    continue;
-                                }
+                                var nestedElement = doc.GetElement(aSubElemId) as FamilyInstance;
+                                if (nestedElement == null) continue;
+
+                                var symId = nestedElement.Symbol.Id;
+
+                                if (nestedTypesUp.ContainsKey(symId))
+                                    nestedTypesUp[symId].Add(nestedElement);
                                 else
-                                {
-                                    // has nested families
-                                    foreach (var aSubElemId in subElements)
-                                    {
-                                        var nestedElement = doc.GetElement(aSubElemId);
-                                        if (nestedElement is FamilyInstance)
-                                        {
-                                            if (nestedNamesUp.Keys.Contains(nestedElement.Name))
-                                            {
-                                                nestedNamesUp[nestedElement.Name].Add(nestedElement);
-                                            }
-                                            else
-                                            {
-                                                nestedNamesUp.Add(nestedElement.Name, new List<Element> { nestedElement });
-                                            }
-                                        }
-                                    }
-                                }
+                                    nestedTypesUp.Add(symId, new List<Element> { nestedElement });
                             }
                         }
-                        nestedNamesUp = nestedNamesUp.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
-                        foreach (var nestedElement in nestedNamesUp.Values)
+
+                        var nestedTypesUpSorted = nestedTypesUp
+                            .OrderBy(kv => GetTypeParamString(kv.Key, "ADSK_Обозначение"), alphaNum)
+                            .ThenBy(kv => GetTypeName(kv.Key), alphaNum)
+                            .ToList();
+
+                        foreach (var group in nestedTypesUpSorted)
                         {
-                            foreach (var el in nestedElement)
+                            foreach (var el in group.Value)
                             {
                                 var positionParam = el.LookupParameter("ADSK_Позиция");
-                                if (positionParam != null && positionParam.IsReadOnly == false)
-                                {
+                                if (positionParam != null && !positionParam.IsReadOnly)
                                     positionParam.Set(nestedCounterUp.ToString());
-                                }
                             }
                             nestedCounterUp++;
                         }
 
-                        Dictionary<string, List<Element>> nestedNamesDown = new Dictionary<string, List<Element>>();
+                        Dictionary<ElementId, List<Element>> nestedTypesDown = new Dictionary<ElementId, List<Element>>();
+
                         foreach (var element in framingElementsDown)
                         {
-                            if (element.SuperComponent == null)
+                            if (element.SuperComponent != null) continue;
+
+                            var subElements = element.GetSubComponentIds();
+                            if (subElements.Count == 0) continue;
+
+                            foreach (var aSubElemId in subElements)
                             {
-                                var subElements = element.GetSubComponentIds();
-                                if (subElements.Count == 0)
-                                {
-                                    // no nested families
-                                    continue;
-                                }
+                                var nestedElement = doc.GetElement(aSubElemId) as FamilyInstance;
+                                if (nestedElement == null) continue;
+
+                                var symId = nestedElement.Symbol.Id;
+
+                                if (nestedTypesDown.ContainsKey(symId))
+                                    nestedTypesDown[symId].Add(nestedElement);
                                 else
-                                {
-                                    // has nested families
-                                    foreach (var aSubElemId in subElements)
-                                    {
-                                        var nestedElement = doc.GetElement(aSubElemId);
-                                        if (nestedElement is FamilyInstance)
-                                        {
-                                            if (nestedNamesDown.Keys.Contains(nestedElement.Name))
-                                            {
-                                                nestedNamesDown[nestedElement.Name].Add(nestedElement);
-                                            }
-                                            else
-                                            {
-                                                nestedNamesDown.Add(nestedElement.Name, new List<Element> { nestedElement });
-                                            }
-                                        }
-                                    }
-                                }
+                                    nestedTypesDown.Add(symId, new List<Element> { nestedElement });
                             }
                         }
-                        nestedNamesDown = nestedNamesDown.OrderBy(x => x.Key).ToDictionary(x => x.Key, x => x.Value);
-                        foreach (var nestedElement in nestedNamesDown.Values)
+
+                        var nestedTypesDownSorted = nestedTypesDown
+                            .OrderBy(kv => GetTypeParamString(kv.Key, "ADSK_Обозначение"), alphaNum)
+                            .ThenBy(kv => GetTypeName(kv.Key), alphaNum)
+                            .ToList();
+
+                        foreach (var group in nestedTypesDownSorted)
                         {
-                            foreach (var el in nestedElement)
+                            foreach (var el in group.Value)
                             {
                                 var positionParam = el.LookupParameter("ADSK_Позиция");
-                                if (positionParam != null && positionParam.IsReadOnly == false)
-                                {
+                                if (positionParam != null && !positionParam.IsReadOnly)
                                     positionParam.Set(nestedCounterDown.ToString());
-                                }
                             }
                             nestedCounterDown++;
                         }

@@ -74,9 +74,9 @@
                 <RadioButton Content="Кирпич 88 мм" GroupName="WallType" IsChecked="{Binding IsBrick85Checked}" Margin="0,0,0,5" Checked="RadioButton_Checked"/>
                 <RadioButton Content="Перегородки" GroupName="WallType" IsChecked="{Binding IsPartitionChecked}" Margin="0,0,0,5" Checked="RadioButton_Checked"/>
 
-                <!-- Опорные подушки -->
-                <TextBlock Text="Опорные подушки" FontWeight="Bold" Margin="0,0,0,5"/>
-                <CheckBox Content="Есть опорные подушки" IsChecked="{Binding HasSupportPads}" Margin="0,0,0,5" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked"/>
+                <!-- // 24.02.26 - изменена сортировка -->
+                <!-- <TextBlock Text="Опорные подушки" FontWeight="Bold" Margin="0,0,0,5"/>
+                <CheckBox Content="Есть опорные подушки" IsChecked="{Binding HasSupportPads}" Margin="0,0,0,5" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked"/>-->
 
                 <!-- Материал перемычки -->
                 <TextBlock Text="Материал перемычки" FontWeight="Bold" Margin="0,0,0,5"/>
