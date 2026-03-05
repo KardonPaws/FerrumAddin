@@ -53,6 +53,12 @@ namespace FerrumAddinDev.FBS
             using (Transaction tx = new Transaction(doc, "Размещение блоков ФБС"))
             {
                 tx.Start();
+                // 05.03.26 - создание базового шаблона вида
+                if (viewTemplate == null)
+                {
+                    viewTemplate = doc.ActiveView.CreateViewTemplate();
+                    viewTemplate.Name = "4_К_ФБС_развертки";
+                }
                 List<Element> blocks = new List<Element>();
                 // 1) Создать разрезы по каждо́й стене, в которой есть блоки
                 CreateSectionViewsForVariant(variant, doc, sectionType, allGrids, existingNames, viewTemplate);
