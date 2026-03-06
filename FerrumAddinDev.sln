@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zhSlabsLayout24", "..\zhSla
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zhShaftSections24", "..\zhShaftSections24\zhShaftSections24.csproj", "{3B174DE7-F43A-4B02-9A3F-8073ABEC6B64}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DimByLine.Library", "..\..\..\..\Downloads\DimByLine.Library.FromSource.v2\DimByLine.Library.csproj", "{C49C1F05-5585-41EA-A09B-732021220387}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{3B174DE7-F43A-4B02-9A3F-8073ABEC6B64}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3B174DE7-F43A-4B02-9A3F-8073ABEC6B64}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3B174DE7-F43A-4B02-9A3F-8073ABEC6B64}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C49C1F05-5585-41EA-A09B-732021220387}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C49C1F05-5585-41EA-A09B-732021220387}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C49C1F05-5585-41EA-A09B-732021220387}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C49C1F05-5585-41EA-A09B-732021220387}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
