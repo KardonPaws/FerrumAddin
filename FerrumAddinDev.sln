@@ -17,7 +17,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Support", "Support", "{F49F
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DimByLine.Library", "..\DimByLine.Library.FromSource.v2\DimByLine.Library.csproj", "{1B92162E-FA78-466E-899D-02A00953B32F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zhWallRebar24", "..\zhWallRebar24\zhWallRebar24.csproj", "{E6A706BA-FC8A-4300-8A6D-215F3799D8FA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zhWallReinforcement24", "..\zhWallReinforcement24\zhWallReinforcement24.csproj", "{BFC4F43C-8BD8-44E5-A961-A23392ADFB0C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -49,10 +49,10 @@ Global
 		{1B92162E-FA78-466E-899D-02A00953B32F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1B92162E-FA78-466E-899D-02A00953B32F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1B92162E-FA78-466E-899D-02A00953B32F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E6A706BA-FC8A-4300-8A6D-215F3799D8FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E6A706BA-FC8A-4300-8A6D-215F3799D8FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E6A706BA-FC8A-4300-8A6D-215F3799D8FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E6A706BA-FC8A-4300-8A6D-215F3799D8FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BFC4F43C-8BD8-44E5-A961-A23392ADFB0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BFC4F43C-8BD8-44E5-A961-A23392ADFB0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BFC4F43C-8BD8-44E5-A961-A23392ADFB0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BFC4F43C-8BD8-44E5-A961-A23392ADFB0C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

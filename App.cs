@@ -316,6 +316,18 @@ namespace FerrumAddinDev
 
             }
 
+            PushButtonData WallArm = new PushButtonData("WallArm", "Армирование кладки",
+                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "zhWallReinforcement24.dll"),
+                "zhWallReinforcement24.ArmMasonryCommand");
+            try
+            {
+                panelKR.AddItem(WallArm);
+            }
+            catch
+            {
+
+            }
+
             panelControl = a.CreateRibbonPanel(tabName, "Управление");
             panelControl.Visible = false;
 
