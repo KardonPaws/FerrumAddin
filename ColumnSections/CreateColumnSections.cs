@@ -1,11 +1,9 @@
 ﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
-using Autodesk.Revit.DB.Structure;
 using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Windows;
 
 namespace FerrumAddinDev.ColumnSections
@@ -13,41 +11,225 @@ namespace FerrumAddinDev.ColumnSections
     [Transaction(TransactionMode.Manual)]
     public class CreateColumnSections : IExternalCommand
     {
+        private static ViewSection FindSectionByName(Document doc, string name)
+        {
+            return new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewSection))
+                .Cast<ViewSection>()
+                .FirstOrDefault(v => !v.IsTemplate && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static ViewSchedule FindScheduleByName(Document doc, string name)
+        {
+            return new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewSchedule))
+                .Cast<ViewSchedule>()
+                .FirstOrDefault(v => v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static ViewSheet FindSheetByName(Document doc, string sheetName)
+        {
+            return new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewSheet))
+                .Cast<ViewSheet>()
+                .FirstOrDefault(s => s.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static Viewport FindViewportOnSheet(Document doc, ElementId sheetId, ElementId viewId)
+        {
+            return new FilteredElementCollector(doc, sheetId)
+                .OfClass(typeof(Viewport))
+                .Cast<Viewport>()
+                .FirstOrDefault(vp => vp.ViewId == viewId);
+        }
+
+        private static bool IsViewPlacedOnAnySheet(Document doc, ElementId viewId)
+        {
+            return new FilteredElementCollector(doc)
+                .OfClass(typeof(Viewport))
+                .Cast<Viewport>()
+                .Any(vp => vp.ViewId == viewId);
+        }
+
+        private static ScheduleSheetInstance FindScheduleInstanceOnSheet(Document doc, ElementId sheetId, ElementId scheduleId)
+        {
+            return new FilteredElementCollector(doc, sheetId)
+                .OfClass(typeof(ScheduleSheetInstance))
+                .Cast<ScheduleSheetInstance>()
+                .FirstOrDefault(x => x.ScheduleId == scheduleId);
+        }
+
+        private static ViewSection GetOrCreateSection(
+            Document doc,
+            string viewName,
+            ElementId sectionTypeId,
+            BoundingBoxXYZ boundingBox,
+            ElementId templateId,
+            string razd)
+        {
+            var existing = FindSectionByName(doc, viewName);
+            if (existing != null)
+            {
+                if (existing.Scale != 25)
+                    existing.Scale = 25;
+
+                if (existing.ViewTemplateId != templateId)
+                    existing.ViewTemplateId = templateId;
+
+                var existingParam = existing.LookupParameter("ADSK_Штамп_Раздел проекта");
+                if (existingParam != null && !existingParam.IsReadOnly)
+                    existingParam.Set(razd);
+
+                return existing;
+            }
+
+            ViewSection section = ViewSection.CreateSection(doc, sectionTypeId, boundingBox);
+            section.Scale = 25;
+            section.Name = viewName;
+
+            var p = section.LookupParameter("ADSK_Штамп_Раздел проекта");
+            if (p != null && !p.IsReadOnly)
+                p.Set(razd);
+
+            section.ViewTemplateId = templateId;
+            return section;
+        }
+
+        private static ViewSchedule GetOrCreateSchedule(
+            Document doc,
+            ViewSchedule template,
+            string scheduleName,
+            string marka)
+        {
+            var existing = FindScheduleByName(doc, scheduleName);
+            if (existing != null)
+                return existing;
+
+            ViewSchedule newSchedule = doc.GetElement(template.Duplicate(ViewDuplicateOption.Duplicate)) as ViewSchedule;
+            newSchedule.Name = scheduleName;
+
+            ScheduleDefinition schedDef = newSchedule.Definition;
+            if (schedDef.GetFilterCount() > 0)
+            {
+                ScheduleFilter firstFilter = schedDef.GetFilter(0);
+                firstFilter.SetValue(marka);
+                schedDef.SetFilter(0, firstFilter);
+            }
+
+            return newSchedule;
+        }
+
+        private static ViewSheet GetOrCreateSheetByName(
+            Document doc,
+            FamilySymbol tbSymbol,
+            string sheetName,
+            string sheetNumber,
+            string razd)
+        {
+            var existing = FindSheetByName(doc, sheetName);
+            if (existing != null)
+            {
+                var existingParam = existing.LookupParameter("ADSK_Штамп_Раздел проекта");
+                if (existingParam != null && !existingParam.IsReadOnly)
+                    existingParam.Set(razd);
+
+                return existing;
+            }
+
+            ViewSheet sheet = ViewSheet.Create(doc, tbSymbol.Id);
+            sheet.SheetNumber = sheetNumber;
+            sheet.Name = sheetName;
+
+            var p = sheet.LookupParameter("ADSK_Штамп_Раздел проекта");
+            if (p != null && !p.IsReadOnly)
+                p.Set(razd);
+
+            return sheet;
+        }
+
+        private static Viewport GetOrCreateViewport(
+            Document doc,
+            ElementId sheetId,
+            ElementId viewId,
+            XYZ point,
+            ElementId viewportTypeId)
+        {
+            var existing = FindViewportOnSheet(doc, sheetId, viewId);
+            if (existing != null)
+            {
+                if (existing.GetTypeId() != viewportTypeId)
+                    existing.ChangeTypeId(viewportTypeId);
+                return existing;
+            }
+
+            if (IsViewPlacedOnAnySheet(doc, viewId))
+                return null;
+
+            Viewport vp = Viewport.Create(doc, sheetId, viewId, point);
+            vp.ChangeTypeId(viewportTypeId);
+            return vp;
+        }
+
+        private static ScheduleSheetInstance GetOrCreateScheduleInstance(
+            Document doc,
+            ElementId sheetId,
+            ElementId scheduleId,
+            XYZ point)
+        {
+            var existing = FindScheduleInstanceOnSheet(doc, sheetId, scheduleId);
+            if (existing != null)
+                return existing;
+
+            return ScheduleSheetInstance.Create(doc, sheetId, scheduleId, point);
+        }
+
+        private static void SetViewportLabelOffsetAsInOriginal(Viewport viewport, View view)
+        {
+            if (viewport == null || view == null)
+                return;
+
+            BoundingBoxXYZ viewBox = view.get_BoundingBox(null);
+            Outline outline = viewport.GetBoxOutline();
+
+            double p1 = (outline.MaximumPoint.X - outline.MinimumPoint.X) / 2;
+            double p2 = (viewBox.Max.Y - viewBox.Min.Y) / 50 + (outline.MaximumPoint.Y - outline.MinimumPoint.Y) / 2;
+
+
+                viewport.LabelOffset = new XYZ(p1, p2, 0.000000000);
+        }
+
         public Result Execute(ExternalCommandData data, ref string msg, ElementSet es)
         {
             var uiDoc = data.Application.ActiveUIDocument;
             var doc = uiDoc.Document;
-            
-            // Получаем шаблон вида для разреза
+
             var sectionTemplate = new FilteredElementCollector(doc)
-            .OfClass(typeof(View))
-            .Cast<View>()
-            .FirstOrDefault(v => v.IsTemplate
-                         && v.ViewType == ViewType.Section
-                         && v.Name.Equals("ZH_КЖ_К_Арм_01"));
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .FirstOrDefault(v => v.IsTemplate
+                             && v.ViewType == ViewType.Section
+                             && v.Name.Equals("ZH_КЖ_К_Арм_01"));
             if (sectionTemplate == null)
             {
                 MessageBox.Show("Не найден шаблон вида ZH_КЖ_К_Арм_01", "Ошибка");
                 return Result.Failed;
             }
             ElementId templateId = sectionTemplate.Id;
-            // Собираем колонны
+
             var columns = new FilteredElementCollector(doc, doc.ActiveView.Id)
                 .OfCategory(BuiltInCategory.OST_StructuralColumns)
                 .OfClass(typeof(FamilyInstance))
                 .Cast<FamilyInstance>()
                 .ToList();
 
-            // Группируем по "Марка"
             var byMark = columns
                 .GroupBy(fi => fi.LookupParameter("Марка")?.AsString() ?? string.Empty)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            // Получаем ViewFamilyType для сечений
             var sectionType = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewFamilyType))
                 .Cast<ViewFamilyType>()
-                .First(v => v.ViewFamily == ViewFamily.Section);
+                .FirstOrDefault(v => v.ViewFamily == ViewFamily.Section);
 
             if (sectionType == null)
             {
@@ -55,14 +237,11 @@ namespace FerrumAddinDev.ColumnSections
                 return Result.Failed;
             }
 
-            // Получение шаблонов спецификаций
-            string[] suffixes = new string[] { "", " Материал", " ВД", " ВРС"};
+            string[] suffixes = new string[] { "", " Материал", " ВД", " ВРС" };
             List<ViewSchedule> scheduleTemplates = new List<ViewSchedule>();
             foreach (var sfx in suffixes)
             {
-                // Исходное имя шаблона
                 string originalName = "!Армирование пилонов" + sfx;
-                // Ищем его в документе
                 ViewSchedule origSchedule = new FilteredElementCollector(doc)
                     .OfClass(typeof(ViewSchedule))
                     .Cast<ViewSchedule>()
@@ -75,7 +254,6 @@ namespace FerrumAddinDev.ColumnSections
                 return Result.Failed;
             }
 
-            // Получаем символ штампа 
             var tbSymbol = new FilteredElementCollector(doc)
                 .OfClass(typeof(FamilySymbol))
                 .OfCategory(BuiltInCategory.OST_TitleBlocks)
@@ -88,7 +266,6 @@ namespace FerrumAddinDev.ColumnSections
                 return Result.Failed;
             }
 
-            // Определяем следующий номер листа
             var existingNumbers = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewSheet))
                 .Cast<ViewSheet>()
@@ -108,14 +285,13 @@ namespace FerrumAddinDev.ColumnSections
             };
 
             var vpTypes = new FilteredElementCollector(doc)
-            .OfClass(typeof(ElementType))
-            .Cast<ElementType>().Where(x => x.FamilyName == "Видовой экран")
-            .ToList();
+                .OfClass(typeof(ElementType))
+                .Cast<ElementType>()
+                .Where(x => x.FamilyName == "Видовой экран")
+                .ToList();
 
-            var vpTypeRazrez = vpTypes
-                .FirstOrDefault(vt => vt.Name.Equals("Разрез_Номер вида"));
-            var vpTypeZagolovok = vpTypes
-                .FirstOrDefault(vt => vt.Name.Equals("Заголовок на листе"));
+            var vpTypeRazrez = vpTypes.FirstOrDefault(vt => vt.Name.Equals("Разрез_Номер вида"));
+            var vpTypeZagolovok = vpTypes.FirstOrDefault(vt => vt.Name.Equals("Заголовок на листе"));
 
             if (vpTypeRazrez == null || vpTypeZagolovok == null)
             {
@@ -132,41 +308,37 @@ namespace FerrumAddinDev.ColumnSections
             using (TransactionGroup tg = new TransactionGroup(doc))
             {
                 tg.Start("Сечения по пилонам");
+
                 foreach (var kv in byMark)
                 {
                     using (var t = new Transaction(doc, "Сечения по пилонам"))
                     {
                         t.Start();
+
                         string marka = kv.Key;
                         var instances = kv.Value;
-                        var firstElement = instances.FirstOrDefault();
-
-                        var groupBBox = new BoundingBoxXYZ();
-
                         var fi = instances.FirstOrDefault();
-                        var bb = fi.get_BoundingBox(null);
+                        if (fi == null)
+                        {
+                            t.Commit();
+                            continue;
+                        }
 
-                        // Размеры элемента
+                        var bb = fi.get_BoundingBox(null);
+                        if (bb == null)
+                        {
+                            t.Commit();
+                            continue;
+                        }
+
                         double elementLenght = bb.Max.X - bb.Min.X;
                         double elementWidth = bb.Max.Y - bb.Min.Y;
                         double elementHeight = bb.Max.Z - bb.Min.Z;
 
-                        XYZ direction = XYZ.Zero;
-                        if (elementWidth > elementLenght)
-                        {
-                            direction = XYZ.BasisX;
-                        }
-                        else
-                        {
-                            direction = XYZ.BasisY;
-                        }
+                        XYZ direction = elementWidth > elementLenght ? XYZ.BasisX : XYZ.BasisY;
                         XYZ center = (bb.Max + bb.Min) / 2 - direction * 500 / 304.8;
-
-
                         XYZ upDirection = XYZ.BasisZ;
-
                         XYZ crossDirection = direction.CrossProduct(upDirection).Negate();
-
 
                         Transform trans = Transform.Identity;
                         trans.Origin = center;
@@ -188,37 +360,13 @@ namespace FerrumAddinDev.ColumnSections
                             boundingBox.Max = new XYZ(elementLenght / 2 + offset, elementHeight / 2 + offset, elementWidth + 500 / 304.8);
                         }
 
-                        // Создание разреза
-                        ViewSection section1 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
-                        section1.Scale = 25;
-                        try
-                        {
-                            section1.Name = razd + " Пилон " + marka;
-                        }
-                        catch
-                        {
-                            doc.Delete(section1.Id);
-                            section1 = (ViewSection)new FilteredElementCollector(doc).OfClass(typeof(ViewSection)).First(x => x.Name == razd + " Пилон " + marka);
-                        }
-                        section1.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
-                        section1.ViewTemplateId = templateId;
+                        string section1Name = razd + " Пилон " + marka;
+                        ViewSection section1 = GetOrCreateSection(doc, section1Name, sectionType.Id, boundingBox, templateId, razd);
 
-                        direction = XYZ.Zero;
-                        if (elementWidth < elementLenght)
-                        {
-                            direction = XYZ.BasisX;
-                        }
-                        else
-                        {
-                            direction = XYZ.BasisY;
-                        }
+                        direction = elementWidth < elementLenght ? XYZ.BasisX : XYZ.BasisY;
                         center = (bb.Max + bb.Min) / 2;
-
-
                         upDirection = XYZ.BasisZ;
-
                         crossDirection = direction.CrossProduct(upDirection).Negate();
-
 
                         trans = Transform.Identity;
                         trans.Origin = center;
@@ -240,36 +388,13 @@ namespace FerrumAddinDev.ColumnSections
                             boundingBox.Max = new XYZ(elementLenght / 2 + offset, elementHeight / 2 + offset, elementWidth / 2 + 100 / 304.8);
                         }
 
-                        // Создание разреза
-                        ViewSection section2 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
-                        section2.Scale = 25;
-                        try
-                        {
-                            section2.Name = razd + " Пилон " + marka + " Р1";
-                        }
-                        catch
-                        {
-                            doc.Delete(section2.Id);
-                            section2 = (ViewSection)new FilteredElementCollector(doc).OfClass(typeof(ViewSection)).First(x => x.Name == razd + " Пилон " + marka + " Р1");
-                        }
-                        section2.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
-                        section2.ViewTemplateId = templateId;
+                        string section2Name = razd + " Пилон " + marka + " Р1";
+                        ViewSection section2 = GetOrCreateSection(doc, section2Name, sectionType.Id, boundingBox, templateId, razd);
 
                         direction = -XYZ.BasisZ;
                         center = (bb.Max + bb.Min) / 2;
-
-                        upDirection = XYZ.Zero;
-                        if (elementWidth > elementLenght)
-                        {
-                            upDirection = XYZ.BasisX;
-                        }
-                        else
-                        {
-                            upDirection = XYZ.BasisY;
-                        }
-
+                        upDirection = elementWidth > elementLenght ? XYZ.BasisX : XYZ.BasisY;
                         crossDirection = direction.CrossProduct(upDirection).Negate();
-
 
                         trans = Transform.Identity;
                         trans.Origin = center;
@@ -291,63 +416,27 @@ namespace FerrumAddinDev.ColumnSections
                             boundingBox.Max = new XYZ(elementWidth / 2 + offset, elementLenght / 2 + offset, elementHeight / 2 - 100 / 304.8);
                         }
 
-                        // Создание разреза
-                        ViewSection section3 = ViewSection.CreateSection(doc, sectionType.Id, boundingBox);
-                        section3.Scale = 25;
-                        try
-                        {
-                            section3.Name = razd + " Пилон " + marka + " Р";
-                        }
-                        catch 
-                        {
-                            doc.Delete(section3.Id);
-                            section3 = (ViewSection)new FilteredElementCollector(doc).OfClass(typeof(ViewSection)).First(x => x.Name == razd + " Пилон " + marka + " Р");
-
-                        }
-                        section3.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
-                        section3.ViewTemplateId = templateId;
+                        string section3Name = razd + " Пилон " + marka + " Р";
+                        ViewSection section3 = GetOrCreateSection(doc, section3Name, sectionType.Id, boundingBox, templateId, razd);
 
                         List<ViewSchedule> createdSchedules = new List<ViewSchedule>();
-                        for (int i = 0; i < scheduleTemplates.Count(); i++)
+                        for (int i = 0; i < scheduleTemplates.Count; i++)
                         {
-                            ViewSchedule newSchedule = doc.GetElement(scheduleTemplates[i].Duplicate(ViewDuplicateOption.Duplicate)) as ViewSchedule;
-                            // Переименовываем
-                            try
-                            {
-                                newSchedule.Name = $"ZH_{razd}_Арм_{marka}" + suffixes[i];
-                            }
-                            catch
-                            {
-                                doc.Delete(newSchedule.Id);
-                                newSchedule = (ViewSchedule)new FilteredElementCollector(doc).OfClass(typeof(ViewSchedule)).First(x => x.Name == $"ZH_{razd}_Арм_{marka}" + suffixes[i]);
-                            }
-                            createdSchedules.Add(newSchedule);
-
-                            // Меняем значение первого фильтра на текущую марку
-                            ScheduleDefinition schedDef = newSchedule.Definition;
-                            if (schedDef.GetFilterCount() > 0)
-                            {
-                                ScheduleFilter firstFilter = schedDef.GetFilter(0);
-                                firstFilter.SetValue(@marka);
-                                schedDef.SetFilter(0, firstFilter);
-                            }
+                            string scheduleName = $"ZH_{razd}_Арм_{marka}" + suffixes[i];
+                            ViewSchedule schedule = GetOrCreateSchedule(doc, scheduleTemplates[i], scheduleName, marka);
+                            createdSchedules.Add(schedule);
                         }
 
-                        ViewSheet sheet = ViewSheet.Create(doc, tbSymbol.Id);
-
-                        // Заполняем параметры листа
-                        sheet.LookupParameter("ADSK_Штамп_Раздел проекта").Set(razd);
-                        try
+                        string sheetName = $"Пилон {marka}";
+                        if (string.IsNullOrEmpty(marka))
                         {
-                            sheet.SheetNumber = nextSheetNumber.ToString();
-                            sheet.Name = $"Пилон {marka}";
+                            sheetName = "Пилон";
                         }
-                        catch
-                        {
-                            t.RollBack();
-                            continue;
-                        }
-                        nextSheetNumber++;
+                        string sheetNumber = nextSheetNumber.ToString();
+                        bool sheetAlreadyExists = FindSheetByName(doc, sheetName) != null;
+                        ViewSheet sheet = GetOrCreateSheetByName(doc, tbSymbol, sheetName, sheetNumber, razd);
+                        if (!sheetAlreadyExists)
+                            nextSheetNumber++;
 
                         var tbInstance = new FilteredElementCollector(doc, sheet.Id)
                             .OfCategory(BuiltInCategory.OST_TitleBlocks)
@@ -357,68 +446,45 @@ namespace FerrumAddinDev.ColumnSections
 
                         if (tbInstance != null)
                         {
-                            // Получаем текущее местоположение
                             var locPoint = tbInstance.Location as LocationPoint;
                             if (locPoint != null)
                             {
                                 XYZ currentPos = locPoint.Point;
                                 XYZ targetPos = new XYZ(9.305967365, 5.081078844, 0.0);
-                                XYZ translation = targetPos - currentPos;
 
-                                // Сдвигаем элемент
-                                ElementTransformUtils.MoveElement(doc, tbInstance.Id, translation);
+                                if (!currentPos.IsAlmostEqualTo(targetPos))
+                                {
+                                    XYZ translation = targetPos - currentPos;
+                                    ElementTransformUtils.MoveElement(doc, tbInstance.Id, translation);
+                                }
                             }
-                            tbInstance.LookupParameter("А").Set(3);
+
+                            var aParam = tbInstance.LookupParameter("А");
+                            if (aParam != null && !aParam.IsReadOnly && aParam.AsInteger() != 3)
+                                aParam.Set(3);
                         }
 
+                        Viewport v1 = GetOrCreateViewport(doc, sheet.Id, section1.Id,
+                            new XYZ(8.165574789, 5.646644124, -0.059228049), razrezTypeId);
+                        SetViewportLabelOffsetAsInOriginal(v1, section1);
 
-                        // Размещаем 3 разреза на листе
-                        Viewport v1 = Viewport.Create(doc, sheet.Id, section1.Id, new XYZ(8.165574789, 5.646644124, -0.059228049));
-                        v1.ChangeTypeId(razrezTypeId);
-                        BoundingBoxXYZ b1 = section1.get_BoundingBox(null);
-                        Outline o1 = v1.GetBoxOutline();
-                        double p1 = (o1.MaximumPoint.X - o1.MinimumPoint.X) / 2;
-                        double p2 = (b1.Max.Y - b1.Min.Y) / 50 + (o1.MaximumPoint.Y - o1.MinimumPoint.Y) / 2;
-                        v1.LabelOffset = new XYZ(p1, p2, 0.000000000);
-                        Viewport v2 = Viewport.Create(doc, sheet.Id, section2.Id, new XYZ(8.437272730, 5.643270480, -0.064714496));
-                        v2.ChangeTypeId(zagolovokTypeId);
-                        b1 = section2.get_BoundingBox(null);
-                        o1 = v2.GetBoxOutline();
-                        p1 = (o1.MaximumPoint.X - o1.MinimumPoint.X) / 2;
-                        p2 = (b1.Max.Y - b1.Min.Y) / 50 + (o1.MaximumPoint.Y - o1.MinimumPoint.Y) / 2;
-                        v2.LabelOffset = new XYZ(p1, p2, 0.000000000);
-                        Viewport v3 = Viewport.Create(doc, sheet.Id, section3.Id, new XYZ(8.280574212, 5.181068513, -0.426660051));
-                        v3.ChangeTypeId(razrezTypeId);
-                        b1 = section3.get_BoundingBox(null);
-                        o1 = v3.GetBoxOutline();
-                        p1 = (o1.MaximumPoint.X - o1.MinimumPoint.X) / 2;
-                        p2 = (b1.Max.Y - b1.Min.Y) / 50 + (o1.MaximumPoint.Y - o1.MinimumPoint.Y) / 2;
-                        v3.LabelOffset = new XYZ(p1, p2, 0.000000000);
+                        Viewport v2 = GetOrCreateViewport(doc, sheet.Id, section2.Id,
+                            new XYZ(8.437272730, 5.643270480, -0.064714496), zagolovokTypeId);
+                        SetViewportLabelOffsetAsInOriginal(v2, section2);
 
-                        List<ScheduleSheetInstance> sheetInstances = new List<ScheduleSheetInstance>();
-                        // Размещаем 4 спецификации
+                        Viewport v3 = GetOrCreateViewport(doc, sheet.Id, section3.Id,
+                            new XYZ(8.280574212, 5.181068513, -0.426660051), razrezTypeId);
+                        SetViewportLabelOffsetAsInOriginal(v3, section3);
+
                         for (int i = 0; i < createdSchedules.Count; i++)
                         {
-                            if (i == 0)
-                            {
-                                sheetInstances.Add(ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, schedulePoints[i]));
-                                doc.Regenerate();
-                            }
-                            else if (i != 3)
-                            {
-                                sheetInstances.Add(ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, new XYZ(schedulePoints[i].X, sheetInstances[i-1].get_BoundingBox(sheet).Min.Y + 2.12/304.8, 0)));
-                                doc.Regenerate();
-                            }
-                            else
-                            {
-                                ScheduleSheetInstance.Create(doc, sheet.Id, createdSchedules[i].Id, new XYZ(schedulePoints[i].X, sheetInstances.Last().Point.Y, 0));
-                            }
+                            GetOrCreateScheduleInstance(doc, sheet.Id, createdSchedules[i].Id, schedulePoints[i]);
                         }
+
                         t.Commit();
-
                     }
-
                 }
+
                 tg.Assimilate();
             }
 
