@@ -1039,13 +1039,17 @@ namespace FerrumAddinDev.GrillageCreator_v2
 
                                 // Создаем среднюю линию
                                 Line centerLine = CreateCenterLine(line1, line2);
-                                // Проверяем, что линии полностью внутри контура
-                                if (IsLineInsideBoundary(centerLine, sideCurves) && LinesNormalDoesntIntersectProfile(line1, line2, sideCurves, centerLine) && (centerLine.Direction.IsAlmostEqualTo(line1.Direction) || centerLine.Direction.IsAlmostEqualTo(line1.Direction.Negate())))
+                                // 15.04.26 - ошибки в коротких линиях
+                                if (centerLine != null)
                                 {
-                                    // Проверяем, что средняя линия еще не была добавлена
-                                    if (!IsLineAlreadyAdded(centerLine, centerLines))
+                                    // Проверяем, что линии полностью внутри контура
+                                    if (IsLineInsideBoundary(centerLine, sideCurves) && LinesNormalDoesntIntersectProfile(line1, line2, sideCurves, centerLine) && (centerLine.Direction.IsAlmostEqualTo(line1.Direction) || centerLine.Direction.IsAlmostEqualTo(line1.Direction.Negate())))
                                     {
-                                        centerLines.Add(centerLine);
+                                        // Проверяем, что средняя линия еще не была добавлена
+                                        if (!IsLineAlreadyAdded(centerLine, centerLines))
+                                        {
+                                            centerLines.Add(centerLine);
+                                        }
                                     }
                                 }
                             }
@@ -1365,6 +1369,9 @@ namespace FerrumAddinDev.GrillageCreator_v2
             {
                 // Линии направлены вдоль оси X
                 points = points.OrderBy(x => x.X).ToList();
+                // 15.04.26 - ошибки в коротких линиях
+                if (points[2].X - points[1].X < 1e-6)
+                    return null;
                 XYZ midStart = new XYZ(points[1].X, (start1.Y + start2.Y) / 2, start1.Z);
                 XYZ midEnd = new XYZ(points[2].X, (end1.Y + end2.Y) / 2, start1.Z);
 
@@ -1374,8 +1381,11 @@ namespace FerrumAddinDev.GrillageCreator_v2
             else if (Math.Abs(dir1.X) < 1e-6 && Math.Abs(dir2.X) < 1e-6)
             {
                 // Линии направлены вдоль оси Y
-                points = points.OrderBy(x => x.Y).ToList();             
-                    XYZ midStart = new XYZ((start1.X + start2.X) / 2, points[1].Y, start1.Z);
+                points = points.OrderBy(x => x.Y).ToList();
+                // 15.04.26 - ошибки в коротких линиях
+                if (points[2].Y - points[1].Y < 1e-6)
+                    return null;
+                XYZ midStart = new XYZ((start1.X + start2.X) / 2, points[1].Y, start1.Z);
                 XYZ midEnd = new XYZ((end1.X + end2.X) / 2, points[2].Y, start1.Z);
                 
 
