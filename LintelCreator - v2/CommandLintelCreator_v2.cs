@@ -1448,13 +1448,22 @@ namespace FerrumAddinDev.LintelCreator_v2
             using (Transaction tr = new Transaction(doc, "Назначение линии видимости"))
             {
                 tr.Start();
-
+                // 17.04.26 - игнор отсутствия параметра Видимость.Глубина
+                var output = "";
                 foreach (var element in groupedElements)
                 {
-                    var d = element.First().LookupParameter("Видимость.Глубина").AsDouble();
-                    if (d < 2000/304.8)
-                        element.First().LookupParameter("Видимость.Глубина").Set(2000 / 304.8);
+                    if (element.First().LookupParameter("Видимость.Глубина") == null)
+                    {
+                        output += "Для перемычек с 'ADSK_Позицией' = " + element.Key + " отсутствует параметр 'Видимость.Глубина'\nВозможно неправильное создание разреза";
+                    }
+                    else
+                    {
+                        var d = element.First().LookupParameter("Видимость.Глубина").AsDouble();
+                        if (d < 2000 / 304.8)
+                            element.First().LookupParameter("Видимость.Глубина").Set(2000 / 304.8);
+                    }
                 }
+                TaskDialog.Show("Внимание", output);
                 tr.Commit();
             }
 
@@ -1568,6 +1577,12 @@ namespace FerrumAddinDev.LintelCreator_v2
                         double elementWidth = firstElement.get_BoundingBox(null).Max.X - firstElement.get_BoundingBox(null).Min.X;
                         double elementHeight = firstElement.get_BoundingBox(null).Max.Y - firstElement.get_BoundingBox(null).Min.Y;
                         double elementDepth = firstElement.get_BoundingBox(null).Max.Z - firstElement.get_BoundingBox(null).Min.Z - 1900 / 304.8;
+
+                        // 17.04.26 - игнор отсутствия параметра Видимость.Глубина
+                        if (elementDepth < 0)
+                        {
+                            elementDepth = firstElement.get_BoundingBox(null).Max.Z - firstElement.get_BoundingBox(null).Min.Z;
+                        }
 
                         BoundingBoxXYZ boundingBox = new BoundingBoxXYZ();
                         boundingBox.Transform = t;
