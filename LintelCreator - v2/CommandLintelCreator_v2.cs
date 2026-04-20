@@ -1433,12 +1433,13 @@ namespace FerrumAddinDev.LintelCreator_v2
         {
             Document doc = app.ActiveUIDocument.Document;
 
-            // Получение всех перемычек
+            // 20.04.26 - фильтр перемычек
             var framingElements = new FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_StructuralFraming)
                 .WhereElementIsNotElementType()
                 .Cast<FamilyInstance>()
-        .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
+                .Where(f => f.Symbol.FamilyName == "01_1_ZH_СК_ЖБ_Перемычки")
+                .Where(f => (doc.GetElement(f.Symbol.Id)).LookupParameter("Ключевая пометка").AsString() == "ПР")
                 .Where(el => el.LookupParameter("ADSK_Позиция")?.AsString() != null)
                 .ToList();
 
