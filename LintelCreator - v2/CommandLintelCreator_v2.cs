@@ -1464,7 +1464,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                             element.First().LookupParameter("Видимость.Глубина").Set(2000 / 304.8);
                     }
                 }
-                TaskDialog.Show("Внимание", output);
+                // 23.04.26 - проверка разреза в перемычках
+                if (output != "")
+                    TaskDialog.Show("Внимание", output);
                 tr.Commit();
             }
 
@@ -1610,7 +1612,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                         //18.02.26 - изменения в перемычках
                         bool lower0 = firstElement.LookupParameter("ZH_Этаж_Числовой").AsDouble() < 0;
 
-                        var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName) && x.Name.Contains(lower0 ? "ниже" : "выше")).FirstOrDefault();
+                        // 23.04.26 - проверка разреза в перемычках
+                        var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName) && x.Name.Contains(lower0 ? "ниже 0.000" : "выше 0.000")).FirstOrDefault();
                         if (view != null)
                         {
                             // 29.01.26 - уникальное имя для разреза
@@ -1625,18 +1628,26 @@ namespace FerrumAddinDev.LintelCreator_v2
                             {
                                 string positionName_ = framingElements_.LookupParameter("ADSK_Позиция").AsString();
                                 bool lower0_ = framingElements_.LookupParameter("ZH_Этаж_Числовой").AsInteger() < 0;
-
-                                if (positionName == positionName_)
+                                // 23.04.26 - проверка разреза в перемычках
+                                if (view.LookupParameter("ADSK_Назначение вида").AsString() == "Перемычки")
                                 {
-                                    doc.Delete(section.Id);
-                                    continue;
+                                    if (positionName == positionName_)
+                                    {
+                                        doc.Delete(section.Id);
+                                        continue;
+                                    }
+                                    else
+                                    {
+                                        if (lower0_)
+                                            view.Name = MakeUniqueViewName(doc, positionName_ + " ниже 0.000_");
+                                        else
+                                            view.Name = MakeUniqueViewName(doc, positionName_ + " выше 0.000_");
+                                    }
                                 }
                                 else
                                 {
-                                    if (lower0_)
-                                        view.Name = MakeUniqueViewName(doc, positionName_ + " ниже 0.000_");
-                                    else
-                                        view.Name = MakeUniqueViewName(doc, positionName_ + " выше 0.000_");
+                                    // 23.04.26 - проверка разреза в перемычках
+                                    view.Name = "!" + view.Name;
                                 }
                             }
                             else
@@ -1644,6 +1655,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 doc.Delete(view.Id);
                             }
                         }
+
                         if (lower0)
                             section.Name = positionName + " ниже 0.000";
                         else
