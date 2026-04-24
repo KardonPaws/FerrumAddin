@@ -1031,7 +1031,8 @@ namespace FerrumAddinDev.GrillageCreator_v2
                     // Проверяем, параллельны ли линии
                     if (dir1.IsAlmostEqualTo(dir2) || dir1.IsAlmostEqualTo(-dir2))
                     {
-                        if (GetProjectionLength(line1, line2) != 0)
+                        // 24.04.26 - наложение линий больше нуля
+                        if (GetProjectionLength(line1, line2) >= 0.01)
                         {
                             // Проверяем, что линии не пересекаются
                             if (!DoLinesIntersect(line1, line2))
