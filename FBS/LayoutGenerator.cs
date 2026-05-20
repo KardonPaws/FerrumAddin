@@ -632,7 +632,8 @@ namespace FerrumAddinDev.FBS
                                     variant.JointsByWall[wall.Id.IntegerValue] = new Dictionary<int, List<double>>();
                                 if (!variant.JointsByWall[wall.Id.IntegerValue].ContainsKey(localRow))
                                     variant.JointsByWall[wall.Id.IntegerValue][localRow] = new List<double>();
-                                variant.JointsByWall[wall.Id.IntegerValue][localRow].Add(Math.Round(j + wall.StartPoint.DotProduct(wall.Direction)));
+                                // 20.05.26 - исправление сохранения швов
+                                variant.JointsByWall[wall.Id.IntegerValue][localRow].Add(Math.Round(j + wall.StartPoint.DotProduct(wall.Direction) * 304.8));
                             }
                         }
                         try

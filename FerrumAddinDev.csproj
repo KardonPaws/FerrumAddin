@@ -90,6 +90,10 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="GrillageCreator - v3\CommandGrillageCreator_v3.cs" />
+    <Compile Include="GrillageCreator - v3\WindowGrillageCreator_v3.xaml.cs">
+      <DependentUpon>WindowGrillageCreator_v3.xaml</DependentUpon>
+    </Compile>
     <Compile Include="LintelCreator - v2\AlphanumComparatorFastString.cs" />
     <Compile Include="App.cs" />
     <Compile Include="ColumnSections\CreateColumnSections.cs" />
@@ -185,6 +189,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="GrillageCreator - v3\WindowGrillageCreator_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="GrillageCreator - v2\WindowGrillageCreator_v2.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -236,7 +244,9 @@
   <ItemGroup>
     <Resource Include="GrillageCreator - v2\GrillageCreatorBackground.png" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Resource Include="GrillageCreator - v3\GrillageCreatorBackground.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"
