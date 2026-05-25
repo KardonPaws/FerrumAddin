@@ -20,6 +20,7 @@ namespace FerrumAddinDev.FBS
         public double Height { get; set; }       // мм
         public double BaseElevation { get; set; } // координата Z
         public List<OpeningInfo> Openings { get; set; } = new List<OpeningInfo>();
+        public int LayoutKey { get; set; }
 
         // Сторонние соседи (с сохранением информации для угловых соединений)
         public WallInfo LeftNeighbor { get; set; }
@@ -31,12 +32,22 @@ namespace FerrumAddinDev.FBS
 
         // Новый список всех соединённых стен
         public List<WallInfo> ConnectedWalls { get; set; } = new List<WallInfo>();
+        public List<WallConnectionInfo> Connections { get; set; } = new List<WallConnectionInfo>();
         public int RowOffset { get; set; }
         public List<double> coordZList { get; set; } = new List<double>();
         public bool first300 = false;
         public bool last300 = false;
         //04.08.25 - базовый уровень в перемычках
         public ElementId baseLevel { get; set; }
+    }
+
+    public class WallConnectionInfo
+    {
+        public WallInfo Neighbor { get; set; }
+        public double PositionOnWall { get; set; }     // мм от начала текущей стены
+        public double PositionOnNeighbor { get; set; } // мм от начала соседней стены
+        public bool IsColinear { get; set; }
+        public bool IsPerpendicular { get; set; }
     }
 
     // Описание проёма (дверь/окно) вдоль стены, определённое стартовым и конечным расстоянием (в мм)

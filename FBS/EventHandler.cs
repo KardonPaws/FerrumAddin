@@ -45,6 +45,7 @@ namespace FerrumAddinDev.FBS
                 if (refs == null) return;
 
                 List<WallInfo> wallInfos = new List<WallInfo>();
+                int segmentLayoutKey = -1;
 
                 foreach (Reference r in refs)
                 {
@@ -60,7 +61,7 @@ namespace FerrumAddinDev.FBS
                     XYZ wallDir = (end - start).Normalize();
 
                     double lengthFt = locCurve.Curve.Length;      // ft
-                    double lengthMm = lengthFt * 304.8;           // мм
+                    double lengthMm = Math.Round(lengthFt * 304.8);           // мм
                     double thicknessMm = wall.Width * 304.8;      // мм
 
                     // Высота и базовый уровень
@@ -183,6 +184,7 @@ namespace FerrumAddinDev.FBS
                             BaseElevation = baseElevFt,          // как было: Min.Z из bb
                             Openings = openingsAbsolute,         // как было: от начала стены, абсолютные Z
                             line = wallLine,
+                            LayoutKey = wall.Id.IntegerValue,
                             // 04.08.25 - базовый уровень в перемычках
                             baseLevel = wall.LookupParameter("Зависимость снизу").AsElementId()
                         };
@@ -266,13 +268,23 @@ namespace FerrumAddinDev.FBS
 
                             double segLengthMm = Math.Round((segEndFt - segStartFt) * mmPerFt);
 
-                            // отверстия теперь общие для всех сегментов
-                            List<OpeningInfo> openingsForInfo =
-                                openingsAbsolute.Count > 0 ? openingsAbsolute : null;
-
                             // Точки начала/конца сегмента на линии стены
                             XYZ segStartPoint = start + wallDir * segStartFt;
                             XYZ segEndPoint = start + wallDir * segEndFt;
+                            double segStartMm = segStartFt * mmPerFt;
+                            double segEndMm = segEndFt * mmPerFt;
+
+                            List<OpeningInfo> openingsForInfo = openingsAbsolute
+                                .Where(op => op.End > segStartMm && op.Start < segEndMm)
+                                .Select(op => new OpeningInfo
+                                {
+                                    Start = Math.Max(op.Start, segStartMm) - segStartMm,
+                                    End = Math.Min(op.End, segEndMm) - segStartMm,
+                                    StartZ = op.StartZ,
+                                    EndZ = op.EndZ
+                                })
+                                .OrderBy(op => op.Start)
+                                .ToList();
 
                             WallInfo infoSeg = new WallInfo
                             {
@@ -284,8 +296,9 @@ namespace FerrumAddinDev.FBS
                                 Thickness = thicknessMm,
                                 Height = Math.Round(segHeightMm),
                                 BaseElevation = level,    // отметка по профилю снизу
-                                Openings = openingsForInfo,    // общие отверстия стены или null
+                                Openings = openingsForInfo,
                                 line = Line.CreateBound(segStartPoint, segEndPoint),
+                                LayoutKey = segmentLayoutKey--,
                                 baseLevel = wall.LookupParameter("Зависимость снизу").AsElementId()
                             };
 

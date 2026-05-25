@@ -16,7 +16,9 @@ namespace FerrumAddinDev.FBS
             ViewFamilyType sectionType = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewFamilyType))
                 .Cast<ViewFamilyType>()
-                .First(vf => vf.ViewFamily == ViewFamily.Section);
+                .FirstOrDefault(vf => vf.ViewFamily == ViewFamily.Section);
+            if (sectionType == null)
+                return;
 
             FamilySymbol tagSym = new FilteredElementCollector(doc)
             .OfClass(typeof(FamilySymbol))
@@ -101,21 +103,22 @@ namespace FerrumAddinDev.FBS
                     XYZ wallDir = block.Wall.Direction;
                     XYZ pt = wallStart + wallDir * centerDistFt;
 
-                    double firstRowZ = block.Wall.first300 && block.Row != 1 ? -300 / 304.8 : 0;
-
-                    double zOff = (block.Row - 1) * (600 / 304.8);
-                    pt = new XYZ(pt.X, pt.Y, block.Wall.BaseElevation + zOff + firstRowZ);
+                    pt = new XYZ(pt.X, pt.Y, block.Wall.coordZList[block.Row - 1] / 304.8);
 
                     FamilyInstance inst = doc.Create.NewFamilyInstance(pt, symbol, StructuralType.NonStructural);
                     // 22.10.25 - Исправления ФБС (нет уровня + имя)
-                    double l = doc.GetElement(inst.LevelId) == null ? doc.GetElement(block.Wall.baseLevel).LookupParameter("ZH_Этаж_Числовой").AsDouble() :
-                        doc.GetElement(inst.LevelId).LookupParameter("ZH_Этаж_Числовой").AsDouble();
-                    inst.LookupParameter("ZH_Этаж_Числовой").Set(l);
+                    Element levelElement = doc.GetElement(inst.LevelId) ?? doc.GetElement(block.Wall.baseLevel);
+                    Parameter levelNumber = levelElement?.LookupParameter("ZH_Этаж_Числовой");
+                    Parameter instLevelNumber = inst.LookupParameter("ZH_Этаж_Числовой");
+                    if (levelNumber != null && instLevelNumber != null && !instLevelNumber.IsReadOnly)
+                        instLevelNumber.Set(levelNumber.AsDouble());
                     if (familyName != "Кирпичная заделка (керамический кирпич)")
                         blocks.Add(inst);
                     block.PlacedElementId = inst.Id;
                     //04.08.25 - базовый уровень в перемычках
-                    inst.LookupParameter("Базовый уровень").Set(block.Wall.baseLevel);
+                    Parameter baseLevelParam = inst.LookupParameter("Базовый уровень");
+                    if (baseLevelParam != null && !baseLevelParam.IsReadOnly && block.Wall.baseLevel != ElementId.InvalidElementId)
+                        baseLevelParam.Set(block.Wall.baseLevel);
 
                     if (block.IsGapFill)
                     {
@@ -130,9 +133,8 @@ namespace FerrumAddinDev.FBS
                         //27.11.25 - Пропуск параметра ADSK_Группирование в заделках при отсутствии
                         try
                         {
-                            inst.LookupParameter("ADSK_Группирование").Set("ФБСм");
-
-                            inst.LookupParameter("Вырезы").Set(0);
+                            inst.LookupParameter("ADSK_Группирование")?.Set("ФБСм");
+                            inst.LookupParameter("Вырезы")?.Set(0);
                         }
                         catch
                         {
@@ -153,21 +155,25 @@ namespace FerrumAddinDev.FBS
                         if (xAxis.CrossProduct(wallDir.Normalize()).Z < 0) ang = -ang;
                         Line axis = Line.CreateBound(pt, pt + XYZ.BasisZ);
                         ElementTransformUtils.RotateElement(doc, inst.Id, axis, ang);
-                        inst.LookupParameter("ADSK_Группирование").Set("ФБС");
-                        //inst.LookupParameter("ADSK_Позиция").Set(Math.Round(block.Length / 100.0).ToString());
-                        IndependentTag tag = IndependentTag.Create(
-                            doc,
-                            tagSym.Id,
-                            views[block.Wall.Id.IntegerValue],
-                            new Reference(inst),
-                            false,
-                            TagOrientation.Horizontal,
-                            (inst.Location as LocationPoint).Point + 0.2 * XYZ.BasisZ);
+                        inst.LookupParameter("ADSK_Группирование")?.Set("ФБС");
+                        if (tagSym != null && views.TryGetValue(block.Wall.Id.IntegerValue, out ElementId viewId))
+                        {
+                            IndependentTag tag = IndependentTag.Create(
+                                doc,
+                                tagSym.Id,
+                                viewId,
+                                new Reference(inst),
+                                false,
+                                TagOrientation.Horizontal,
+                                (inst.Location as LocationPoint).Point + 0.2 * XYZ.BasisZ);
+                        }
                     }
                 }
                 var listBlocks = blocks.GroupBy(b => b.Name).OrderBy(g =>
                 {
                     var m = Regex.Match(g.Key, @"ФБС(\d+)\.(\d+)\.(\d+)");
+                    if (!m.Success)
+                        return (int.MaxValue, int.MaxValue, int.MaxValue);
                     int a = int.Parse(m.Groups[1].Value);
                     int b = int.Parse(m.Groups[2].Value);
                     int c = int.Parse(m.Groups[3].Value);
@@ -178,7 +184,7 @@ namespace FerrumAddinDev.FBS
                 {
                     foreach (var b in block)
                     {
-                        b.LookupParameter("ADSK_Позиция").Set(i.ToString());
+                        b.LookupParameter("ADSK_Позиция")?.Set(i.ToString());
                     }
                     i++;
                 }
@@ -214,6 +220,9 @@ namespace FerrumAddinDev.FBS
         //02.12.25 - измененный профиль стены + вынос на листы
         private static void PlaceSectionsOnSheets(LayoutVariant variant, Document doc, ElementId titleBlockTypeId)
         {
+            if (titleBlockTypeId == null || titleBlockTypeId == ElementId.InvalidElementId)
+                return;
+
             ElementType vpTypeTitle = new FilteredElementCollector(doc)
                 .OfClass(typeof(ElementType))
                 .Where(x => x.Name.Equals("Заголовок на листе", StringComparison.OrdinalIgnoreCase))
@@ -233,7 +242,9 @@ namespace FerrumAddinDev.FBS
             // Все виды для варианта
             var viewsToPlace = variant.Blocks
                 .Select(b => b.Wall)
-                .Distinct()
+                .GroupBy(w => w.Id.IntegerValue)
+                .Select(g => g.First())
+                .Where(w => views.ContainsKey(w.Id.IntegerValue))
                 .Select(w => doc.GetElement(views[w.Id.IntegerValue]) as View)
                 .Where(v => v != null)
                 .OrderBy(v => v.Name)
@@ -282,6 +293,14 @@ namespace FerrumAddinDev.FBS
 
                 double width = maxX - minX;      // полная ширина (вид + заголовок)
                 double height = maxY - minY;     // полная высота (включая заголовок)
+                double sheetWidth = freeRight - freeLeft;
+                double sheetHeight = freeTop - freeBot;
+
+                if (width > sheetWidth || height > sheetHeight)
+                {
+                    doc.Delete(vp.Id);
+                    continue;
+                }
 
                 XYZ center0 = vp.GetBoxCenter();
                 double leftOffset = minX - center0.X;
@@ -327,7 +346,30 @@ namespace FerrumAddinDev.FBS
 
                 doc.Regenerate();
 
+                if (tbInst == null)
+                {
+                    freeLeft = -0.5;
+                    freeRight = 0.5;
+                    freeTop = 0.35;
+                    freeBot = -0.35;
+                    cursorX = freeLeft;
+                    cursorY = freeTop;
+                    rowHeight = 0.0;
+                    return sheet;
+                }
+
                 BoundingBoxXYZ tbBb = tbInst.get_BoundingBox(sheet);
+                if (tbBb == null)
+                {
+                    freeLeft = -0.5;
+                    freeRight = 0.5;
+                    freeTop = 0.35;
+                    freeBot = -0.35;
+                    cursorX = freeLeft;
+                    cursorY = freeTop;
+                    rowHeight = 0.0;
+                    return sheet;
+                }
                 XYZ tbMin = tbBb.Min;
                 XYZ tbMax = tbBb.Max;
 
@@ -345,19 +387,6 @@ namespace FerrumAddinDev.FBS
         }
 
 
-        private static (double width, double height) EstimateViewportSize(View view)
-        {
-            BoundingBoxXYZ crop = view.CropBox;
-            if (crop == null)
-                return (1.0, 1.0);
-
-            double width = (crop.Max.X - crop.Min.X) / view.Scale;
-            double height = (crop.Max.Y - crop.Min.Y) / view.Scale;
-
-            double reserve = 0.3; // небольшой запас под надписи
-            return (width + reserve, height + reserve);
-        }
-
         // В CreateSectionViewsForVariant передаём wallsInVariant в GenerateSectionName
         private static void CreateSectionViewsForVariant(
     LayoutVariant variant,
@@ -367,10 +396,10 @@ namespace FerrumAddinDev.FBS
     HashSet<string> existingNames,
     View viewTemplate)
         {
-            var wallsInVariant = variant.Blocks.Select(b => b.Wall.Id.Value).Distinct();
-            foreach (var wallId in wallsInVariant)
+            var blocksByWall = variant.Blocks.GroupBy(b => b.Wall.Id.Value).ToList();
+            foreach (var wallBlocks in blocksByWall)
             {
-                var wall = doc.GetElement(new ElementId(wallId));
+                var wall = doc.GetElement(new ElementId(wallBlocks.Key));
                 int i = 1;
                 string name = GenerateSectionName(wall, variant.Blocks.Select(b => b.Wall).ToList(), allGrids, existingNames);
                 // 08.07.25 - добавление цифр к разрезам тк при одинаковых именах вылетает
@@ -407,7 +436,7 @@ namespace FerrumAddinDev.FBS
                     }
                 }
 
-                BoundingBoxXYZ box = GetSectionBox(wall);
+                BoundingBoxXYZ box = GetSectionBox(wall, wallBlocks);
                 // box теперь валидный
                 ViewSection vs = ViewSection.CreateSection(doc, sectionType.Id, box);
 
@@ -417,14 +446,31 @@ namespace FerrumAddinDev.FBS
             }
         }
 
-        private static BoundingBoxXYZ GetSectionBox(Element wall)
+        private static BoundingBoxXYZ GetSectionBox(Element wall, IEnumerable<BlockPlacement> wallBlocks = null)
         {
             Line line = (wall.Location as LocationCurve).Curve as Line;
             // Концы стены в футах
             XYZ p0 = line.GetEndPoint(0);
             XYZ p1 = line.GetEndPoint(1);
+            XYZ wallDir = line.Direction.Normalize();
+
+            double minAlong = 0.0;
+            double maxAlong = (p1 - p0).GetLength();
+            if (wallBlocks != null)
+            {
+                foreach (BlockPlacement block in wallBlocks)
+                {
+                    XYZ blockStart = block.Wall.StartPoint + block.Wall.Direction.Normalize() * (block.Start / 304.8);
+                    XYZ blockEnd = block.Wall.StartPoint + block.Wall.Direction.Normalize() * (block.End / 304.8);
+                    double startAlong = (blockStart - p0).DotProduct(wallDir);
+                    double endAlong = (blockEnd - p0).DotProduct(wallDir);
+                    minAlong = Math.Min(minAlong, Math.Min(startAlong, endAlong));
+                    maxAlong = Math.Max(maxAlong, Math.Max(startAlong, endAlong));
+                }
+            }
+
             // Центр
-            XYZ midXY = (p0 + p1) / 2.0;
+            XYZ midXY = p0 + wallDir * ((minAlong + maxAlong) / 2.0);
             // Высоты
             double topZ;
             Parameter heightParam = wall.get_Parameter(BuiltInParameter.WALL_USER_HEIGHT_PARAM);
@@ -438,15 +484,15 @@ namespace FerrumAddinDev.FBS
             }
 
             // Запас в футах
-            double halfLength = (p1 - p0).GetLength() / 2.0 + 0.5;
+            double halfLength = (maxAlong - minAlong) / 2.0;
             double halfDepth = 0.7;
 
             XYZ upDirection = XYZ.BasisZ;
-            XYZ crossDirection = line.Direction.CrossProduct(upDirection);
+            XYZ crossDirection = wallDir.CrossProduct(upDirection);
 
             Transform t = Transform.Identity;
             t.Origin = midXY;
-            t.BasisX = line.Direction;
+            t.BasisX = wallDir;
             t.BasisY = upDirection;
             t.BasisZ = crossDirection;
 
@@ -455,13 +501,13 @@ namespace FerrumAddinDev.FBS
 
             if (line.Direction.Y == 0)
             {
-                min = new XYZ(-halfLength-0.5, - 2.0, 0);
-                max = new XYZ(halfLength, topZ + 1.0, halfDepth);
+                min = new XYZ(-halfLength - 1.0, - 2.0, 0);
+                max = new XYZ(halfLength + 0.5, topZ + 1.0, halfDepth);
             }
             else
             {
-                min = new XYZ(-halfLength-0.5, - 2.0, 0);
-                max = new XYZ(halfLength, topZ + 1.0, halfDepth);
+                min = new XYZ(-halfLength - 1.0, - 2.0, 0);
+                max = new XYZ(halfLength + 0.5, topZ + 1.0, halfDepth);
             }
 
             var box = new BoundingBoxXYZ
@@ -488,7 +534,6 @@ namespace FerrumAddinDev.FBS
             List<Grid> grids,
             HashSet<string> existingNames)
         {
-            double tol_ft = 5.0 / 304.8;
             Line wLine = (wall.Location as LocationCurve).Curve as Line;
             XYZ wDir = (wLine.GetEndPoint(1) - wLine.GetEndPoint(0)).Normalize();
 
@@ -496,6 +541,7 @@ namespace FerrumAddinDev.FBS
             var parallel = grids.Where(g =>
             {
                 var gl = (g.Curve as Line);
+                if (gl == null) return false;
                 var gd = (gl.GetEndPoint(1) - gl.GetEndPoint(0)).Normalize();
                 return Math.Abs(Math.Abs(gd.DotProduct(wDir)) - 1) < 1e-3;
             }).ToList();
@@ -536,13 +582,16 @@ namespace FerrumAddinDev.FBS
                 var perp = grids.Where(h =>
                 {
                     var hl = (h.Curve as Line);
+                    if (hl == null) return false;
                     var hd = (hl.GetEndPoint(1) - hl.GetEndPoint(0)).Normalize();
                     return Math.Abs(wDir.DotProduct(hd)) < 1e-3;
                 });
                 var cross = perp.FirstOrDefault(h =>
                 {
-                    h.Curve.Intersect(g.Curve, out _);
-                    return true;
+                    IntersectionResultArray results;
+                    return h.Curve.Intersect(g.Curve, out results) != SetComparisonResult.Disjoint
+                        && results != null
+                        && results.Size > 0;
                 });
                 if (cross != null)
                 {
@@ -555,6 +604,7 @@ namespace FerrumAddinDev.FBS
             var nearest2 = parallel
                 .Select(g => {
                     var gl = (g.Curve as Line);
+                    if (gl == null) return new { Grid = g, Dist = double.MaxValue };
                     var pr = gl.Project(mid).XYZPoint;
                     return new { Grid = g, Dist = pr.DistanceTo(mid) };
                 })
