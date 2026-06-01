@@ -208,10 +208,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
         public static string horizontDiameter;
         public static string cornerDiameter;
         
-
-        private void Button_Click(object sender, RoutedEventArgs e)
+        private bool TryReadSettings()
         {
-            // Проверяем, что все обязательные поля заполнены
             if (string.IsNullOrEmpty(boxHorizont.Text) ||
                 (!isKnittedMode && string.IsNullOrEmpty(boxVertical.Text)) ||
                 string.IsNullOrEmpty(boxLeftRight.Text) ||
@@ -228,13 +226,13 @@ namespace FerrumAddinDev.GrillageCreator_v3
                                "Не все параметры заполнены",
                                MessageBoxButton.OK,
                                MessageBoxImage.Warning);
-                return;
+                return false;
             }
 
             try
             {
                 horizontalCount = int.Parse(boxHorizont.Text);
-                verticalCount = int.Parse(boxVertical.Text);
+                verticalCount = int.Parse(string.IsNullOrEmpty(boxVertical.Text) ? "200" : boxVertical.Text);
                 leftRightOffset = int.Parse(boxLeftRight.Text);
                 bottomOffset = int.Parse(boxBottom.Text);
                 topOffset = int.Parse(boxTop.Text);
@@ -247,15 +245,13 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 cornerDiameter = comboCorner.SelectedItem.ToString();
 
                 if (horizontalCount >= 2)
-                {
-                    SaveSettings();
-                    CommandGrillageCreator_v3.createGrillage.Raise();
-                }
-                else
-                    MessageBox.Show("Пожалуйста, введите число каркасов >1.",
-                               "Ошибка ввода",
-                               MessageBoxButton.OK,
-                               MessageBoxImage.Error);
+                    return true;
+
+                MessageBox.Show("Пожалуйста, введите число каркасов >1.",
+                           "Ошибка ввода",
+                           MessageBoxButton.OK,
+                           MessageBoxImage.Error);
+                return false;
             }
             catch (FormatException)
             {
@@ -263,6 +259,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                                "Ошибка ввода",
                                MessageBoxButton.OK,
                                MessageBoxImage.Error);
+                return false;
             }
             catch (Exception ex)
             {
@@ -270,7 +267,26 @@ namespace FerrumAddinDev.GrillageCreator_v3
                                "Ошибка",
                                MessageBoxButton.OK,
                                MessageBoxImage.Error);
+                return false;
             }
+        }
+
+        private void CreateLinesButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!TryReadSettings())
+                return;
+
+            SaveSettings();
+            CommandGrillageCreator_v3.createGrillageLines.Raise();
+        }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            if (!TryReadSettings())
+                return;
+
+            SaveSettings();
+            CommandGrillageCreator_v3.createGrillage.Raise();
         }
 
         public static bool isKnittedMode = false;  

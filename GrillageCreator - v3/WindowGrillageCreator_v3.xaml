@@ -53,7 +53,8 @@
         <TextBox x:Name="boxBottom" HorizontalAlignment="Left" Margin="68,366,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
         <TextBox x:Name="boxTop" HorizontalAlignment="Left" Margin="419,48,0,0" TextWrapping="Wrap" Text="50" VerticalAlignment="Top" Width="70" PreviewTextInput="previewTextInput"/>
 
-        <Button Content="Выполнить" HorizontalAlignment="Right" Margin="0,420,13,0" VerticalAlignment="Top" Click="Button_Click"/>
+        <Button Content="Создать линии" HorizontalAlignment="Right" Margin="0,420,108,0" VerticalAlignment="Top" Width="95" Click="CreateLinesButton_Click"/>
+        <Button Content="Армировать" HorizontalAlignment="Right" Margin="0,420,13,0" VerticalAlignment="Top" Width="85" Click="Button_Click"/>
 
         <ComboBox x:Name="comboCorner" HorizontalAlignment="Left" Margin="386,207,0,0" VerticalAlignment="Top" Width="162"/>
         <TextBlock HorizontalAlignment="Left" Margin="386,186,0,0" TextWrapping="Wrap" Text="Ø уголков" VerticalAlignment="Top"/>
