@@ -712,8 +712,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
             List<Element> rebarTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).WhereElementIsElementType().ToList();
             List<Element> rearCoverTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarCoverType)).ToList();
-            List<ModelCurve> modelCurves = GetSelectedModelLines(uiDoc, doc);
-            if (modelCurves.Count == 0)
+            List<DetailCurve> DetailCurves = GetSelectedModelLines(uiDoc, doc);
+            if (DetailCurves.Count == 0)
                 return;
 
             corners = new List<XYZ>();
@@ -724,14 +724,14 @@ namespace FerrumAddinDev.GrillageCreator_v3
             {
                 tg.Start();
 
-                foreach (ModelCurve modelCurve in modelCurves)
+                foreach (DetailCurve DetailCurve in DetailCurves)
                 {
-                    Line rawLine = modelCurve.GeometryCurve as Line;
+                    Line rawLine = DetailCurve.GeometryCurve as Line;
                     if (rawLine == null)
                         continue;
 
                     GrillageLineData storedData;
-                    bool hasStoredData = TryReadLineData(modelCurve, out storedData);
+                    bool hasStoredData = TryReadLineData(DetailCurve, out storedData);
 
                     FloorContext context;
                     Line centerLine;
@@ -1024,11 +1024,11 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
         }
 
-        private List<ModelCurve> GetSelectedModelLines(UIDocument uiDoc, Document doc)
+        private List<DetailCurve> GetSelectedModelLines(UIDocument uiDoc, Document doc)
         {
-            List<ModelCurve> selectedLines = uiDoc.Selection.GetElementIds()
+            List<DetailCurve> selectedLines = uiDoc.Selection.GetElementIds()
                 .Select(id => doc.GetElement(id))
-                .OfType<ModelCurve>()
+                .OfType<DetailCurve>()
                 .Where(x => x.GeometryCurve is Line)
                 .ToList();
 
@@ -1040,7 +1040,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     new ModelLineSelectionFilter(),
                     "Выберите осевые линии для армирования")
                 .Select(x => doc.GetElement(x.ElementId))
-                .OfType<ModelCurve>()
+                .OfType<DetailCurve>()
                 .Where(x => x.GeometryCurve is Line)
                 .ToList();
         }
@@ -1226,14 +1226,14 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         ? Plane.CreateByThreePoints(line.Curve.GetEndPoint(0), line.Curve.GetEndPoint(1), line.Curve.GetEndPoint(0) + XYZ.BasisX)
                         : Plane.CreateByThreePoints(line.Curve.GetEndPoint(0), line.Curve.GetEndPoint(1), line.Curve.GetEndPoint(0) + XYZ.BasisZ);
 
-                    ModelCurve modelCurve = doc.Create.NewModelCurve(line.Curve, SketchPlane.Create(doc, plane)) as ModelCurve;
-                    if (modelCurve == null)
+                    var DetailCurve = doc.Create.NewDetailCurve(doc.ActiveView, line.Curve);//, SketchPlane.Create(doc, plane));
+                    if (DetailCurve == null)
                         continue;
 
                     if (lineStyle != null)
-                        modelCurve.LineStyle = lineStyle;
+                        DetailCurve.LineStyle = lineStyle;
 
-                    WriteLineData(modelCurve, schema, line.Data);
+                    WriteLineData(DetailCurve, schema, line.Data);
                 }
 
                 trans.Commit();
@@ -1275,14 +1275,14 @@ namespace FerrumAddinDev.GrillageCreator_v3
             return builder.Finish();
         }
 
-        private void WriteLineData(ModelCurve modelCurve, Schema schema, GrillageLineData data)
+        private void WriteLineData(DetailCurve DetailCurve, Schema schema, GrillageLineData data)
         {
-            if (modelCurve == null || schema == null || data == null)
+            if (DetailCurve == null || schema == null || data == null)
                 return;
 
             Entity entity = new Entity(schema);
             entity.Set(schema.GetField("Data"), SerializeLineData(data));
-            modelCurve.SetEntity(entity);
+            DetailCurve.SetEntity(entity);
         }
 
         private bool TryReadLineData(Element element, out GrillageLineData data)
@@ -1430,8 +1430,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
         {
             public bool AllowElement(Element elem)
             {
-                ModelCurve modelCurve = elem as ModelCurve;
-                return modelCurve != null && modelCurve.GeometryCurve is Line;
+                DetailCurve DetailCurve = elem as DetailCurve;
+                return DetailCurve != null && DetailCurve.GeometryCurve is Line;
             }
 
             public bool AllowReference(Reference reference, XYZ position)
@@ -1978,7 +1978,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         //    plane = Plane.CreateByThreePoints(extendedLine.GetEndPoint(0), extendedLine.GetEndPoint(1), extendedLine.GetEndPoint(0) + 1 * XYZ.BasisZ);
                         //}
                         //// Создаем модель линии
-                        //doc.Create.NewModelCurve(extendedLine, SketchPlane.Create(doc, plane));
+                        //doc.Create.NewDetailCurve(extendedLine, SketchPlane.Create(doc, plane));
 
                         if (rebarSet != null)
                         {
