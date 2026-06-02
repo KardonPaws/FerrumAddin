@@ -151,8 +151,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     List<Line> centerLines = ComputeCenterLines(allCurves);
                     //CreateModelLines(doc, centerLines);
 
-                    centerLines = ExtendLinesToConnect(centerLines, modLength);
-                    centerLines = ExtendCenterLines(centerLines, modLength);
+                    centerLines = PrepareCenterLinesForModelLines(centerLines, allCurves);
 
                     Dictionary<Line, List<Line>> dictTop = new Dictionary<Line, List<Line>>();
                     Dictionary<Line, List<Line>> dictBottom = new Dictionary<Line, List<Line>>();
@@ -541,8 +540,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         continue;
 
                     List<Line> centerLines = ComputeCenterLines(context.Profile);
-                    centerLines = ExtendLinesToConnect(centerLines, modLength);
-                    centerLines = ExtendCenterLines(centerLines, modLength);
+                    centerLines = PrepareCenterLinesForModelLines(centerLines, context.Profile);
 
                     List<GrillageModelLine> modelLines = new List<GrillageModelLine>();
                     foreach (Line centerLine in centerLines)
@@ -564,6 +562,146 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
                 tg.Assimilate();
             }
+        }
+
+        private List<Line> PrepareCenterLinesForModelLines(List<Line> centerLines, List<Line> profile)
+        {
+            const double maxExtendDistance = 1000.0 / 304.8;
+            const double boundaryGap = 50.0 / 304.8;
+
+            List<Line> extendedToBoundary = ExtendCenterLinesToNearestBoundary(centerLines, profile, maxExtendDistance, boundaryGap);
+            return ConnectCollinearCenterLines(extendedToBoundary, maxExtendDistance);
+        }
+
+        private List<Line> ExtendCenterLinesToNearestBoundary(List<Line> centerLines, List<Line> profile, double maxDistance, double boundaryGap)
+        {
+            List<Line> result = new List<Line>();
+
+            foreach (Line centerLine in centerLines)
+            {
+                XYZ start = centerLine.GetEndPoint(0);
+                XYZ end = centerLine.GetEndPoint(1);
+                XYZ direction = (end - start).Normalize();
+
+                XYZ newStart = ExtendPointTowardBoundary(start, -direction, profile, maxDistance, boundaryGap);
+                XYZ newEnd = ExtendPointTowardBoundary(end, direction, profile, maxDistance, boundaryGap);
+
+                if (newStart.DistanceTo(newEnd) > GeometryTolerance)
+                    result.Add(Line.CreateBound(newStart, newEnd));
+            }
+
+            return result;
+        }
+
+        private XYZ ExtendPointTowardBoundary(XYZ point, XYZ direction, List<Line> profile, double maxDistance, double boundaryGap)
+        {
+            double distance;
+            if (!TryFindNearestBoundaryDistance(point, direction, profile, maxDistance, out distance))
+                return point;
+
+            double extension = distance - boundaryGap;
+            if (extension <= GeometryTolerance)
+                return point;
+
+            return point + direction.Normalize() * extension;
+        }
+
+        private bool TryFindNearestBoundaryDistance(XYZ point, XYZ direction, List<Line> profile, double maxDistance, out double distance)
+        {
+            distance = double.MaxValue;
+            XYZ rayEnd = point + direction.Normalize() * maxDistance;
+            Line ray = Line.CreateBound(point, rayEnd);
+
+            foreach (Line boundaryLine in profile)
+            {
+                XYZ intersection = GetIntersectionPoint(ray, boundaryLine);
+                if (intersection == null)
+                    continue;
+
+                double currentDistance = point.DistanceTo(intersection);
+                if (currentDistance <= GeometryTolerance || currentDistance > maxDistance + GeometryTolerance)
+                    continue;
+
+                if (!IsPointOnLineSegment(intersection, ray) || !IsPointOnLineSegment(intersection, boundaryLine))
+                    continue;
+
+                if (currentDistance < distance)
+                    distance = currentDistance;
+            }
+
+            return distance < double.MaxValue;
+        }
+
+        private List<Line> ConnectCollinearCenterLines(List<Line> centerLines, double maxGapDistance)
+        {
+            List<Line> result = centerLines.ToList();
+
+            for (int i = 0; i < result.Count; i++)
+            {
+                for (int j = i + 1; j < result.Count; j++)
+                {
+                    if (!AreLinesCollinearInXY(result[i], result[j]))
+                        continue;
+
+                    ClosestLineEndPair pair = GetClosestLineEndPair(result[i], result[j]);
+                    if (pair.Distance <= GeometryTolerance || pair.Distance >= maxGapDistance)
+                        continue;
+
+                    XYZ joinPoint = (pair.Point1 + pair.Point2) / 2;
+                    result[i] = ReplaceLineEnd(result[i], pair.EndIndex1, joinPoint);
+                    result[j] = ReplaceLineEnd(result[j], pair.EndIndex2, joinPoint);
+                }
+            }
+
+            return result.Where(line => line.Length > GeometryTolerance).ToList();
+        }
+
+        private bool AreLinesCollinearInXY(Line line1, Line line2)
+        {
+            if (!AreParallelInXY(line1.Direction, line2.Direction))
+                return false;
+
+            XYZ direction = GetHorizontalDirection(line1);
+            XYZ perpendicular = new XYZ(-direction.Y, direction.X, 0).Normalize();
+            double offset = Math.Abs((GetLineMidPoint(line2) - GetLineMidPoint(line1)).DotProduct(perpendicular));
+            double zOffset = Math.Abs(GetLineAverageZ(line2) - GetLineAverageZ(line1));
+
+            return offset < 1.0 / 304.8 && zOffset < 1.0 / 304.8;
+        }
+
+        private ClosestLineEndPair GetClosestLineEndPair(Line line1, Line line2)
+        {
+            ClosestLineEndPair closest = new ClosestLineEndPair
+            {
+                Distance = double.MaxValue
+            };
+
+            for (int endIndex1 = 0; endIndex1 < 2; endIndex1++)
+            {
+                XYZ point1 = line1.GetEndPoint(endIndex1);
+                for (int endIndex2 = 0; endIndex2 < 2; endIndex2++)
+                {
+                    XYZ point2 = line2.GetEndPoint(endIndex2);
+                    double distance = point1.DistanceTo(point2);
+                    if (distance >= closest.Distance)
+                        continue;
+
+                    closest.EndIndex1 = endIndex1;
+                    closest.EndIndex2 = endIndex2;
+                    closest.Point1 = point1;
+                    closest.Point2 = point2;
+                    closest.Distance = distance;
+                }
+            }
+
+            return closest;
+        }
+
+        private Line ReplaceLineEnd(Line line, int endIndex, XYZ point)
+        {
+            return endIndex == 0
+                ? Line.CreateBound(point, line.GetEndPoint(1))
+                : Line.CreateBound(line.GetEndPoint(0), point);
         }
 
         private void ExecuteCreateRebarsFromSelectedLines(UIApplication uiApp)
@@ -1368,6 +1506,15 @@ namespace FerrumAddinDev.GrillageCreator_v3
             public Dictionary<Line, List<Line>> Top { get; private set; }
             public Dictionary<Line, List<Line>> Bottom { get; private set; }
             public List<double> HalfWidths { get; private set; }
+        }
+
+        private class ClosestLineEndPair
+        {
+            public int EndIndex1 { get; set; }
+            public int EndIndex2 { get; set; }
+            public XYZ Point1 { get; set; }
+            public XYZ Point2 { get; set; }
+            public double Distance { get; set; }
         }
 
         private class ExistingRebarLineGroup
