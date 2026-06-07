@@ -722,7 +722,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
             Dictionary<long, RebarBuildGroup> groups = new Dictionary<long, RebarBuildGroup>();
             Dictionary<long, List<ExistingRebarLineGroup>> existingRebarGroupsByHost = new Dictionary<long, List<ExistingRebarLineGroup>>();
 
-            using (TransactionGroup tg = new TransactionGroup(doc, "Армирование ростверков по осевым линиям"))
+            using (TransactionGroup tg = new TransactionGroup(doc, "Армирование ростверков по линиям направления"))
             {
                 tg.Start();
 
