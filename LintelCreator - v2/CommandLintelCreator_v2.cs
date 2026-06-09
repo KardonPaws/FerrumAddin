@@ -1611,9 +1611,17 @@ namespace FerrumAddinDev.LintelCreator_v2
                         string positionName = firstElement.LookupParameter("ADSK_Позиция").AsString();
                         //18.02.26 - изменения в перемычках
                         bool lower0 = firstElement.LookupParameter("ZH_Этаж_Числовой").AsDouble() < 0;
+                        // 09.06.26 - исправление имен разрезов
+                        string elevationSuffix = lower0 ? " ниже 0.000" : " выше 0.000";
+                        string sectionName = positionName + elevationSuffix;
 
                         // 23.04.26 - проверка разреза в перемычках
-                        var view = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Views).Where(x => x.Name.Contains(positionName) && x.Name.Contains(lower0 ? "ниже 0.000" : "выше 0.000")).FirstOrDefault();
+                        // 09.06.26 - исправление имен разрезов
+                        var view = new FilteredElementCollector(doc)
+                            .OfCategory(BuiltInCategory.OST_Views)
+                            .Where(x => x.Id != section.Id && x.Name.Equals(sectionName, StringComparison.OrdinalIgnoreCase))
+                            .FirstOrDefault();
+                        bool sectionNameReleased = false;
                         if (view != null)
                         {
                             // 29.01.26 - уникальное имя для разреза
@@ -1642,24 +1650,28 @@ namespace FerrumAddinDev.LintelCreator_v2
                                             view.Name = MakeUniqueViewName(doc, positionName_ + " ниже 0.000_");
                                         else
                                             view.Name = MakeUniqueViewName(doc, positionName_ + " выше 0.000_");
+                                        sectionNameReleased = true;
                                     }
                                 }
                                 else
                                 {
                                     // 23.04.26 - проверка разреза в перемычках
-                                    view.Name = "!" + view.Name;
+                                    view.Name = MakeUniqueViewName(doc, "!" + view.Name);
+                                    sectionNameReleased = true;
                                 }
                             }
                             else
                             {
                                 doc.Delete(view.Id);
+                                sectionNameReleased = true;
                             }
                         }
 
-                        if (lower0)
-                            section.Name = positionName + " ниже 0.000";
-                        else
-                            section.Name = positionName + " выше 0.000";
+                        // 09.06.26 - исправление имен разрезов
+                        if (sectionNameReleased)
+                            doc.Regenerate();
+
+                        section.Name = sectionName;
 
 
 
