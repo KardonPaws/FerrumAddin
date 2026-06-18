@@ -550,8 +550,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         BoundaryDistances distances = CalculateBoundaryDistances(centerLine, context.Profile);
                         if (!AreBoundaryDistancesValid(distances))
                             continue;
-
-                        GrillageLineData data = CreateLineDataFromCurrentSettings(context, distances);
+                        // 18.06.2026 - настройки всегда из окна
+                        GrillageLineData data = CreateLineData(context, distances);
                         modelLines.Add(new GrillageModelLine
                         {
                             Curve = centerLine,
@@ -717,7 +717,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
             List<DetailCurve> DetailCurves = GetSelectedModelLines(uiDoc, doc);
             if (DetailCurves.Count == 0)
                 return;
-
+            // 18.06.2026 - настройки всегда из окна
+            GrillageCurrentSettings currentSettings = CreateCurrentSettings();
             corners = new List<XYZ>();
             Dictionary<long, RebarBuildGroup> groups = new Dictionary<long, RebarBuildGroup>();
             Dictionary<long, List<ExistingRebarLineGroup>> existingRebarGroupsByHost = new Dictionary<long, List<ExistingRebarLineGroup>>();
@@ -746,20 +747,15 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
                     if (!AreBoundaryDistancesValid(distances))
                         continue;
-
-                    GrillageLineData lineData = hasStoredData
-                        ? storedData
-                        : CreateLineDataFromCurrentSettings(context, distances);
-
-                    lineData.HostElementId = context.Floor.Id.Value;
-                    lineData.LeftBoundaryDistance = distances.Left;
-                    lineData.RightBoundaryDistance = distances.Right;
+                    // 18.06.2026 - настройки всегда из окна
+                    GrillageLineData lineData = CreateLineData(context, distances);
+                    UpdateStoredLineData(doc, DetailCurve, lineData);
 
                     long hostKey = context.Floor.Id.Value;
                     if (!existingRebarGroupsByHost.ContainsKey(hostKey))
                         existingRebarGroupsByHost[hostKey] = CollectExistingLongitudinalRebarGroups(doc, context.Floor);
-
-                    CenterLineRebarResult result = CreateRebarForCenterLine(doc, rebarTypes, context.Floor, centerLine, context.Thickness, lineData);
+                    // 18.06.2026 - настройки всегда из окна
+                    CenterLineRebarResult result = CreateRebarForCenterLine(doc, rebarTypes, context.Floor, centerLine, context.Thickness, lineData, currentSettings);
                     if (result == null)
                         continue;
 
@@ -768,18 +764,18 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         groups[hostKey] = new RebarBuildGroup
                         {
                             Host = context.Floor,
-                            CornerDiameter = lineData.CornerDiameter
+                            CornerDiameter = currentSettings.CornerDiameter
                         };
                     }
 
                     groups[hostKey].Top.Add(result.CenterLine, result.TopLines);
                     groups[hostKey].Bottom.Add(result.CenterLine, result.BottomLines);
                     groups[hostKey].HalfWidths.Add(Math.Max(distances.Left, distances.Right));
-
-                    ApplyRebarCover(doc, rearCoverTypes, context.Floor, lineData);
+                    // 18.06.2026 - настройки всегда из окна
+                    ApplyRebarCover(doc, rearCoverTypes, context.Floor, currentSettings);
                     modLength = Math.Max(distances.Left, distances.Right);
 
-                    RebarBarType cornerType = rebarTypes.Where(x => x.Name == lineData.CornerDiameter).FirstOrDefault() as RebarBarType;
+                    RebarBarType cornerType = rebarTypes.Where(x => x.Name == currentSettings.CornerDiameter).FirstOrDefault() as RebarBarType;
                     CreateCornerRebarsWithExistingRebars(doc, result, existingRebarGroupsByHost[hostKey], cornerType, context.Floor);
                 }
 
@@ -796,24 +792,24 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 tg.Assimilate();
             }
         }
-
-        private CenterLineRebarResult CreateRebarForCenterLine(Document doc, List<Element> rebarTypes, Floor host, Line centerLine, double thickness, GrillageLineData data)
+        // 18.06.2026 - настройки всегда из окна
+        private CenterLineRebarResult CreateRebarForCenterLine(Document doc, List<Element> rebarTypes, Floor host, Line centerLine, double thickness, GrillageLineData lineData, GrillageCurrentSettings settings)
         {
-            if (data.HorizontalCount < 2)
+            if (settings.HorizontalCount < 2)
                 return null;
 
-            double rightRebarHalfWidth = data.RightBoundaryDistance - data.LeftRightOffset / 304.8;
-            double leftRebarHalfWidth = data.LeftBoundaryDistance - data.LeftRightOffset / 304.8;
+            double rightRebarHalfWidth = lineData.RightBoundaryDistance - settings.LeftRightOffset / 304.8;
+            double leftRebarHalfWidth = lineData.LeftBoundaryDistance - settings.LeftRightOffset / 304.8;
             if (rightRebarHalfWidth <= GeometryTolerance || leftRebarHalfWidth <= GeometryTolerance)
                 return null;
 
             XYZ lineDirection = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
             XYZ perpendicularDirection = new XYZ(-lineDirection.Y, lineDirection.X, 0).Normalize();
 
-            XYZ offsetBottomRight = perpendicularDirection * rightRebarHalfWidth + data.BottomOffset / 304.8 * XYZ.BasisZ;
-            XYZ offsetBottomLeft = perpendicularDirection * -leftRebarHalfWidth + data.BottomOffset / 304.8 * XYZ.BasisZ;
-            XYZ offsetTopRight = perpendicularDirection * rightRebarHalfWidth + (thickness - data.TopOffset / 304.8) * XYZ.BasisZ;
-            XYZ offsetTopLeft = perpendicularDirection * -leftRebarHalfWidth + (thickness - data.TopOffset / 304.8) * XYZ.BasisZ;
+            XYZ offsetBottomRight = perpendicularDirection * rightRebarHalfWidth + settings.BottomOffset / 304.8 * XYZ.BasisZ;
+            XYZ offsetBottomLeft = perpendicularDirection * -leftRebarHalfWidth + settings.BottomOffset / 304.8 * XYZ.BasisZ;
+            XYZ offsetTopRight = perpendicularDirection * rightRebarHalfWidth + (thickness - settings.TopOffset / 304.8) * XYZ.BasisZ;
+            XYZ offsetTopLeft = perpendicularDirection * -leftRebarHalfWidth + (thickness - settings.TopOffset / 304.8) * XYZ.BasisZ;
 
             Line lineBR = Line.CreateBound(centerLine.GetEndPoint(0) + offsetBottomRight, centerLine.GetEndPoint(1) + offsetBottomRight);
             Line lineBL = Line.CreateBound(centerLine.GetEndPoint(0) + offsetBottomLeft, centerLine.GetEndPoint(1) + offsetBottomLeft);
@@ -823,12 +819,12 @@ namespace FerrumAddinDev.GrillageCreator_v3
             List<Line> intermediateLinesTop = new List<Line>();
             List<Line> intermediateLinesBottom = new List<Line>();
             double distanceBetweenLines = lineBR.GetEndPoint(0).DistanceTo(lineBL.GetEndPoint(0));
-            double step = distanceBetweenLines / (data.HorizontalCount - 1);
+            double step = distanceBetweenLines / (settings.HorizontalCount - 1);
 
             intermediateLinesTop.Add(lineTL);
             intermediateLinesBottom.Add(lineBL);
 
-            for (int i = 1; i <= data.HorizontalCount - 2; i++)
+            for (int i = 1; i <= settings.HorizontalCount - 2; i++)
             {
                 XYZ offset = perpendicularDirection * (step * i);
                 intermediateLinesBottom.Add(Line.CreateBound(lineBL.GetEndPoint(0) + offset, lineBL.GetEndPoint(1) + offset));
@@ -838,16 +834,16 @@ namespace FerrumAddinDev.GrillageCreator_v3
             intermediateLinesTop.Add(lineTR);
             intermediateLinesBottom.Add(lineBR);
 
-            RebarBarType typeTop = rebarTypes.Where(x => x.Name == data.TopDiameter).FirstOrDefault() as RebarBarType;
-            RebarBarType typeBot = rebarTypes.Where(x => x.Name == data.BottomDiameter).FirstOrDefault() as RebarBarType;
-            RebarBarType typeVertical = rebarTypes.Where(x => x.Name == data.VertDiameter).FirstOrDefault() as RebarBarType;
-            RebarBarType typeHorizontal = rebarTypes.Where(x => x.Name == data.HorizontDiameter).FirstOrDefault() as RebarBarType;
+            RebarBarType typeTop = rebarTypes.Where(x => x.Name == settings.TopDiameter).FirstOrDefault() as RebarBarType;
+            RebarBarType typeBot = rebarTypes.Where(x => x.Name == settings.BottomDiameter).FirstOrDefault() as RebarBarType;
+            RebarBarType typeVertical = rebarTypes.Where(x => x.Name == settings.VertDiameter).FirstOrDefault() as RebarBarType;
+            RebarBarType typeHorizontal = rebarTypes.Where(x => x.Name == settings.HorizontDiameter).FirstOrDefault() as RebarBarType;
 
-            if (typeTop == null || typeBot == null || typeHorizontal == null || (!data.IsKnittedMode && typeVertical == null))
+            if (typeTop == null || typeBot == null || typeHorizontal == null || (!settings.IsKnittedMode && typeVertical == null))
                 return null;
 
-            List<Element> rebs = CreateRebarFromLines(doc, intermediateLinesBottom, typeTop, RebarStyle.Standard, host, true, data.IsKnittedMode);
-            rebs.AddRange(CreateRebarFromLines(doc, intermediateLinesTop, typeBot, RebarStyle.Standard, host, false, data.IsKnittedMode));
+            List<Element> rebs = CreateRebarFromLines(doc, intermediateLinesBottom, typeTop, RebarStyle.Standard, host, true, settings.IsKnittedMode);
+            rebs.AddRange(CreateRebarFromLines(doc, intermediateLinesTop, typeBot, RebarStyle.Standard, host, false, settings.IsKnittedMode));
 
             if (rebs.Count > 0)
             {
@@ -866,7 +862,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
             Line verticalLineRightStart = Line.CreateBound(lineBR.GetEndPoint(0), lineTR.GetEndPoint(0));
             Line verticalLineLeftStart = Line.CreateBound(lineBL.GetEndPoint(0), lineTL.GetEndPoint(0));
-            double verticalStep = data.VerticalStep / 304.8;
+            double verticalStep = settings.VerticalStep / 304.8;
             if (verticalStep <= GeometryTolerance)
                 verticalStep = 200 / 304.8;
 
@@ -881,7 +877,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 verticalLineRightStart.GetEndPoint(0) + verticalDirection * offsetFromEdge,
                 verticalLineRightStart.GetEndPoint(1) + verticalDirection * offsetFromEdge));
 
-            for (int i = 1; i <= data.HorizontalCount - 2; i++)
+            for (int i = 1; i <= settings.HorizontalCount - 2; i++)
             {
                 XYZ offset = verticalDirection * (step * i);
                 XYZ currentStart = startPoint1 + offset;
@@ -910,7 +906,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
             int numberOfLinesTop = (int)(centerLineLength / verticalStep) + 1;
             XYZ direction = (centerLine.GetEndPoint(1) - centerLine.GetEndPoint(0)).Normalize();
 
-            double horizontalStep = data.HorizontalStep / 304.8;
+            double horizontalStep = settings.HorizontalStep / 304.8;
             if (horizontalStep <= GeometryTolerance)
                 horizontalStep = 200 / 304.8;
             int numberOfLinesBot = (int)(centerLineLength / horizontalStep) + 1;
@@ -928,7 +924,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     verticalLineLeftStart.GetEndPoint(1) + XYZ.BasisZ * offsetBot + offsetL)
             };
 
-            if (data.IsKnittedMode)
+            if (settings.IsKnittedMode)
             {
                 CreateKnittedRebarSets(doc, host, direction, intermediateLinesTop, intermediateLinesBottom, typeHorizontal, typeTop, typeBot, numberOfLinesTop, verticalStep);
             }
@@ -1000,17 +996,17 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 i = j;
             }
         }
-
-        private void ApplyRebarCover(Document doc, List<Element> rearCoverTypes, Floor host, GrillageLineData data)
+        // 18.06.2026 - настройки всегда из окна
+        private void ApplyRebarCover(Document doc, List<Element> rearCoverTypes, Floor host, GrillageCurrentSettings settings)
         {
             using (Transaction tx = new Transaction(doc, "Защитный слой"))
             {
                 tx.Start();
-                Element coverLeftRight = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (data.LeftRightOffset / 304.8 - 25 / 304.8)).FirstOrDefault();
+                Element coverLeftRight = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (settings.LeftRightOffset / 304.8 - 25 / 304.8)).FirstOrDefault();
                 if (coverLeftRight != null)
                     host.get_Parameter(BuiltInParameter.CLEAR_COVER_OTHER).Set(coverLeftRight.Id);
 
-                Element coverTopBottom = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (Math.Min(data.TopOffset, data.BottomOffset) / 304.8 - 25 / 304.8)).FirstOrDefault();
+                Element coverTopBottom = rearCoverTypes.Where(x => (x as RebarCoverType).CoverDistance == (Math.Min(settings.TopOffset, settings.BottomOffset) / 304.8 - 25 / 304.8)).FirstOrDefault();
                 if (coverTopBottom != null)
                 {
                     try
@@ -1187,15 +1183,21 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 && distance > GeometryTolerance
                 && distance < double.MaxValue;
         }
-
-        private GrillageLineData CreateLineDataFromCurrentSettings(FloorContext context, BoundaryDistances distances)
+        // 18.06.2026 - настройки всегда из окна
+        private GrillageLineData CreateLineData(FloorContext context, BoundaryDistances distances)
         {
             return new GrillageLineData
             {
-                Version = 1,
                 HostElementId = context.Floor.Id.Value,
                 LeftBoundaryDistance = distances.Left,
-                RightBoundaryDistance = distances.Right,
+                RightBoundaryDistance = distances.Right
+            };
+        }
+
+        private GrillageCurrentSettings CreateCurrentSettings()
+        {
+            return new GrillageCurrentSettings
+            {
                 TopDiameter = WindowGrillageCreator_v3.topDiameter,
                 BottomDiameter = WindowGrillageCreator_v3.bottomDiameter,
                 VertDiameter = WindowGrillageCreator_v3.vertDiameter,
@@ -1286,6 +1288,20 @@ namespace FerrumAddinDev.GrillageCreator_v3
             entity.Set(schema.GetField("Data"), SerializeLineData(data));
             DetailCurve.SetEntity(entity);
         }
+        // 18.06.2026 - настройки всегда из окна
+        private void UpdateStoredLineData(Document doc, DetailCurve DetailCurve, GrillageLineData data)
+        {
+            if (doc == null || DetailCurve == null || data == null)
+                return;
+
+            Schema schema = GetOrCreateGrillageLineSchema();
+            using (Transaction tx = new Transaction(doc, "Обновление данных осевой линии"))
+            {
+                tx.Start();
+                WriteLineData(DetailCurve, schema, data);
+                tx.Commit();
+            }
+        }
 
         private bool TryReadLineData(Element element, out GrillageLineData data)
         {
@@ -1308,26 +1324,13 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 return false;
             }
         }
-
+        // 18.06.2026 - настройки всегда из окна
         private string SerializeLineData(GrillageLineData data)
         {
             XElement element = new XElement("GrillageLineData",
-                new XAttribute("Version", data.Version),
-                new XAttribute("HostElementId", data.HostElementId),
-                new XAttribute("LeftBoundaryDistance", FormatDouble(data.LeftBoundaryDistance)),
-                new XAttribute("RightBoundaryDistance", FormatDouble(data.RightBoundaryDistance)),
-                new XAttribute("TopDiameter", data.TopDiameter ?? ""),
-                new XAttribute("BottomDiameter", data.BottomDiameter ?? ""),
-                new XAttribute("VertDiameter", data.VertDiameter ?? ""),
-                new XAttribute("HorizontDiameter", data.HorizontDiameter ?? ""),
-                new XAttribute("CornerDiameter", data.CornerDiameter ?? ""),
-                new XAttribute("HorizontalCount", data.HorizontalCount),
-                new XAttribute("VerticalStep", data.VerticalStep),
-                new XAttribute("HorizontalStep", data.HorizontalStep),
-                new XAttribute("LeftRightOffset", data.LeftRightOffset),
-                new XAttribute("BottomOffset", data.BottomOffset),
-                new XAttribute("TopOffset", data.TopOffset),
-                new XAttribute("IsKnittedMode", data.IsKnittedMode));
+                new XAttribute("Host", data.HostElementId),
+                new XAttribute("Left", FormatDouble(data.LeftBoundaryDistance)),
+                new XAttribute("Right", FormatDouble(data.RightBoundaryDistance)));
 
             return element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         }
@@ -1343,22 +1346,9 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 XElement element = XElement.Parse(xml);
                 data = new GrillageLineData
                 {
-                    Version = ReadInt(element, "Version", 1),
-                    HostElementId = ReadLong(element, "HostElementId", 0),
-                    LeftBoundaryDistance = ReadDouble(element, "LeftBoundaryDistance", 0),
-                    RightBoundaryDistance = ReadDouble(element, "RightBoundaryDistance", 0),
-                    TopDiameter = ReadString(element, "TopDiameter"),
-                    BottomDiameter = ReadString(element, "BottomDiameter"),
-                    VertDiameter = ReadString(element, "VertDiameter"),
-                    HorizontDiameter = ReadString(element, "HorizontDiameter"),
-                    CornerDiameter = ReadString(element, "CornerDiameter"),
-                    HorizontalCount = ReadInt(element, "HorizontalCount", 2),
-                    VerticalStep = ReadInt(element, "VerticalStep", 200),
-                    HorizontalStep = ReadInt(element, "HorizontalStep", 200),
-                    LeftRightOffset = ReadInt(element, "LeftRightOffset", 50),
-                    BottomOffset = ReadInt(element, "BottomOffset", 50),
-                    TopOffset = ReadInt(element, "TopOffset", 50),
-                    IsKnittedMode = ReadBool(element, "IsKnittedMode", false)
+                    HostElementId = ReadLong(element, "Host", ReadLong(element, "HostElementId", 0)),
+                    LeftBoundaryDistance = ReadDouble(element, "Left", ReadDouble(element, "LeftBoundaryDistance", 0)),
+                    RightBoundaryDistance = ReadDouble(element, "Right", ReadDouble(element, "RightBoundaryDistance", 0))
                 };
                 return true;
             }
@@ -1371,21 +1361,6 @@ namespace FerrumAddinDev.GrillageCreator_v3
         private string FormatDouble(double value)
         {
             return value.ToString("R", CultureInfo.InvariantCulture);
-        }
-
-        private string ReadString(XElement element, string name)
-        {
-            XAttribute attribute = element.Attribute(name);
-            return attribute == null ? null : attribute.Value;
-        }
-
-        private int ReadInt(XElement element, string name, int defaultValue)
-        {
-            XAttribute attribute = element.Attribute(name);
-            int value;
-            return attribute != null && int.TryParse(attribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
-                ? value
-                : defaultValue;
         }
 
         private long ReadLong(XElement element, string name, long defaultValue)
@@ -1402,15 +1377,6 @@ namespace FerrumAddinDev.GrillageCreator_v3
             XAttribute attribute = element.Attribute(name);
             double value;
             return attribute != null && double.TryParse(attribute.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-                ? value
-                : defaultValue;
-        }
-
-        private bool ReadBool(XElement element, string name, bool defaultValue)
-        {
-            XAttribute attribute = element.Attribute(name);
-            bool value;
-            return attribute != null && bool.TryParse(attribute.Value, out value)
                 ? value
                 : defaultValue;
         }
@@ -1469,10 +1435,13 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
         private class GrillageLineData
         {
-            public int Version { get; set; }
             public long HostElementId { get; set; }
             public double LeftBoundaryDistance { get; set; }
             public double RightBoundaryDistance { get; set; }
+        }
+        // 18.06.2026 - настройки всегда из окна
+        private class GrillageCurrentSettings
+        {
             public string TopDiameter { get; set; }
             public string BottomDiameter { get; set; }
             public string VertDiameter { get; set; }
