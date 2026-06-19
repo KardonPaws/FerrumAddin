@@ -1099,6 +1099,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 if (context != null)
                 {
                     centerLine = ProjectLineToFloorBottom(modelLine, context);
+                    // 19.06.26 - армирование по длине линии
+                    centerLine = Line.CreateBound(centerLine.GetEndPoint(0) + 25 / 304.8 * centerLine.Direction, centerLine.GetEndPoint(1) - 25 / 304.8 * centerLine.Direction);
                     return true;
                 }
             }
@@ -1118,6 +1120,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 {
                     context = candidateContext;
                     centerLine = candidateLine;
+                    // 19.06.26 - армирование по длине линии
+                    centerLine = Line.CreateBound(centerLine.GetEndPoint(0) + 25 / 304.8 * centerLine.Direction, centerLine.GetEndPoint(1) - 25 / 304.8 * centerLine.Direction);
                     return true;
                 }
             }
