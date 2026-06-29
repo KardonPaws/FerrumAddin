@@ -464,17 +464,22 @@ namespace FerrumAddinDev.ColumnSections
                                 aParam.Set(3);
                         }
 
+                        // 29.06.26 -  измененеие заголовков для сечений пилонов
                         Viewport v1 = GetOrCreateViewport(doc, sheet.Id, section1.Id,
-                            new XYZ(8.165574789, 5.646644124, -0.059228049), razrezTypeId);
+                            new XYZ(8.165574789, 5.646644124, -0.059228049), zagolovokTypeId);
                         SetViewportLabelOffsetAsInOriginal(v1, section1);
+                        v1.LookupParameter("Номер вида").Set(3);
 
                         Viewport v2 = GetOrCreateViewport(doc, sheet.Id, section2.Id,
-                            new XYZ(8.437272730, 5.643270480, -0.064714496), zagolovokTypeId);
+                            new XYZ(8.437272730, 5.643270480, -0.064714496), razrezTypeId);
                         SetViewportLabelOffsetAsInOriginal(v2, section2);
+                        v2.LookupParameter("Номер вида").Set(1);
 
                         Viewport v3 = GetOrCreateViewport(doc, sheet.Id, section3.Id,
                             new XYZ(8.280574212, 5.181068513, -0.426660051), razrezTypeId);
                         SetViewportLabelOffsetAsInOriginal(v3, section3);
+                        v3.LookupParameter("Номер вида").Set(2);
+
 
                         for (int i = 0; i < createdSchedules.Count; i++)
                         {
