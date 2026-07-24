@@ -53,8 +53,8 @@ namespace FerrumAddinDev.LintelCreator_v2
             {
                 //26.01.26 - исправлена ширина проемов
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Doors).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall) != null).Where(x => ((x as FamilyInstance).Host as Wall)?.WallType.Kind != WallKind.Curtain));
-
-                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall) != null).Where(x => ((x as FamilyInstance).Host as Wall)?.WallType.Kind != WallKind.Curtain));
+                //24.07.26 - игнор угловых окон
+                windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Windows).WhereElementIsNotElementType().Where(x => (x as FamilyInstance).SuperComponent == null).Where(x => ((x as FamilyInstance).Host as Wall) != null).Where(x => ((x as FamilyInstance).Host as Wall)?.WallType.Kind != WallKind.Curtain).Where(x => !(x as FamilyInstance).Symbol.FamilyName.Contains("Угловое")));
                 // 29.06.25 - исключен тип 211.002
                 windowsAndDoorsList.AddRange(new FilteredElementCollector(doc, doc.ActiveView.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType()
                     .Where(x => x is Wall && (x as Wall).WallType != null && (x as Wall).WallType.Kind == WallKind.Curtain).Where(f => !f.Name.Contains("Лоджий")).Where(f =>
