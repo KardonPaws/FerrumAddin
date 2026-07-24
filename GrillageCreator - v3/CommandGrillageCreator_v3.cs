@@ -545,7 +545,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     List<GrillageModelLine> modelLines = new List<GrillageModelLine>();
                     foreach (Line centerLine in centerLines)
                     {
-                        if (centerLine.Length < 500 / 304.8)
+                        // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
+                        if (centerLine.Length <= 700 / 304.8)
                             continue;
                         BoundaryDistances distances = CalculateBoundaryDistances(centerLine, context.Profile);
                         if (!AreBoundaryDistancesValid(distances))

@@ -354,8 +354,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .Where(c => !char.IsControl(c) && System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
                 .ToArray())
                 .Trim();
+            // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
 
-            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(cleaned, "Тестовый вариант", StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -482,8 +483,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .Where(c => !char.IsControl(c) && System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
                 .ToArray())
                 .Trim();
+            // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
 
-            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(cleaned, "Тестовый вариант", StringComparison.OrdinalIgnoreCase);
         }
 
         public void FilterFamiliesAndTypes()
@@ -513,7 +515,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                 if (left || right) return 1;
                 return 0;
             }
-            //04.01.26 - ошибочные перемычки перемещены
+            // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
 
             var candidates = family.OriginalTypes
                 .Select(type =>
@@ -523,7 +525,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                     {
                         Type = type,
                         Parts = parts,
-                        SupportCategory = type.Name == "Ошибка"? 2 : GetSupportCategory(parts)
+                        SupportCategory = type.Name == "Тестовый вариант"? 2 : GetSupportCategory(parts)
                     };
                 })
                 .ToList();

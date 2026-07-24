@@ -198,20 +198,28 @@ namespace FerrumAddinDev.LintelCreator_v2
                 var max = bb.Max;
                 XYZ wallCenter;
 
-                // 29.06.25 - у некоторых семейств нет точки вставки, в try
+                // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
                 var center = new XYZ(0, 0, 0);
                 var orient = el is FamilyInstance fi ? fi.FacingOrientation : (((el as Wall).Location as LocationCurve).Curve as Line).Direction.CrossProduct(XYZ.BasisZ);
+                Wall hostWall = null;
+                if (el is Wall)
+                {
+                    hostWall = allWalls.Cast<Wall>()
+                             .FirstOrDefault(w => w.FindInserts(false, false, true, false)
+                                 .Any(id => id == el.Id));
+                }
                 try
                 {
-                    center = el is FamilyInstance ? (el.Location as LocationPoint).Point + (max.Z - min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, max.Z);
+                    center = el is FamilyInstance ? (el.Location as LocationPoint).Point + (max.Z - min.Z) * XYZ.BasisZ : new XYZ((min.X + max.X) / 2, (min.Y + max.Y) / 2, 0).DotProduct(orient.CrossProduct(XYZ.BasisZ)) * orient.CrossProduct(XYZ.BasisZ) + ((hostWall.get_BoundingBox(null).Max + hostWall.get_BoundingBox(null).Min)/2).DotProduct(orient) * orient + max.Z * XYZ.BasisZ;
                 }
                 catch
                 {
                     continue;
                 }
                 // 24.09.25 - изменения в перемычках
-                var leftPtC = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width / 2) * orient : center - (el as Wall).Width / 2 * orient;
-                var rightPtC = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + (el as Wall).Width / 2 * orient;
+
+                var leftPtC = el is FamilyInstance fi1 ? center - ((fi1.Host as Wall).Width / 2) * orient : center - hostWall.Width / 2 * orient;
+                var rightPtC = el is FamilyInstance fi2 ? center + ((fi2.Host as Wall).Width / 2) * orient : center + hostWall.Width / 2 * orient;
                 double threshold = 0;
                 if (el is FamilyInstance inst)
                 {
@@ -850,17 +858,17 @@ namespace FerrumAddinDev.LintelCreator_v2
                 {
                     var wallType = kv.Key;
                     var elems = kv.Value;
-                    // 16.02.26 - игнорирование стен гкл и фсд + изменения нумерации
+                    // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
                     var wallName = wallType.Name.ToLower();
-                    if (wallName.Contains("_пгп_") || wallName.Contains("_гкл_") || wallName.Contains("_фсд_"))
+                    if (wallName.Contains("_пгп_") || wallName.Contains("_гкл_") || wallName.Contains("_фсд_") || wallName.Contains("_прг_"))
                     {
                         continue;
                     }
-                    if (wallType.Name.Contains("ПРГ"))
-                    {
-                        withLintelParent.SupportType = 0;
-                        noLintelParent.SupportType = 0;
-                    }
+                    //if (wallType.Name.Contains("ПРГ"))
+                    //{
+                    //    withLintelParent.SupportType = 0;
+                    //    noLintelParent.SupportType = 0;
+                    //}
                     // разделить элементы на два списка по наличию перемычки
                     var without = elems.Where(el => !ElementHasLintel(el, doc)).ToList();
                     var withError = elems.Where(el => ElementHasErrorLintel(el, doc)).ToList();
@@ -924,8 +932,8 @@ namespace FerrumAddinDev.LintelCreator_v2
                             System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
                 .ToArray())
                 .Trim();
-
-            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+            // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
+            return string.Equals(cleaned, "Тестовый вариант", StringComparison.OrdinalIgnoreCase);
         }
 
 
@@ -2247,8 +2255,9 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .Where(c => !char.IsControl(c) && System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format)
                 .ToArray())
                 .Trim();
+            // 24.07.26 - фикс перемычек + игнор линий в ростверках меньше 700
 
-            return string.Equals(cleaned, "Ошибка", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(cleaned, "Тестовый вариант", StringComparison.OrdinalIgnoreCase);
         }
 
         public string GetName()
