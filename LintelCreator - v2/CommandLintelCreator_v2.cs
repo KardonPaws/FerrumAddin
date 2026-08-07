@@ -2137,6 +2137,23 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
                                 newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
 
+                                //29.07.26 - параметр основы стены у вложенных семейств
+                                var subComponents = newLintel.GetSubComponentIds();
+
+                                foreach (ElementId id in subComponents)
+                                {
+                                    Element subElem = doc.GetElement(id);
+                                    Parameter p = subElem.LookupParameter("ZH_Тип_Основы_Стена");
+
+                                    if (p != null && !p.IsReadOnly)
+                                    {
+                                        if (selectedWallType.Contains("_НСЩ_"))
+                                            p.Set("Каркас");
+                                        else
+                                            p.Set("Перегородка");
+                                    }
+                                }
+
                                 // Переделать удаление списков - тут удалять из списка Walls сам элемент, после группы проверять колиество элементов и удалять если нет
                                 // 20.06.25 - изменения в созданных элементах в окне
                                 lintelCreated.Add(element);
