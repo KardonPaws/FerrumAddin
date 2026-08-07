@@ -47,7 +47,6 @@ namespace FerrumAddinDev.GrillageCreator_v3
         private const string GrillageLineStyleName = "Ferrum_Ростверк_Ось_армирования";
         private static readonly Guid GrillageLineSchemaGuid = new Guid("9A48B51C-8B0D-46F7-B22A-FE9A0A630D2B");
         private readonly bool createModelLinesOnly;
-        private string diagnosticContext = "Запуск команды";
 
         public string message = "";
         public static Document d;
@@ -65,7 +64,6 @@ namespace FerrumAddinDev.GrillageCreator_v3
         {
             try
             {
-                diagnosticContext = "Запуск команды";
                 if (createModelLinesOnly)
                     ExecuteCreateModelLines(uiApp);
                 else
@@ -76,35 +74,10 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
             catch (Exception ex)
             {
-                string logPath = WriteDiagnosticLog(ex);
-                string logMessage = string.IsNullOrEmpty(logPath)
-                    ? string.Empty
-                    : "\n\nДиагностика записана:\n" + logPath;
-                MessageBox.Show(ex.Message + "\n\nЭтап: " + diagnosticContext + logMessage, "Ошибка");
+
             }
         }
 
-        private string WriteDiagnosticLog(Exception ex)
-        {
-            try
-            {
-                string logPath = System.IO.Path.Combine(
-                    System.IO.Path.GetTempPath(), "FerrumAddin_GrillageCreator_v3_error.log");
-                string entry = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0:O}\r\nЭтап: {1}\r\n{2}\r\n{3}\r\n",
-                    DateTime.Now,
-                    diagnosticContext,
-                    ex,
-                    new string('-', 80));
-                System.IO.File.AppendAllText(logPath, entry);
-                return logPath;
-            }
-            catch
-            {
-                return null;
-            }
-        }
 
         private void ExecuteCreateModelLines(UIApplication uiApp)
         {
@@ -1082,7 +1055,6 @@ namespace FerrumAddinDev.GrillageCreator_v3
             GrillageCurrentSettings currentSettings = CreateCurrentSettings();
             corners = new List<XYZ>();
             Dictionary<long, RebarBuildGroup> groups = new Dictionary<long, RebarBuildGroup>();
-            Dictionary<long, List<ExistingRebarLineGroup>> existingRebarGroupsByHost = new Dictionary<long, List<ExistingRebarLineGroup>>();
 
             using (TransactionGroup tg = new TransactionGroup(doc, "Армирование ростверков по линиям направления"))
             {
@@ -1090,7 +1062,6 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
                 foreach (DetailCurve DetailCurve in DetailCurves)
                 {
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": чтение геометрии";
                     Line rawLine = DetailCurve.GeometryCurve as Line;
                     if (rawLine == null)
                         continue;
@@ -1100,12 +1071,10 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
                     FloorContext context;
                     Line centerLine;
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": поиск основания";
                     if (!TryFindFloorContextForLine(doc, DetailCurve, rawLine, hasStoredData ? storedData : null,
                         currentSettings, out context, out centerLine))
                         continue;
 
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": расчёт границ";
                     BoundaryDistances distances = CalculateBoundaryDistances(centerLine, context.Profile);
                     if (!AreBoundaryDistancesValid(distances) && hasStoredData && AreBoundaryDistancesValid(storedData))
                         distances = new BoundaryDistances(storedData.LeftBoundaryDistance, storedData.RightBoundaryDistance);
@@ -1113,7 +1082,6 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     if (!AreBoundaryDistancesValid(distances))
                         continue;
                     // 18.06.2026 - настройки всегда из окна
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": исходная геометрия";
                     OriginalLineGeometry originalGeometry = GetOriginalCenterLineGeometry(
                         rawLine, centerLine, context, hasStoredData ? storedData : null);
                     GrillageLineData lineData = CreateLineData(
@@ -1122,15 +1090,10 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         originalGeometry.Length,
                         originalGeometry.StartPoint,
                         originalGeometry.EndPoint);
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": сохранение данных";
                     UpdateStoredLineData(doc, DetailCurve, lineData);
 
                     long hostKey = context.Floor.Id.Value;
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": чтение существующей арматуры";
-                    if (!existingRebarGroupsByHost.ContainsKey(hostKey))
-                        existingRebarGroupsByHost[hostKey] = CollectExistingLongitudinalRebarGroups(doc, context.Floor);
                     // 18.06.2026 - настройки всегда из окна
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": создание основной арматуры";
                     CenterLineRebarResult result = CreateRebarForCenterLine(doc, rebarTypes, context.Floor, centerLine, context.Thickness, lineData, currentSettings);
                     if (result == null)
                         continue;
@@ -1143,32 +1106,24 @@ namespace FerrumAddinDev.GrillageCreator_v3
                             CornerDiameter = currentSettings.CornerDiameter
                         };
                     }
-
-                    groups[hostKey].Top.Add(result.CenterLine, result.TopLines);
-                    groups[hostKey].Bottom.Add(result.CenterLine, result.BottomLines);
+                    // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
+                    groups[hostKey].Results.Add(result);
                     groups[hostKey].HalfWidths.Add(Math.Max(distances.Left, distances.Right));
                     // 18.06.2026 - настройки всегда из окна
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": защитный слой";
                     ApplyRebarCover(doc, rearCoverTypes, context.Floor, currentSettings);
                     modLength = Math.Max(distances.Left, distances.Right);
-
-                    RebarBarType cornerType = rebarTypes.Where(x => x.Name == currentSettings.CornerDiameter).FirstOrDefault() as RebarBarType;
-                    diagnosticContext = "Линия " + DetailCurve.Id.Value + ": угловая арматура";
-                    CreateCornerRebarsWithExistingRebars(doc, result, existingRebarGroupsByHost[hostKey], cornerType, context.Floor);
                 }
 
                 foreach (RebarBuildGroup group in groups.Values)
                 {
-                    if (group.Top.Count < 2)
+                    if (group.Results.Count < 2)
                         continue;
 
                     modLength = CalculateModeDistance(group.HalfWidths);
                     RebarBarType cornerType = rebarTypes.Where(x => x.Name == group.CornerDiameter).FirstOrDefault() as RebarBarType;
-                    diagnosticContext = "Угловая арматура между выбранными линиями";
-                    CreateCornerRebarsAtIntersections(doc, group.Top, group.Bottom, cornerType, group.Host);
+                    CreateJunctionRebars(doc, group.Results, cornerType, group.Host);
                 }
 
-                diagnosticContext = "Завершение транзакции";
                 tg.Assimilate();
             }
         }
@@ -1328,13 +1283,32 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 CreateRebarSet(doc, verticalLines, typeVertical, RebarStyle.Standard, host, direction, numberOfLinesTop, verticalStep, false, false);
                 CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, host, direction, numberOfLinesBot, horizontalStep, true, false);
             }
-
+            // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
             return new CenterLineRebarResult
             {
                 CenterLine = centerLine,
+                OriginalCenterLine = CreateOriginalCenterLine(centerLine, lineData),
                 TopLines = intermediateLinesTop,
-                BottomLines = intermediateLinesBottom
+                BottomLines = intermediateLinesBottom,
+                LeftBoundaryDistance = lineData.LeftBoundaryDistance,
+                RightBoundaryDistance = lineData.RightBoundaryDistance
             };
+        }
+
+        private Line CreateOriginalCenterLine(Line centerLine, GrillageLineData lineData)
+        {
+            if (lineData == null
+                || !IsUsablePoint(lineData.OriginalStartPoint)
+                || !IsUsablePoint(lineData.OriginalEndPoint))
+                return centerLine;
+
+            double z = centerLine.GetEndPoint(0).Z;
+            XYZ startPoint = new XYZ(lineData.OriginalStartPoint.X, lineData.OriginalStartPoint.Y, z);
+            XYZ endPoint = new XYZ(lineData.OriginalEndPoint.X, lineData.OriginalEndPoint.Y, z);
+            if (startPoint.DistanceTo(endPoint) <= GeometryTolerance)
+                return centerLine;
+
+            return Line.CreateBound(startPoint, endPoint);
         }
 
         private void CreateKnittedRebarSets(Document doc, Element host, XYZ direction, List<Line> topLines,
@@ -2078,27 +2052,28 @@ namespace FerrumAddinDev.GrillageCreator_v3
             public int TopOffset { get; set; }
             public bool IsKnittedMode { get; set; }
         }
-
+        // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
         private class CenterLineRebarResult
         {
             public Line CenterLine { get; set; }
+            public Line OriginalCenterLine { get; set; }
             public List<Line> TopLines { get; set; }
             public List<Line> BottomLines { get; set; }
+            public double LeftBoundaryDistance { get; set; }
+            public double RightBoundaryDistance { get; set; }
         }
 
         private class RebarBuildGroup
         {
             public RebarBuildGroup()
             {
-                Top = new Dictionary<Line, List<Line>>();
-                Bottom = new Dictionary<Line, List<Line>>();
+                Results = new List<CenterLineRebarResult>();
                 HalfWidths = new List<double>();
             }
 
             public Floor Host { get; set; }
             public string CornerDiameter { get; set; }
-            public Dictionary<Line, List<Line>> Top { get; private set; }
-            public Dictionary<Line, List<Line>> Bottom { get; private set; }
+            public List<CenterLineRebarResult> Results { get; private set; }
             public List<double> HalfWidths { get; private set; }
         }
 
@@ -2154,6 +2129,30 @@ namespace FerrumAddinDev.GrillageCreator_v3
             public XYZ Direction { get; set; }
             public XYZ JunctionPoint { get; set; }
             public double Distance { get; set; }
+        }
+        // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
+        private class RebarJunction
+        {
+            public RebarJunction(XYZ point)
+            {
+                Point = point;
+                ResultIndexes = new HashSet<int>();
+            }
+
+            public XYZ Point { get; private set; }
+            public HashSet<int> ResultIndexes { get; private set; }
+        }
+
+        private class JunctionBranch
+        {
+            public JunctionBranch(int resultIndex, XYZ direction)
+            {
+                ResultIndex = resultIndex;
+                Direction = new XYZ(direction.X, direction.Y, 0).Normalize();
+            }
+
+            public int ResultIndex { get; private set; }
+            public XYZ Direction { get; private set; }
         }
 
         private class ExistingRebarLineGroup
@@ -2389,6 +2388,356 @@ namespace FerrumAddinDev.GrillageCreator_v3
             XYZ dir1 = new XYZ(direction1.X, direction1.Y, 0).Normalize();
             XYZ dir2 = new XYZ(direction2.X, direction2.Y, 0).Normalize();
             return dir1.IsAlmostEqualTo(dir2) || dir1.IsAlmostEqualTo(-dir2);
+        }
+        // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
+        private void CreateJunctionRebars(Document doc, List<CenterLineRebarResult> results,
+            RebarBarType barType, Element host)
+        {
+            if (barType == null || results == null || results.Count < 2)
+                return;
+
+            List<RebarJunction> junctions = FindRebarJunctions(results);
+            if (junctions.Count == 0)
+                return;
+
+            using (Transaction tx = new Transaction(doc, "Соединительная арматура в узлах"))
+            {
+                tx.Start();
+
+                foreach (RebarJunction junction in junctions)
+                {
+                    List<JunctionBranch> branches = BuildJunctionBranches(junction, results);
+                    List<List<JunctionBranch>> axes = GroupJunctionBranchesByAxis(branches);
+
+                    if (IsCrossJunction(branches, axes))
+                    {
+                        CreateCrossStraightRebars(doc, junction.Point, axes, results, barType, host);
+                        continue;
+                    }
+
+                    if (IsLJunction(branches) || IsTJunction(branches, axes))
+                        CreateLOrTCornerRebars(doc, junction.Point, branches, results, barType, host);
+                }
+
+                tx.Commit();
+            }
+        }
+
+        private List<RebarJunction> FindRebarJunctions(List<CenterLineRebarResult> results)
+        {
+            const double maxJunctionDistance = 1000.0 / 304.8;
+            const double junctionTolerance = 10.0 / 304.8;
+            List<RebarJunction> junctions = new List<RebarJunction>();
+
+            for (int firstIndex = 0; firstIndex < results.Count; firstIndex++)
+            {
+                Line firstLine = results[firstIndex].OriginalCenterLine ?? results[firstIndex].CenterLine;
+                for (int secondIndex = firstIndex + 1; secondIndex < results.Count; secondIndex++)
+                {
+                    Line secondLine = results[secondIndex].OriginalCenterLine ?? results[secondIndex].CenterLine;
+                    if (AreParallelInXY(firstLine.Direction, secondLine.Direction))
+                        continue;
+
+                    XYZ intersection = GetIntersectionPoint(firstLine, secondLine);
+                    if (intersection == null
+                        || GetDistanceToLineSegmentInXY(intersection, firstLine) > maxJunctionDistance
+                        || GetDistanceToLineSegmentInXY(intersection, secondLine) > maxJunctionDistance)
+                        continue;
+
+                    RebarJunction junction = junctions.FirstOrDefault(item =>
+                        GetDistanceInXY(item.Point, intersection) < junctionTolerance);
+                    if (junction == null)
+                    {
+                        junction = new RebarJunction(intersection);
+                        junctions.Add(junction);
+                    }
+
+                    junction.ResultIndexes.Add(firstIndex);
+                    junction.ResultIndexes.Add(secondIndex);
+                }
+            }
+
+            return junctions;
+        }
+
+        private double GetDistanceToLineSegmentInXY(XYZ point, Line line)
+        {
+            XYZ start = new XYZ(line.GetEndPoint(0).X, line.GetEndPoint(0).Y, 0);
+            XYZ end = new XYZ(line.GetEndPoint(1).X, line.GetEndPoint(1).Y, 0);
+            XYZ pointInXY = new XYZ(point.X, point.Y, 0);
+            XYZ vector = end - start;
+            double lengthSquared = vector.DotProduct(vector);
+            if (lengthSquared <= GeometryTolerance)
+                return pointInXY.DistanceTo(start);
+
+            double parameter = (pointInXY - start).DotProduct(vector) / lengthSquared;
+            parameter = Math.Max(0, Math.Min(1, parameter));
+            return pointInXY.DistanceTo(start + vector * parameter);
+        }
+
+        private double GetDistanceInXY(XYZ firstPoint, XYZ secondPoint)
+        {
+            return new XYZ(firstPoint.X - secondPoint.X, firstPoint.Y - secondPoint.Y, 0).GetLength();
+        }
+
+        private List<JunctionBranch> BuildJunctionBranches(RebarJunction junction,
+            List<CenterLineRebarResult> results)
+        {
+            const double branchTolerance = 10.0 / 304.8;
+            List<JunctionBranch> branches = new List<JunctionBranch>();
+
+            foreach (int resultIndex in junction.ResultIndexes)
+            {
+                Line line = results[resultIndex].OriginalCenterLine ?? results[resultIndex].CenterLine;
+                XYZ direction = GetHorizontalDirection(line);
+                XYZ junctionAtLineZ = new XYZ(junction.Point.X, junction.Point.Y, line.GetEndPoint(0).Z);
+                double firstProjection = (line.GetEndPoint(0) - junctionAtLineZ).DotProduct(direction);
+                double secondProjection = (line.GetEndPoint(1) - junctionAtLineZ).DotProduct(direction);
+                double minProjection = Math.Min(firstProjection, secondProjection);
+                double maxProjection = Math.Max(firstProjection, secondProjection);
+
+                if (maxProjection > branchTolerance)
+                    branches.Add(new JunctionBranch(resultIndex, direction));
+                if (minProjection < -branchTolerance)
+                    branches.Add(new JunctionBranch(resultIndex, -direction));
+
+                if (minProjection >= -branchTolerance && maxProjection <= branchTolerance)
+                {
+                    XYZ middlePoint = GetLineMidPoint(line);
+                    XYZ middleDirection = new XYZ(
+                        middlePoint.X - junction.Point.X,
+                        middlePoint.Y - junction.Point.Y,
+                        0);
+                    if (middleDirection.GetLength() > GeometryTolerance)
+                        branches.Add(new JunctionBranch(resultIndex, middleDirection.Normalize()));
+                }
+            }
+
+            return branches;
+        }
+
+        private List<List<JunctionBranch>> GroupJunctionBranchesByAxis(List<JunctionBranch> branches)
+        {
+            List<List<JunctionBranch>> axes = new List<List<JunctionBranch>>();
+            foreach (JunctionBranch branch in branches)
+            {
+                List<JunctionBranch> axis = axes.FirstOrDefault(item =>
+                    AreParallelInXY(item[0].Direction, branch.Direction));
+                if (axis == null)
+                {
+                    axis = new List<JunctionBranch>();
+                    axes.Add(axis);
+                }
+
+                axis.Add(branch);
+            }
+
+            return axes;
+        }
+
+        private bool IsLJunction(List<JunctionBranch> branches)
+        {
+            return branches.Count == 2
+                && !AreParallelInXY(branches[0].Direction, branches[1].Direction);
+        }
+
+        private bool IsTJunction(List<JunctionBranch> branches, List<List<JunctionBranch>> axes)
+        {
+            return branches.Count == 3
+                && axes.Count == 2
+                && axes.Any(axis => axis.Count == 2 && AreOppositeDirections(axis[0].Direction, axis[1].Direction));
+        }
+
+        private bool IsCrossJunction(List<JunctionBranch> branches, List<List<JunctionBranch>> axes)
+        {
+            return branches.Count == 4
+                && axes.Count == 2
+                && axes.All(axis => axis.Count == 2
+                    && AreOppositeDirections(axis[0].Direction, axis[1].Direction));
+        }
+
+        private bool AreOppositeDirections(XYZ firstDirection, XYZ secondDirection)
+        {
+            XYZ first = new XYZ(firstDirection.X, firstDirection.Y, 0).Normalize();
+            XYZ second = new XYZ(secondDirection.X, secondDirection.Y, 0).Normalize();
+            return first.DotProduct(second) < -0.999;
+        }
+
+        private void CreateLOrTCornerRebars(Document doc, XYZ junctionPoint,
+            List<JunctionBranch> branches, List<CenterLineRebarResult> results,
+            RebarBarType barType, Element host)
+        {
+            JunctionBranch longBranch = branches
+                .OrderByDescending(branch => GetDistanceToLineSegmentInXY(
+                    junctionPoint, results[branch.ResultIndex].CenterLine))
+                .ThenBy(branch => branch.ResultIndex)
+                .First();
+
+            JunctionBranch shortBranch = branches
+                .Where(branch => !AreParallelInXY(branch.Direction, longBranch.Direction))
+                .OrderBy(branch => branch.ResultIndex)
+                .ThenBy(branch => branch.Direction.X)
+                .ThenBy(branch => branch.Direction.Y)
+                .FirstOrDefault();
+            if (shortBranch == null)
+                return;
+
+            CenterLineRebarResult longResult = results[longBranch.ResultIndex];
+            CenterLineRebarResult shortResult = results[shortBranch.ResultIndex];
+            CreateCornerRebarsForLayer(doc, junctionPoint, longResult.TopLines, shortResult.TopLines,
+                longBranch.Direction, shortBranch.Direction, barType, host);
+            CreateCornerRebarsForLayer(doc, junctionPoint, longResult.BottomLines, shortResult.BottomLines,
+                longBranch.Direction, shortBranch.Direction, barType, host);
+        }
+
+        private void CreateCornerRebarsForLayer(Document doc, XYZ junctionPoint,
+            List<Line> longLines, List<Line> shortLines, XYZ longDirection, XYZ shortDirection,
+            RebarBarType barType, Element host)
+        {
+            const double longLegLength = 600.0 / 304.8;
+            const double shortLegLength = 200.0 / 304.8;
+            List<Line> orderedShortLines = GetBestVirtualLineOrder(longLines, shortLines, junctionPoint);
+            int count = Math.Min(longLines.Count, orderedShortLines.Count);
+
+            for (int index = 0; index < count; index++)
+            {
+                XYZ bendPoint = GetIntersectionPoint(longLines[index], orderedShortLines[index]);
+                if (bendPoint == null)
+                    continue;
+
+                XYZ longDirectionInXY = new XYZ(longDirection.X, longDirection.Y, 0).Normalize();
+                XYZ shortDirectionInXY = new XYZ(shortDirection.X, shortDirection.Y, 0).Normalize();
+                XYZ longEnd = bendPoint + longDirectionInXY * longLegLength;
+                XYZ shortEnd = bendPoint + shortDirectionInXY * shortLegLength;
+                List<Curve> curves = new List<Curve>
+                {
+                    Line.CreateBound(longEnd, bendPoint),
+                    Line.CreateBound(bendPoint, shortEnd)
+                };
+
+                Rebar rebar = Rebar.CreateFromCurves(doc, RebarStyle.Standard, barType,
+                    null, null, host, XYZ.BasisZ, curves,
+                    RebarHookOrientation.Right, RebarHookOrientation.Left, true, true);
+                if (rebar != null)
+                {
+                    Parameter position = rebar.LookupParameter("ADSK_Позиция");
+                    if (position != null && !position.IsReadOnly)
+                        position.Set("1");
+                }
+            }
+        }
+
+        private List<Line> GetBestVirtualLineOrder(List<Line> firstLines, List<Line> secondLines, XYZ junctionPoint)
+        {
+            List<Line> direct = secondLines.ToList();
+            List<Line> reversed = secondLines.AsEnumerable().Reverse().ToList();
+            return GetVirtualIntersectionScore(firstLines, reversed, junctionPoint)
+                < GetVirtualIntersectionScore(firstLines, direct, junctionPoint)
+                ? reversed
+                : direct;
+        }
+
+        private double GetVirtualIntersectionScore(List<Line> firstLines, List<Line> secondLines, XYZ junctionPoint)
+        {
+            int count = Math.Min(firstLines.Count, secondLines.Count);
+            double score = 0;
+            for (int index = 0; index < count; index++)
+            {
+                XYZ intersection = GetIntersectionPoint(firstLines[index], secondLines[index]);
+                score += intersection == null ? 1000000 : GetDistanceInXY(intersection, junctionPoint);
+            }
+
+            return score;
+        }
+
+        private void CreateCrossStraightRebars(Document doc, XYZ junctionPoint,
+            List<List<JunctionBranch>> axes, List<CenterLineRebarResult> results,
+            RebarBarType barType, Element host)
+        {
+            const double anchorageLength = 600.0 / 304.8;
+
+            for (int axisIndex = 0; axisIndex < axes.Count; axisIndex++)
+            {
+                JunctionBranch axisBranch = axes[axisIndex][0];
+                JunctionBranch perpendicularBranch = axes[1 - axisIndex][0];
+                CenterLineRebarResult axisResult = results[axisBranch.ResultIndex];
+                CenterLineRebarResult perpendicularResult = results[perpendicularBranch.ResultIndex];
+                XYZ axisDirection = GetCanonicalAxisDirection(axisBranch.Direction);
+
+                double negativeBoundaryDistance;
+                double positiveBoundaryDistance;
+                GetBoundaryDistancesAlongDirection(perpendicularResult, axisDirection,
+                    out negativeBoundaryDistance, out positiveBoundaryDistance);
+
+                CreateStraightRebarsForLayer(doc, junctionPoint, axisResult.TopLines, axisDirection,
+                    negativeBoundaryDistance + anchorageLength,
+                    positiveBoundaryDistance + anchorageLength,
+                    barType, host);
+                CreateStraightRebarsForLayer(doc, junctionPoint, axisResult.BottomLines, axisDirection,
+                    negativeBoundaryDistance + anchorageLength,
+                    positiveBoundaryDistance + anchorageLength,
+                    barType, host);
+            }
+        }
+
+        private XYZ GetCanonicalAxisDirection(XYZ direction)
+        {
+            XYZ result = new XYZ(direction.X, direction.Y, 0).Normalize();
+            if (result.X < -GeometryTolerance
+                || (Math.Abs(result.X) <= GeometryTolerance && result.Y < 0))
+                result = -result;
+            return result;
+        }
+
+        private void GetBoundaryDistancesAlongDirection(CenterLineRebarResult perpendicularResult,
+            XYZ direction, out double negativeDistance, out double positiveDistance)
+        {
+            XYZ perpendicularLineDirection = GetHorizontalDirection(perpendicularResult.CenterLine);
+            XYZ rightDirection = new XYZ(
+                -perpendicularLineDirection.Y,
+                perpendicularLineDirection.X,
+                0).Normalize();
+
+            if (rightDirection.DotProduct(direction) >= 0)
+            {
+                negativeDistance = perpendicularResult.LeftBoundaryDistance;
+                positiveDistance = perpendicularResult.RightBoundaryDistance;
+            }
+            else
+            {
+                negativeDistance = perpendicularResult.RightBoundaryDistance;
+                positiveDistance = perpendicularResult.LeftBoundaryDistance;
+            }
+        }
+
+        private void CreateStraightRebarsForLayer(Document doc, XYZ junctionPoint,
+            List<Line> longitudinalLines, XYZ direction, double negativeLength, double positiveLength,
+            RebarBarType barType, Element host)
+        {
+            foreach (Line longitudinalLine in longitudinalLines)
+            {
+                XYZ lineStart = longitudinalLine.GetEndPoint(0);
+                XYZ lineDirection = GetHorizontalDirection(longitudinalLine);
+                XYZ junctionAtLineZ = new XYZ(junctionPoint.X, junctionPoint.Y, lineStart.Z);
+                XYZ pointOnLine = lineStart
+                    + lineDirection * (junctionAtLineZ - lineStart).DotProduct(lineDirection);
+                Line straightLine = Line.CreateBound(
+                    pointOnLine - direction * negativeLength,
+                    pointOnLine + direction * positiveLength);
+
+                Rebar rebar = Rebar.CreateFromCurves(doc, RebarStyle.Standard, barType,
+                    null, null, host, XYZ.BasisZ, new List<Curve> { straightLine },
+                    RebarHookOrientation.Right, RebarHookOrientation.Left, true, true);
+                if (rebar == null)
+                    continue;
+
+                Parameter length = rebar.LookupParameter("ADSK_A");
+                if (length != null && !length.IsReadOnly)
+                    length.Set(straightLine.Length);
+                Parameter position = rebar.LookupParameter("ADSK_Позиция");
+                if (position != null && !position.IsReadOnly)
+                    position.Set("1");
+            }
         }
 
         private void CreateCornerRebarsAtIntersections(Document doc,

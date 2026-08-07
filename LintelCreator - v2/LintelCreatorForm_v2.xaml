@@ -125,6 +125,7 @@
             <CheckBox Checked="CheckBox_Checked" Unchecked="CheckBox_Checked" Content="Разбивать перемычки выше и ниже отм. 0,000" Margin="0,0,5,0" />
             <Button Content="Нумерация" Margin="0,0,5,0" Click="Button_Click_1"  />
             <Button Content="Нумерация влож. эл-ов" Margin="0,0,5,0" Click="Button_Click_2"/>
+            <Button Content="Тип основы" Margin="0,0,5,0" Click="Button_SetBaseType_Click"/>
             <Button Content="Разрезы" Margin="0,0,5,0" Click="Button_Click_3"/>
             <Button Content="Марки" Click="Button_Click_4" Margin="0,0,5,0"/>
             <Button Content="Разрезы на листы" Click="Button_Click_5"/>

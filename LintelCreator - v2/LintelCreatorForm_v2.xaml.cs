@@ -217,6 +217,11 @@ namespace FerrumAddinDev.LintelCreator_v2
         {
             CommandLintelCreator_v2.nestedElementsNumberingEvent.Raise();
         }
+        // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
+        private void Button_SetBaseType_Click(object sender, RoutedEventArgs e)
+        {
+            CommandLintelCreator_v2.setLintelBaseTypeEvent.Raise();
+        }
 
         private void Button_Click_3(object sender, RoutedEventArgs e)
         {

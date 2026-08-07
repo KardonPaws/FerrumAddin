@@ -21,9 +21,11 @@ namespace FerrumAddinDev.LintelCreator_v2
     [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.Manual)]
     class CommandLintelCreator_v2 : IExternalCommand
     {
+        // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
         public static ExternalEvent lintelCreateEvent;
         public static ExternalEvent lintelNumerateEvent;
         public static ExternalEvent nestedElementsNumberingEvent;
+        public static ExternalEvent setLintelBaseTypeEvent;
         public static ExternalEvent createSectionsEvent;
         public static ExternalEvent tagLintelsEvent;
         public static ExternalEvent placeSectionsEvent;
@@ -40,6 +42,7 @@ namespace FerrumAddinDev.LintelCreator_v2
             lintelCreateEvent = ExternalEvent.Create(new LintelCreate());
             lintelNumerateEvent = ExternalEvent.Create(new LintelNumerate());
             nestedElementsNumberingEvent = ExternalEvent.Create(new NestedElementsNumbering());
+            setLintelBaseTypeEvent = ExternalEvent.Create(new SetLintelBaseType());
             createSectionsEvent = ExternalEvent.Create(new CreateSectionsForLintels());
             tagLintelsEvent = ExternalEvent.Create(new TagLintels());
             placeSectionsEvent = ExternalEvent.Create(new PlaceSections());
@@ -1432,6 +1435,295 @@ namespace FerrumAddinDev.LintelCreator_v2
         public string GetName()
         {
             return "Нумерация вложенных элементов перемычек";
+        }
+    }
+
+    // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
+    public class SetLintelBaseType : IExternalEventHandler
+    {
+        private const string BaseTypeParameterName = "ZH_Тип_Основы_Стена";
+        private const double WallSearchTolerance = 300.0 / 304.8;
+        private const double VerticalTolerance = 100.0 / 304.8;
+
+        public void Execute(UIApplication app)
+        {
+            UIDocument uidoc = app.ActiveUIDocument;
+            Document doc = uidoc.Document;
+
+            List<FamilyInstance> selectedLintels = uidoc.Selection.GetElementIds()
+                .Select(id => GetTopLevelFamilyInstance(doc.GetElement(id) as FamilyInstance))
+                .Where(IsLintel)
+                .GroupBy(x => x.Id)
+                .Select(group => group.First())
+                .ToList();
+
+            List<FamilyInstance> lintels = selectedLintels.Any()
+                ? selectedLintels
+                : new FilteredElementCollector(doc)
+                    .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                    .WhereElementIsNotElementType()
+                    .OfType<FamilyInstance>()
+                    .Where(IsLintel)
+                    .ToList();
+
+            if (!lintels.Any())
+            {
+                TaskDialog.Show("Тип основы", "Перемычки для обработки не найдены.");
+                return;
+            }
+
+            int processedLintels = 0;
+            int updatedParameters = 0;
+            int wallsNotFound = 0;
+
+            using (Transaction trans = new Transaction(doc, "Определение типа основы перемычек"))
+            {
+                trans.Start();
+
+                try
+                {
+                    foreach (FamilyInstance lintel in lintels)
+                    {
+                        Wall wall = FindHostWall(doc, lintel);
+                        if (wall == null)
+                        {
+                            wallsNotFound++;
+                            continue;
+                        }
+
+                        string baseType = wall.WallType.Name.IndexOf("_НСЩ_", StringComparison.OrdinalIgnoreCase) >= 0
+                            ? "Каркас"
+                            : "Перегородка";
+
+                        foreach (ElementId id in lintel.GetSubComponentIds())
+                        {
+                            Element subElement = doc.GetElement(id);
+                            Parameter parameter = subElement?.LookupParameter(BaseTypeParameterName);
+
+                            if (parameter != null
+                                && !parameter.IsReadOnly
+                                && parameter.StorageType == StorageType.String)
+                            {
+                                parameter.Set(baseType);
+                                updatedParameters++;
+                            }
+                        }
+
+                        processedLintels++;
+                    }
+
+                    trans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    trans.RollBack();
+                    TaskDialog.Show("Ошибка", ex.Message);
+                    return;
+                }
+            }
+
+            string scope = selectedLintels.Any() ? "выбранным перемычкам" : "всем перемычкам модели";
+            string result = $"Тип основы назначен по {scope}.\n" +
+                            $"Обработано перемычек: {processedLintels}.\n" +
+                            $"Изменено параметров: {updatedParameters}.";
+
+            if (wallsNotFound > 0)
+                result += $"\nНе найдена стена для перемычек: {wallsNotFound}.";
+
+            TaskDialog.Show("Тип основы", result);
+        }
+
+        private static FamilyInstance GetTopLevelFamilyInstance(FamilyInstance instance)
+        {
+            while (instance?.SuperComponent is FamilyInstance parent)
+                instance = parent;
+
+            return instance;
+        }
+
+        private static bool IsLintel(FamilyInstance instance)
+        {
+            if (instance == null
+                || instance.SuperComponent != null
+                || instance.Category == null
+                || instance.Category.Id.Value != (long)BuiltInCategory.OST_StructuralFraming)
+            {
+                return false;
+            }
+
+            string grouping = instance.LookupParameter("ADSK_Группирование")?.AsString();
+            string keyNote = instance.Symbol?.LookupParameter("Ключевая пометка")?.AsString();
+
+            return string.Equals(grouping, "ПР", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(keyNote, "ПР", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static Wall FindHostWall(Document doc, FamilyInstance lintel)
+        {
+            BoundingBoxXYZ lintelBox = lintel.get_BoundingBox(null);
+            if (lintelBox == null)
+                return null;
+
+            // Сначала быстрым BoundingBox-фильтром оставляем только стены рядом с перемычкой.
+            XYZ expansion = new XYZ(WallSearchTolerance, WallSearchTolerance, VerticalTolerance);
+            Outline searchOutline = new Outline(lintelBox.Min - expansion, lintelBox.Max + expansion);
+            List<Wall> candidateWalls = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_Walls)
+                .WhereElementIsNotElementType()
+                .WherePasses(new BoundingBoxIntersectsFilter(searchOutline))
+                .OfType<Wall>()
+                .Where(wall => wall.WallType != null && wall.WallType.Kind != WallKind.Curtain)
+                .ToList();
+
+            if (!candidateWalls.Any())
+                return null;
+
+            // Затем проверяем фактическое пересечение Solid-геометрии перемычки и стен.
+            Options options = new Options
+            {
+                ComputeReferences = false,
+                DetailLevel = ViewDetailLevel.Fine,
+                IncludeNonVisibleObjects = true
+            };
+
+            List<Solid> lintelSolids = GetElementSolids(doc, lintel, options, true);
+            Wall wallByGeometry = candidateWalls
+                .Select(wall => new
+                {
+                    Wall = wall,
+                    IntersectionVolume = GetIntersectionVolume(
+                        lintelSolids,
+                        GetElementSolids(doc, wall, options, false))
+                })
+                .Where(item => item.IntersectionVolume > 1e-9)
+                .OrderByDescending(item => item.IntersectionVolume)
+                .Select(item => item.Wall)
+                .FirstOrDefault();
+
+            if (wallByGeometry != null)
+                return wallByGeometry;
+
+            // Резерв для семейств, которые не отдают Solid или только касаются грани стены.
+            XYZ lintelPoint = (lintel.Location as LocationPoint)?.Point;
+
+            if (lintelPoint == null)
+                lintelPoint = (lintelBox.Min + lintelBox.Max) / 2.0;
+
+            XYZ lintelDirection = lintel.FacingOrientation;
+            var candidates = new List<Tuple<Wall, bool, double>>();
+
+            foreach (Wall wall in candidateWalls)
+            {
+                LocationCurve wallLocation = wall.Location as LocationCurve;
+                Curve wallCurve = wallLocation?.Curve;
+                BoundingBoxXYZ wallBox = wall.get_BoundingBox(null);
+
+                if (wallCurve == null || wallBox == null)
+                    continue;
+
+                if (lintelBox != null
+                    && (lintelBox.Max.Z < wallBox.Min.Z - VerticalTolerance
+                        || lintelBox.Min.Z > wallBox.Max.Z + VerticalTolerance))
+                {
+                    continue;
+                }
+
+                XYZ pointAtWallElevation = new XYZ(
+                    lintelPoint.X,
+                    lintelPoint.Y,
+                    wallCurve.GetEndPoint(0).Z);
+                IntersectionResult projection = wallCurve.Project(pointAtWallElevation);
+
+                if (projection == null)
+                    continue;
+
+                double distance = projection.XYZPoint.DistanceTo(pointAtWallElevation);
+                if (distance > wall.Width / 2.0 + WallSearchTolerance)
+                    continue;
+
+                double directionMatch = Math.Abs(lintelDirection.DotProduct(wall.Orientation));
+                candidates.Add(Tuple.Create(wall, directionMatch >= 0.8, distance));
+            }
+
+            return candidates
+                .OrderByDescending(candidate => candidate.Item2)
+                .ThenBy(candidate => candidate.Item3)
+                .Select(candidate => candidate.Item1)
+                .FirstOrDefault();
+        }
+
+        private static List<Solid> GetElementSolids(
+            Document doc,
+            Element element,
+            Options options,
+            bool includeSubComponents)
+        {
+            var solids = new List<Solid>();
+            AddSolids(element?.get_Geometry(options), solids);
+
+            if (includeSubComponents && element is FamilyInstance familyInstance)
+            {
+                foreach (ElementId subComponentId in familyInstance.GetSubComponentIds())
+                {
+                    Element subComponent = doc.GetElement(subComponentId);
+                    solids.AddRange(GetElementSolids(doc, subComponent, options, true));
+                }
+            }
+
+            return solids;
+        }
+
+        private static void AddSolids(GeometryElement geometry, ICollection<Solid> solids)
+        {
+            if (geometry == null)
+                return;
+
+            foreach (GeometryObject geometryObject in geometry)
+            {
+                if (geometryObject is Solid solid && solid.Volume > 1e-9)
+                {
+                    solids.Add(solid);
+                }
+                else if (geometryObject is GeometryInstance geometryInstance)
+                {
+                    AddSolids(geometryInstance.GetInstanceGeometry(), solids);
+                }
+            }
+        }
+
+        private static double GetIntersectionVolume(
+            IEnumerable<Solid> firstSolids,
+            IEnumerable<Solid> secondSolids)
+        {
+            double volume = 0.0;
+
+            foreach (Solid first in firstSolids)
+            {
+                foreach (Solid second in secondSolids)
+                {
+                    try
+                    {
+                        Solid intersection = BooleanOperationsUtils.ExecuteBooleanOperation(
+                            first,
+                            second,
+                            BooleanOperationsType.Intersect);
+
+                        if (intersection != null)
+                            volume += intersection.Volume;
+                    }
+                    catch (Autodesk.Revit.Exceptions.InvalidOperationException)
+                    {
+                        // У отдельных тел Revit не может выполнить boolean-операцию.
+                    }
+                }
+            }
+
+            return volume;
+        }
+
+        public string GetName()
+        {
+            return "Определение типа основы перемычек";
         }
     }
 
