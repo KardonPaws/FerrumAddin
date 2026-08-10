@@ -2572,41 +2572,74 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     junctionPoint, results[branch.ResultIndex].CenterLine))
                 .ThenBy(branch => branch.ResultIndex)
                 .First();
-
-            JunctionBranch shortBranch = branches
+            // 10.08.26 - новые узлы для ростверков
+            List<JunctionBranch> shortBranches = branches
                 .Where(branch => !AreParallelInXY(branch.Direction, longBranch.Direction))
                 .OrderBy(branch => branch.ResultIndex)
                 .ThenBy(branch => branch.Direction.X)
                 .ThenBy(branch => branch.Direction.Y)
-                .FirstOrDefault();
-            if (shortBranch == null)
+                .ToList();
+            if (shortBranches.Count == 0)
                 return;
 
             CenterLineRebarResult longResult = results[longBranch.ResultIndex];
-            CenterLineRebarResult shortResult = results[shortBranch.ResultIndex];
-            CreateCornerRebarsForLayer(doc, junctionPoint, longResult.TopLines, shortResult.TopLines,
-                longBranch.Direction, shortBranch.Direction, barType, host);
-            CreateCornerRebarsForLayer(doc, junctionPoint, longResult.BottomLines, shortResult.BottomLines,
-                longBranch.Direction, shortBranch.Direction, barType, host);
+            CreateCornerRebarsForLayer(doc, junctionPoint, longResult.TopLines, shortBranches,
+                results, true, longBranch.Direction, barType, host);
+            CreateCornerRebarsForLayer(doc, junctionPoint, longResult.BottomLines, shortBranches,
+                results, false, longBranch.Direction, barType, host);
         }
 
         private void CreateCornerRebarsForLayer(Document doc, XYZ junctionPoint,
-            List<Line> longLines, List<Line> shortLines, XYZ longDirection, XYZ shortDirection,
+            List<Line> longLines, List<JunctionBranch> shortBranches,
+            List<CenterLineRebarResult> results, bool isTopLayer, XYZ longDirection,
             RebarBarType barType, Element host)
         {
             const double longLegLength = 600.0 / 304.8;
             const double shortLegLength = 200.0 / 304.8;
-            List<Line> orderedShortLines = GetBestVirtualLineOrder(longLines, shortLines, junctionPoint);
-            int count = Math.Min(longLines.Count, orderedShortLines.Count);
+            if (longLines == null || longLines.Count == 0 || shortBranches.Count == 0)
+                return;
 
-            for (int index = 0; index < count; index++)
+            JunctionBranch referenceShortBranch = shortBranches[0];
+            List<Line> referenceShortLines = GetJunctionLayerLines(
+                results[referenceShortBranch.ResultIndex], isTopLayer);
+            Line referenceFarLine = GetFarJunctionLine(
+                referenceShortLines, junctionPoint, longDirection);
+            if (referenceFarLine == null)
+                return;
+
+            XYZ shortAxis = GetCanonicalAxisDirection(referenceShortBranch.Direction);
+            List<Line> orderedLongLines = longLines
+                .OrderBy(line => GetCornerPositionAlongAxis(
+                    line, referenceFarLine, junctionPoint, shortAxis))
+                .ToList();
+
+            JunctionBranch negativeShortBranch = shortBranches
+                .OrderBy(branch => branch.Direction.DotProduct(shortAxis))
+                .First();
+            JunctionBranch positiveShortBranch = shortBranches
+                .OrderByDescending(branch => branch.Direction.DotProduct(shortAxis))
+                .First();
+            int negativeDirectionCount = shortBranches.Count > 1
+                ? orderedLongLines.Count / 2
+                : orderedLongLines.Count;
+
+            for (int index = 0; index < orderedLongLines.Count; index++)
             {
-                XYZ bendPoint = GetIntersectionPoint(longLines[index], orderedShortLines[index]);
+                JunctionBranch selectedShortBranch = index < negativeDirectionCount
+                    ? negativeShortBranch
+                    : positiveShortBranch;
+                List<Line> selectedShortLines = GetJunctionLayerLines(
+                    results[selectedShortBranch.ResultIndex], isTopLayer);
+                Line farLine = GetFarJunctionLine(selectedShortLines, junctionPoint, longDirection);
+                if (farLine == null)
+                    continue;
+
+                XYZ bendPoint = GetIntersectionPoint(orderedLongLines[index], farLine);
                 if (bendPoint == null)
                     continue;
 
                 XYZ longDirectionInXY = new XYZ(longDirection.X, longDirection.Y, 0).Normalize();
-                XYZ shortDirectionInXY = new XYZ(shortDirection.X, shortDirection.Y, 0).Normalize();
+                XYZ shortDirectionInXY = selectedShortBranch.Direction;
                 XYZ longEnd = bendPoint + longDirectionInXY * longLegLength;
                 XYZ shortEnd = bendPoint + shortDirectionInXY * shortLegLength;
                 List<Curve> curves = new List<Curve>
@@ -2627,27 +2660,29 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
         }
 
-        private List<Line> GetBestVirtualLineOrder(List<Line> firstLines, List<Line> secondLines, XYZ junctionPoint)
+        private List<Line> GetJunctionLayerLines(CenterLineRebarResult result, bool isTopLayer)
         {
-            List<Line> direct = secondLines.ToList();
-            List<Line> reversed = secondLines.AsEnumerable().Reverse().ToList();
-            return GetVirtualIntersectionScore(firstLines, reversed, junctionPoint)
-                < GetVirtualIntersectionScore(firstLines, direct, junctionPoint)
-                ? reversed
-                : direct;
+            return isTopLayer ? result.TopLines : result.BottomLines;
         }
 
-        private double GetVirtualIntersectionScore(List<Line> firstLines, List<Line> secondLines, XYZ junctionPoint)
+        private Line GetFarJunctionLine(List<Line> lines, XYZ junctionPoint, XYZ longDirection)
         {
-            int count = Math.Min(firstLines.Count, secondLines.Count);
-            double score = 0;
-            for (int index = 0; index < count; index++)
-            {
-                XYZ intersection = GetIntersectionPoint(firstLines[index], secondLines[index]);
-                score += intersection == null ? 1000000 : GetDistanceInXY(intersection, junctionPoint);
-            }
+            if (lines == null || lines.Count == 0)
+                return null;
 
-            return score;
+            XYZ direction = new XYZ(longDirection.X, longDirection.Y, 0).Normalize();
+            return lines.OrderBy(line =>
+                (GetLineMidPoint(line) - junctionPoint).DotProduct(direction)).First();
+        }
+
+        private double GetCornerPositionAlongAxis(Line longLine, Line farLine,
+            XYZ junctionPoint, XYZ shortAxis)
+        {
+            XYZ intersection = GetIntersectionPoint(longLine, farLine);
+            if (intersection == null)
+                return double.MaxValue;
+
+            return (intersection - junctionPoint).DotProduct(shortAxis);
         }
 
         private void CreateCrossStraightRebars(Document doc, XYZ junctionPoint,
