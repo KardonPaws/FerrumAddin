@@ -132,6 +132,10 @@
     <Compile Include="LintelCreator - v2\LintelCreatorForm_v2.xaml.cs">
       <DependentUpon>LintelCreatorForm_v2.xaml</DependentUpon>
     </Compile>
+    <Compile Include="LintelCreator - v2\CommandLintelCreator_v3.cs" />
+    <Compile Include="LintelCreator - v2\LintelCreatorForm_v3.xaml.cs">
+      <DependentUpon>LintelCreatorForm_v3.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -165,6 +169,10 @@
   <ItemGroup>
     <None Include="app.config" />
     <None Include="FerrumAddinDev.addin" />
+    <Content Include="LintelCreator - v2\LintelUnitCatalog_v3.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>LintelUnitCatalog_v3.json</TargetPath>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Properties\Resources.resx">
@@ -206,6 +214,14 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="LintelCreator - v2\LintelCreatorForm_v2.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="LintelCreator - v2\LintelCreatorForm_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="LintelCreator - v2\LintelLayoutPrototype.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -251,6 +267,7 @@
   <PropertyGroup>
     <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"
 if exist "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev" copy "$(ProjectDir)$(OutputPath)*.dll" "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev"
+if exist "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev" copy "$(ProjectDir)$(OutputPath)\LintelUnitCatalog_v3.json" "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev"
 copy "$(ProjectDir)$(OutputPath)\FerrumAddinDev.dll" "$(ProjectDir)\DLL"</PostBuildEvent>
   </PropertyGroup>
 </Project>

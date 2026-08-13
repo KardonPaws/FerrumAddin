@@ -1,0 +1,946 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Автоматическая раскладка перемычек — прототип"
+        Width="1500"
+        Height="900"
+        MinWidth="1280"
+        MinHeight="720"
+        WindowStartupLocation="CenterScreen"
+        Background="#F4F6F8"
+        FontFamily="Segoe UI"
+        FontSize="13">
+    <Window.Resources>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#2563EB"/>
+        <SolidColorBrush x:Key="PrimaryLightBrush" Color="#EFF6FF"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#D7DCE2"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#667085"/>
+        <SolidColorBrush x:Key="SuccessBrush" Color="#16803C"/>
+        <SolidColorBrush x:Key="SuccessLightBrush" Color="#ECFDF3"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="#B54708"/>
+        <SolidColorBrush x:Key="WarningLightBrush" Color="#FFFAEB"/>
+        <SolidColorBrush x:Key="ErrorBrush" Color="#B42318"/>
+        <SolidColorBrush x:Key="ErrorLightBrush" Color="#FEF3F2"/>
+
+        <Style x:Key="PanelStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14"/>
+        </Style>
+
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#17202A"/>
+        </Style>
+
+        <Style x:Key="CaptionStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#344054"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#344054"/>
+            <Setter Property="BorderBrush" Value="#C9D0D8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="DeleteButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource WarningBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="CompactButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Padding" Value="7,4"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="MinWidth" Value="30"/>
+        </Style>
+
+        <Style x:Key="InputStyle" TargetType="TextBox">
+            <Setter Property="Padding" Value="7,5"/>
+            <Setter Property="BorderBrush" Value="#C9D0D8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="ComboStyle" TargetType="ComboBox">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="BorderBrush" Value="#C9D0D8"/>
+            <Setter Property="Background" Value="White"/>
+        </Style>
+
+        <Style x:Key="OpeningItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <Style x:Key="VariantItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,0,9"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="20,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Автоматическая раскладка перемычек" FontSize="21" FontWeight="SemiBold" Foreground="#17202A"/>
+                    <TextBlock Text="Расчёт составных типов и проверка перед размещением" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{StaticResource SuccessLightBrush}" CornerRadius="12" Padding="9,4" Margin="0,0,10,0">
+                        <TextBlock Text="Модель собрана · 3 проёмов" Foreground="{StaticResource SuccessBrush}"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Этапы процесса -->
+
+        <!-- Основная рабочая область -->
+        <Grid Grid.Row="2" Margin="14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="380"/>
+                <ColumnDefinition Width="9"/>
+                <ColumnDefinition Width="420"/>
+                <ColumnDefinition Width="9"/>
+                <ColumnDefinition Width="*" MinWidth="450"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Проёмы -->
+            <Border Grid.Column="0" Style="{StaticResource PanelStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Проёмы" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="1 рассчитано · 1 требуют проверки · 1 пропущен" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Обновить" Style="{StaticResource CompactButtonStyle}" Height="30" VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Grid Grid.Row="1" Margin="0,13,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="112"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Text="Поиск по ID или типу" Foreground="#98A2B3" Style="{StaticResource InputStyle}"/>
+                        <ComboBox Grid.Column="2" Style="{StaticResource ComboStyle}" SelectedIndex="0">
+                            <ComboBoxItem Content="Все статусы"/>
+                            <ComboBoxItem Content="Рассчитано"/>
+                            <ComboBoxItem Content="Проверить"/>
+                            <ComboBoxItem Content="Без решения"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <Grid Grid.Row="2" Margin="0,0,0,9">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <CheckBox Content="Выбрать все рассчитанные" IsChecked="True" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="2 из 3" Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <Grid Grid.Row="3" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="155"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Группировка" Style="{StaticResource FieldLabelStyle}" VerticalAlignment="Center" Margin="0"/>
+                        <ComboBox Grid.Column="2" Style="{StaticResource ComboStyle}" SelectedIndex="0">
+                            <ComboBoxItem Content="По типу проёма"/>
+                            <ComboBoxItem Content="По категории"/>
+                            <ComboBoxItem Content="Без группировки"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <TabControl Grid.Row="4" Background="Transparent" BorderBrush="{StaticResource BorderBrush}" Padding="0">
+                        <TabItem Header="Проёмы">
+                            <Grid Margin="8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <ListBox Grid.Row="1"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ItemContainerStyle="{StaticResource OpeningItemStyle}"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBoxItem Focusable="False">
+                            <Border Background="#EEF2F6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" CornerRadius="4" Padding="8,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="True" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="01_Дверь_наружная" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Тип ДВ-1500×2100" Style="{StaticResource CaptionStyle}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="1 шт." Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                        </ListBoxItem>
+                        <ListBoxItem IsSelected="True" Margin="16,0,0,8">
+                            <Border BorderBrush="{StaticResource PrimaryBrush}" BorderThickness="2" CornerRadius="5" Background="{StaticResource PrimaryLightBrush}" Padding="10">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <RadioButton Grid.Column="1" Content="Стена _НСЩ_ · 380 мм" IsChecked="True" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="2" Text="1 экз." Foreground="{StaticResource SuccessBrush}" FontSize="12"/>
+                                    </Grid>
+                                    <TextBlock Text="Проёмы: ID 123456" Margin="24,7,0,0"/>
+                                    <TextBlock Text="Несущая сторона 1 · найдено 3 варианта" Style="{StaticResource CaptionStyle}" Margin="24,3,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </ListBoxItem>
+                        <ListBoxItem Focusable="False"/>
+                                    <ListBoxItem Margin="16,0,0,8"/>
+                                    <ListBoxItem Focusable="False">
+                            <Border Background="#EEF2F6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" CornerRadius="4" Padding="8,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="True" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="01_Дверь_внутренняя" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Тип ДВ-1200×2100" Style="{StaticResource CaptionStyle}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="1 шт." Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                        </ListBoxItem>
+                        <ListBoxItem Margin="16,0,0,8">
+                            <Border BorderBrush="#F5C66B" BorderThickness="1" CornerRadius="5" Background="{StaticResource WarningLightBrush}" Padding="10">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <RadioButton Grid.Column="1" Content="Стена _КЛ_ · 400 мм" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="2" Text="1 экз." Foreground="{StaticResource WarningBrush}" FontSize="12"/>
+                                    </Grid>
+                                    <TextBlock Text="Проёмы: ID 126441" Margin="24,7,0,0"/>
+                                    <TextBlock Text="Ширина перемычки больше ширины проема на 1000 мм" Foreground="{StaticResource WarningBrush}" FontSize="12" Margin="24,3,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </ListBoxItem>
+                        <ListBoxItem Focusable="False">
+                            <Border Background="#EEF2F6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" CornerRadius="4" Padding="8,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="False" IsEnabled="False" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Витраж" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Тип ВТ-2750×2400" Style="{StaticResource CaptionStyle}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="1 шт." Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                        </ListBoxItem>
+                        <ListBoxItem Margin="16,0,0,8">
+                            <Border BorderBrush="#FDA29B" BorderThickness="1" CornerRadius="5" Background="{StaticResource ErrorLightBrush}" Padding="10">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="False" IsEnabled="False" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <RadioButton Grid.Column="1" Content="Стена _НСЩ_ · 640 мм" IsEnabled="False" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="2" Text="1 экз." Foreground="{StaticResource ErrorBrush}" FontSize="12"/>
+                                    </Grid>
+                                    <TextBlock Text="Проёмы: ID 127002" Margin="24,7,0,0"/>
+                                    <TextBlock Text="Нет перемычки требуемой длины ≥ 3250 мм" Foreground="{StaticResource ErrorBrush}" FontSize="12" Margin="24,3,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </ListBoxItem>
+                                </ListBox>
+                            </Grid>
+                        </TabItem>
+
+                        <TabItem Header="Проёмы с перемычками">
+                            <Grid Margin="8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Margin="0,0,0,7"/>
+
+                                <TreeView Grid.Row="1" BorderThickness="0" Background="Transparent">
+                                    <TreeViewItem IsExpanded="True">
+                                        <TreeViewItem.Header>
+                                            <Grid Width="300">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="01_Дверь_наружная" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="Тип ДВ-1500×2100" Style="{StaticResource CaptionStyle}"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="5 шт." Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </TreeViewItem.Header>
+                                        <TreeViewItem IsSelected="True">
+                                            <TreeViewItem.Header>
+                                                <Border BorderBrush="{StaticResource PrimaryBrush}" BorderThickness="1" CornerRadius="4" Background="{StaticResource PrimaryLightBrush}" Padding="8" Margin="0,4,0,4" Width="285">
+                                                    <StackPanel>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <RadioButton Content="Стена _НСЩ_ · 380 мм" IsChecked="True" FontWeight="SemiBold"/>
+                                                            <TextBlock Grid.Column="1" Text="3 экз." Foreground="{StaticResource SuccessBrush}"/>
+                                                        </Grid>
+                                                        <TextBlock Text="Текущий тип: 65_380_2000_Н160-120-100" Style="{StaticResource CaptionStyle}" Margin="20,5,0,0" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="ID перемычек: 450021, 450118, 450231" Style="{StaticResource CaptionStyle}" Margin="20,2,0,0" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </TreeViewItem.Header>
+                                        </TreeViewItem>
+                                        <TreeViewItem>
+                                            <TreeViewItem.Header>
+                                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Background="White" Padding="8" Margin="0,4,0,4" Width="285">
+                                                    <StackPanel>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <RadioButton Content="Стена _НСЩ_ · 510 мм" FontWeight="SemiBold"/>
+                                                            <TextBlock Grid.Column="1" Text="2 экз." Foreground="{StaticResource SuccessBrush}"/>
+                                                        </Grid>
+                                                        <TextBlock Text="Текущий тип: 65_510_2200_Н160-140-120-90" Style="{StaticResource CaptionStyle}" Margin="20,5,0,0" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </TreeViewItem.Header>
+                                        </TreeViewItem>
+                                    </TreeViewItem>
+
+                                    <TreeViewItem IsExpanded="True">
+                                        <TreeViewItem.Header>
+                                            <Grid Width="300">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="01_Окно" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="Тип ОК-1810×1500" Style="{StaticResource CaptionStyle}"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="4 шт." Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </TreeViewItem.Header>
+                                        <TreeViewItem>
+                                            <TreeViewItem.Header>
+                                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Background="White" Padding="8" Margin="0,4,0,4" Width="285">
+                                                    <StackPanel>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <RadioButton Content="Стена _НСЩ_ · 380 мм" FontWeight="SemiBold"/>
+                                                            <TextBlock Grid.Column="1" Text="4 экз." Foreground="{StaticResource SuccessBrush}"/>
+                                                        </Grid>
+                                                        <TextBlock Text="Текущий тип: 88_380_2200_Н160-120-100" Style="{StaticResource CaptionStyle}" Margin="20,5,0,0" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </TreeViewItem.Header>
+                                        </TreeViewItem>
+                                    </TreeViewItem>
+                                </TreeView>
+
+                                <Border Grid.Row="2" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="9" Margin="0,8,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Изменение существующих перемычек" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Выбрано: 3 экземпляра" Style="{StaticResource CaptionStyle}" Margin="0,2,0,7"/>
+
+                                        <TextBlock Text="Новый тип" Style="{StaticResource FieldLabelStyle}"/>
+                                        <ComboBox Style="{StaticResource ComboStyle}" SelectedIndex="0" Margin="0,0,0,7">
+                                            <ComboBoxItem Content="Имя типа"/>
+                                            <ComboBoxItem Content="AUTO_65_380_2000_Н160-120-120"/>
+                                            <ComboBoxItem Content="Рассчитать новый вариант…"/>
+                                        </ComboBox>
+
+                                        <CheckBox Content="Применить ко всем экземплярам этой стены" IsChecked="True" Margin="0,0,0,8"/>
+                                        <WrapPanel>
+                                            <Button Content="Изменить тип" Style="{StaticResource SecondaryButtonStyle}"/>
+                                            <Button Content="Заменить" Style="{StaticResource PrimaryButtonStyle}" Margin="0"/>
+                                            <Button Content="Удалить" Style="{StaticResource DeleteButtonStyle}" Margin="9,0,6,0"/>
+                                        </WrapPanel>
+                                        <TextBlock Text="Изменить тип — без пересоздания. Заменить — удалить существующую и поставить рассчитанную заново. Удалить - удалить перемычки для выбранных проемов."
+                                                   Style="{StaticResource CaptionStyle}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </Border>
+
+            <!-- Варианты расчёта -->
+            <Border Grid.Column="2" Style="{StaticResource PanelStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Варианты раскладки" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="Проём ID 123456" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Пересчитать" Style="{StaticResource CompactButtonStyle}"/>
+                    </Grid>
+
+                    <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,13,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Ширина проёма" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="1500 мм" FontWeight="SemiBold"/>
+                                <TextBlock Text="Толщина стены" Style="{StaticResource FieldLabelStyle}" Margin="0,9,0,4"/>
+                                <TextBlock Text="380 мм" FontWeight="SemiBold"/>
+                                <TextBlock Text="Тип стены" Style="{StaticResource FieldLabelStyle}" Margin="0,9,0,4"/>
+                                <TextBlock Text="_НСЩ_ · Каркас" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Требуемая длина" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="≥ 2000 мм" FontWeight="SemiBold"/>
+                                <TextBlock Text="Несущая сторона" Style="{StaticResource FieldLabelStyle}" Margin="0,9,0,4"/>
+                                <TextBlock Text="Сторона 1" FontWeight="SemiBold"/>
+                                <TextBlock Text="Несущая зона" Style="{StaticResource FieldLabelStyle}" Margin="0,9,0,4"/>
+                                <TextBlock Text="160 мм" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="2"
+                            Background="#F8FAFC"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="10"
+                            Margin="0,0,0,10">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Настройка подбора" FontWeight="SemiBold" Foreground="#17202A"/>
+                                <TextBlock Grid.Column="1" Text="Для выбранного проёма" Style="{StaticResource CaptionStyle}"/>
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Тип кладки" Style="{StaticResource FieldLabelStyle}" FontWeight="SemiBold"/>
+                                    <RadioButton Content="Кирпич 65 мм"
+                                                 GroupName="PrototypeWallKind"
+                                                 IsChecked="True"
+                                                 Margin="0,2,0,4"/>
+                                    <RadioButton Content="Кирпич 88 мм"
+                                                 GroupName="PrototypeWallKind"
+                                                 Margin="0,0,0,4"/>
+                                    <RadioButton Content="Перегородки"
+                                                 GroupName="PrototypeWallKind"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Материал перемычки" Style="{StaticResource FieldLabelStyle}" FontWeight="SemiBold"/>
+                                    <RadioButton Content="Металлическая"
+                                                 GroupName="PrototypeLintelMaterial"
+                                                 Margin="0,2,0,4"/>
+                                    <RadioButton Content="Железобетонная"
+                                                 GroupName="PrototypeLintelMaterial"
+                                                 IsChecked="True"
+                                                 Margin="0,0,0,8"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Grid.Row="3" Text="Найдено 3 допустимых варианта" Foreground="{StaticResource SuccessBrush}" Margin="0,0,0,8"/>
+
+                    <ListBox Grid.Row="4" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource VariantItemStyle}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBoxItem IsSelected="True">
+                            <Border BorderBrush="{StaticResource PrimaryBrush}" BorderThickness="2" CornerRadius="6" Background="{StaticResource PrimaryLightBrush}" Padding="11">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <RadioButton IsChecked="True" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Вариант 1 · рекомендуемый" FontWeight="SemiBold"/>
+                                            <TextBlock Text="3 элемента · 3 марки" Style="{StaticResource CaptionStyle}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="2" Background="{StaticResource SuccessLightBrush}" CornerRadius="10" Padding="7,3">
+                                            <TextBlock Text="Δ 0 мм" Foreground="{StaticResource SuccessBrush}" FontSize="12"/>
+                                        </Border>
+                                    </Grid>
+                                    <Grid Margin="25,11,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160*"/>
+                                            <ColumnDefinition Width="120*"/>
+                                            <ColumnDefinition Width="100*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#D1E9FF" BorderBrush="#2E90FA" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="Н 160" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="#E9D7FE" BorderBrush="#9B51E0" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="120" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Column="2" Background="#FDEAD7" BorderBrush="#F79009" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="100" HorizontalAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="Несущая сторона →" Foreground="{StaticResource PrimaryBrush}" Margin="25,3,0,0" FontSize="12"/>
+                                </StackPanel>
+                            </Border>
+                        </ListBoxItem>
+
+                        <ListBoxItem>
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Background="White" Padding="11">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <RadioButton VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Вариант 2" FontWeight="SemiBold"/>
+                                            <TextBlock Text="3 элемента · 2 марки" Style="{StaticResource CaptionStyle}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="2" Background="{StaticResource WarningLightBrush}" CornerRadius="10" Padding="7,3">
+                                            <TextBlock Text="Δ +20 мм" Foreground="{StaticResource WarningBrush}" FontSize="12"/>
+                                        </Border>
+                                    </Grid>
+                                    <Grid Margin="25,11,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160*"/>
+                                            <ColumnDefinition Width="120*"/>
+                                            <ColumnDefinition Width="120*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#D1E9FF" BorderBrush="#2E90FA" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="Н 160" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="#E9D7FE" BorderBrush="#9B51E0" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="120" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Column="2" Background="#E9D7FE" BorderBrush="#9B51E0" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="120" HorizontalAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </ListBoxItem>
+
+                        <ListBoxItem>
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Background="White" Padding="11">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <RadioButton VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Вариант 3" FontWeight="SemiBold"/>
+                                            <TextBlock Text="4 элемента · 2 марки" Style="{StaticResource CaptionStyle}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="2" Background="{StaticResource SuccessLightBrush}" CornerRadius="10" Padding="7,3">
+                                            <TextBlock Text="Δ 0 мм" Foreground="{StaticResource SuccessBrush}" FontSize="12"/>
+                                        </Border>
+                                    </Grid>
+                                    <Grid Margin="25,11,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="140*"/>
+                                            <ColumnDefinition Width="80*"/>
+                                            <ColumnDefinition Width="80*"/>
+                                            <ColumnDefinition Width="80*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#D1E9FF" BorderBrush="#2E90FA" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="Н 140" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="#DCFCE7" BorderBrush="#16A34A" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="80" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Column="2" Background="#DCFCE7" BorderBrush="#16A34A" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="80" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Column="3" Background="#DCFCE7" BorderBrush="#16A34A" BorderThickness="1" Padding="4,8">
+                                            <TextBlock Text="80" HorizontalAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </ListBoxItem>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Ручной редактор -->
+            <Border Grid.Column="4" Style="{StaticResource PanelStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Редактор комплекта" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="Можно изменить состав и порядок перед созданием типа" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="Развернуть порядок" Style="{StaticResource CompactButtonStyle}"/>
+                            <Button Content="Вернуть расчёт" Style="{StaticResource CompactButtonStyle}" Margin="0"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,13,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="130"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Имя типа" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="Имя по логике" Style="{StaticResource InputStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <Border Width="20" Height="20" CornerRadius="13" Background="{StaticResource SuccessBrush}" VerticalAlignment="Center">
+                                    <TextBlock Text="✓" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
+                                </Border>
+                                <TextBlock Text="Существующий тип"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="2" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="105"/>
+                            <ColumnDefinition Width="68"/>
+                            <ColumnDefinition Width="62"/>
+                            <ColumnDefinition Width="65"/>
+                            <ColumnDefinition Width="92"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="№" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="2" Text="Назначение" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="1" Text="Тип вложенной перемычки" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="3" Text="Длина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="4" Text="Ширина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="5" Text="Зазор" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="6" Text="Действия" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <Border BorderBrush="#93C5FD" BorderThickness="1" Background="#F0F7FF" CornerRadius="4" Padding="7" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="27"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="68"/>
+                                        <ColumnDefinition Width="62"/>
+                                        <ColumnDefinition Width="65"/>
+                                        <ColumnDefinition Width="92"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="1" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                    <ComboBox Grid.Column="1" SelectedIndex="0" Style="{StaticResource ComboStyle}" Margin="0,0,6,0">
+                                        <ComboBoxItem Content="01_ZH_ЖБ_ПБ 65 : 3ПБ25-8"/>
+                                        <ComboBoxItem Content="01_ZH_ЖБ_ПБ 65 : 2ПБ22-3"/>
+                                    </ComboBox>
+                                    <ComboBox Grid.Column="2" SelectedIndex="0" Style="{StaticResource ComboStyle}" Margin="0,0,6,0">
+                                        <ComboBoxItem Content="Несущая"/>
+                                        <ComboBoxItem Content="Ненесущая"/>
+                                    </ComboBox>
+                                    <TextBox Grid.Column="3" Text="2200" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <TextBox Grid.Column="4" Text="160" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <TextBox Grid.Column="5" Text="0" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <StackPanel Grid.Column="6" Orientation="Horizontal">
+                                        <Button Content="↑" Style="{StaticResource CompactButtonStyle}" IsEnabled="False"/>
+                                        <Button Content="↓" Style="{StaticResource CompactButtonStyle}"/>
+                                        <Button Content="×" Style="{StaticResource CompactButtonStyle}" Foreground="{StaticResource ErrorBrush}" Margin="0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="White" CornerRadius="4" Padding="7" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="27"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="68"/>
+                                        <ColumnDefinition Width="62"/>
+                                        <ColumnDefinition Width="65"/>
+                                        <ColumnDefinition Width="92"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="2" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                    <ComboBox Grid.Column="2" SelectedIndex="0" Style="{StaticResource ComboStyle}" Margin="0,0,6,0">
+                                        <ComboBoxItem Content="Ненесущая"/>
+                                        <ComboBoxItem Content="Несущая"/>
+                                    </ComboBox>
+                                    <ComboBox Grid.Column="1" SelectedIndex="0" Style="{StaticResource ComboStyle}" Margin="0,0,6,0">
+                                        <ComboBoxItem Content="01_ZH_ЖБ_ПБ 65 : 2ПБ22-3"/>
+                                        <ComboBoxItem Content="01_ZH_ЖБ_ПБ 65 : 3ПБ25-8"/>
+                                    </ComboBox>
+                                    <TextBox Grid.Column="3" Text="2200" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <TextBox Grid.Column="4" Text="120" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <TextBox Grid.Column="5" Text="0" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <StackPanel Grid.Column="6" Orientation="Horizontal">
+                                        <Button Content="↑" Style="{StaticResource CompactButtonStyle}"/>
+                                        <Button Content="↓" Style="{StaticResource CompactButtonStyle}"/>
+                                        <Button Content="×" Style="{StaticResource CompactButtonStyle}" Foreground="{StaticResource ErrorBrush}" Margin="0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="White" CornerRadius="4" Padding="7" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="27"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="105"/>
+                                        <ColumnDefinition Width="68"/>
+                                        <ColumnDefinition Width="62"/>
+                                        <ColumnDefinition Width="65"/>
+                                        <ColumnDefinition Width="92"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="3" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                    <ComboBox Grid.Column="2" SelectedIndex="0" Style="{StaticResource ComboStyle}" Margin="0,0,6,0">
+                                        <ComboBoxItem Content="Ненесущая"/>
+                                        <ComboBoxItem Content="Несущая"/>
+                                    </ComboBox>
+                                    <ComboBox Grid.Column="1" SelectedIndex="0" Style="{StaticResource ComboStyle}" Margin="0,0,6,0">
+                                        <ComboBoxItem Content="01_ZH_ЖБ_ПБ 65 : 5ПБ25-37"/>
+                                        <ComboBoxItem Content="01_ZH_ЖБ_ПБ 65 : 2ПБ22-3"/>
+                                    </ComboBox>
+                                    <TextBox Grid.Column="3" Text="2200" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <TextBox Grid.Column="4" Text="100" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <TextBox Grid.Column="5" Text="0" Style="{StaticResource InputStyle}" Margin="0,0,6,0" TextAlignment="Right"/>
+                                    <StackPanel Grid.Column="6" Orientation="Horizontal">
+                                        <Button Content="↑" Style="{StaticResource CompactButtonStyle}"/>
+                                        <Button Content="↓" Style="{StaticResource CompactButtonStyle}" IsEnabled="False"/>
+                                        <Button Content="×" Style="{StaticResource CompactButtonStyle}" Foreground="{StaticResource ErrorBrush}" Margin="0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Button Content="＋ Добавить перемычку" Style="{StaticResource SecondaryButtonStyle}" HorizontalAlignment="Left" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Border Grid.Row="4" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,10,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Стена" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="380 мм" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Комплект" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="380 мм" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Отклонение" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="0 мм" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3">
+                                <TextBlock Text="Допуск" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="±20 мм" Style="{StaticResource InputStyle}" Width="72" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Expander Grid.Row="5" Header="Дополнительные параметры типа (опорные подушки, уголки, планка)" Foreground="#344054">
+                        <Grid Margin="0,9,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="ОП_левая" Style="{StaticResource FieldLabelStyle}"/>
+                                <ComboBox Style="{StaticResource ComboStyle}" SelectedIndex="0">
+                                    <ComboBoxItem Content="ОП 4.4"/>
+                                    <ComboBoxItem Content="ОП 5.4"/>
+                                    <ComboBoxItem Content="&lt;Нет&gt;"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="ОП_правая" Style="{StaticResource FieldLabelStyle}"/>
+                                <ComboBox Style="{StaticResource ComboStyle}" SelectedIndex="1">
+                                    <ComboBoxItem Content="ОП 4.4"/>
+                                    <ComboBoxItem Content="ОП 5.4"/>
+                                    <ComboBoxItem Content="&lt;Нет&gt;"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+                    </Expander>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Сервисные операции из существующего окна -->
+        <Border Grid.Row="3" Background="#FAFBFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="18,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="14"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox Content="Разбивать перемычки выше и ниже отметки 0,000"
+                          IsChecked="True"
+                          VerticalAlignment="Center"/>
+                <WrapPanel Grid.Column="2">
+                    <Button Content="Нумерация" Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="Нумерация влож. элементов" Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="Тип основы" Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="Разрезы" Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="Марки" Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="Разрезы на листы" Style="{StaticResource SecondaryButtonStyle}" Margin="0"/>
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <!-- Нижняя панель действий -->
+        <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="18,11">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{StaticResource WarningLightBrush}" CornerRadius="4" Padding="9,5" Margin="0,0,10,0">
+                        <TextBlock Text="⚠ 1 проёма требуют ручной проверки" Foreground="{StaticResource WarningBrush}"/>
+                    </Border>
+                    <TextBlock Text="Будет создано 1 новых типов, 1 существующих типов будут переиспользованы" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="Закрыть" Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="Сохранить изменения варианта" Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="Создать типы и поставить 2 перемычки" Style="{StaticResource PrimaryButtonStyle}" Margin="0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

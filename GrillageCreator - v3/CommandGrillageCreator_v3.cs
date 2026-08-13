@@ -655,8 +655,10 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     if (!AreLinesCollinearInXY(centerLines[i], centerLines[j]))
                         continue;
 
-                    LineEndPair closestEnds = GetClosestLineEndPair(centerLines[i], i, centerLines[j], j);
-                    if (closestEnds.Distance <= GeometryTolerance || closestEnds.Distance >= maxGapDistance)
+                    LineEndPair closestEnds;
+                    if (!TryGetFacingCollinearEnds(centerLines[i], i, centerLines[j], j, out closestEnds)
+                        || closestEnds.Distance <= GeometryTolerance
+                        || closestEnds.Distance > maxGapDistance + GeometryTolerance)
                         continue;
 
                     possiblePairs.Add(new CollinearGapPair
@@ -686,6 +688,53 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
 
             return result;
+        }
+        // 13.08.26 - ростверки доработка узлов
+        private bool TryGetFacingCollinearEnds(Line firstLine, int firstLineIndex,
+            Line secondLine, int secondLineIndex, out LineEndPair facingEnds)
+        {
+            facingEnds = null;
+            XYZ direction = GetCanonicalAxisDirection(GetHorizontalDirection(firstLine));
+            double firstMin = GetProjectionMin(firstLine, direction);
+            double firstMax = GetProjectionMax(firstLine, direction);
+            double secondMin = GetProjectionMin(secondLine, direction);
+            double secondMax = GetProjectionMax(secondLine, direction);
+
+            // Перекрывающиеся или уже соприкасающиеся отрезки не образуют разрыв.
+            if (Math.Max(firstMin, secondMin) <= Math.Min(firstMax, secondMax) + GeometryTolerance)
+                return false;
+
+            LineEndReference firstEnd;
+            LineEndReference secondEnd;
+            if (firstMax < secondMin)
+            {
+                firstEnd = GetLineEndAtProjection(firstLine, firstLineIndex, direction, true);
+                secondEnd = GetLineEndAtProjection(secondLine, secondLineIndex, direction, false);
+            }
+            else
+            {
+                firstEnd = GetLineEndAtProjection(firstLine, firstLineIndex, direction, false);
+                secondEnd = GetLineEndAtProjection(secondLine, secondLineIndex, direction, true);
+            }
+
+            facingEnds = new LineEndPair
+            {
+                First = firstEnd,
+                Second = secondEnd,
+                Distance = firstEnd.Point.DistanceTo(secondEnd.Point)
+            };
+            return true;
+        }
+
+        private LineEndReference GetLineEndAtProjection(Line line, int lineIndex,
+            XYZ direction, bool useMaximum)
+        {
+            double firstProjection = line.GetEndPoint(0).DotProduct(direction);
+            double secondProjection = line.GetEndPoint(1).DotProduct(direction);
+            int endIndex = useMaximum
+                ? (firstProjection >= secondProjection ? 0 : 1)
+                : (firstProjection <= secondProjection ? 0 : 1);
+            return new LineEndReference(lineIndex, endIndex, line.GetEndPoint(endIndex));
         }
 
         private List<List<CollinearGapPair>> GroupCollinearGapPairs(List<CollinearGapPair> pairs)
@@ -844,7 +893,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 BoundaryPoint = boundaryPoint,
                 JunctionPoint = (point + boundaryPoint) / 2,
                 ExtendedPoint = point + normalizedDirection * extension,
-                ResultPoint = point + normalizedDirection * extension
+                ResultPoint = point
             });
         }
 
@@ -1272,7 +1321,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 Line.CreateBound(verticalLineRightStart.GetEndPoint(1) + XYZ.BasisZ * offsetBot + offsetL,
                     verticalLineLeftStart.GetEndPoint(1) + XYZ.BasisZ * offsetBot + offsetL)
             };
-
+            // 13.08.26 - ростверки доработка узлов
+            List<Rebar> horizontalTransverseRebars = new List<Rebar>();
             if (settings.IsKnittedMode)
             {
                 CreateKnittedRebarSets(doc, host, direction, intermediateLinesTop, intermediateLinesBottom,
@@ -1281,7 +1331,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
             else
             {
                 CreateRebarSet(doc, verticalLines, typeVertical, RebarStyle.Standard, host, direction, numberOfLinesTop, verticalStep, false, false);
-                CreateRebarSet(doc, horizontalLines, typeHorizontal, RebarStyle.Standard, host, direction, numberOfLinesBot, horizontalStep, true, false);
+                horizontalTransverseRebars = CreateRebarSet(doc, horizontalLines, typeHorizontal,
+                    RebarStyle.Standard, host, direction, numberOfLinesBot, horizontalStep, true, false);
             }
             // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
             return new CenterLineRebarResult
@@ -1290,6 +1341,9 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 OriginalCenterLine = CreateOriginalCenterLine(centerLine, lineData),
                 TopLines = intermediateLinesTop,
                 BottomLines = intermediateLinesBottom,
+                HorizontalTransverseRebars = horizontalTransverseRebars,
+                DistributionStartOffset = distributionStartOffset,
+                HorizontalStep = horizontalStep,
                 LeftBoundaryDistance = lineData.LeftBoundaryDistance,
                 RightBoundaryDistance = lineData.RightBoundaryDistance
             };
@@ -2059,6 +2113,11 @@ namespace FerrumAddinDev.GrillageCreator_v3
             public Line OriginalCenterLine { get; set; }
             public List<Line> TopLines { get; set; }
             public List<Line> BottomLines { get; set; }
+            // 13.08.26 - ростверки доработка узлов
+            public List<Rebar> HorizontalTransverseRebars { get; set; }
+            public XYZ DistributionStartOffset { get; set; }
+            public double HorizontalStep { get; set; }
+            public bool HorizontalDistributionRestored { get; set; }
             public double LeftBoundaryDistance { get; set; }
             public double RightBoundaryDistance { get; set; }
         }
@@ -2414,9 +2473,9 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         CreateCrossStraightRebars(doc, junction.Point, axes, results, barType, host);
                         continue;
                     }
-
+                    // 13.08.26 - ростверки доработка узлов
                     if (IsLJunction(branches) || IsTJunction(branches, axes))
-                        CreateLOrTCornerRebars(doc, junction.Point, branches, results, barType, host);
+                        CreateLOrTCornerRebars(doc, junction.Point, branches, axes, results, barType, host);
                 }
 
                 tx.Commit();
@@ -2562,17 +2621,26 @@ namespace FerrumAddinDev.GrillageCreator_v3
             XYZ second = new XYZ(secondDirection.X, secondDirection.Y, 0).Normalize();
             return first.DotProduct(second) < -0.999;
         }
-
+        // 13.08.26 - ростверки доработка узлов
         private void CreateLOrTCornerRebars(Document doc, XYZ junctionPoint,
-            List<JunctionBranch> branches, List<CenterLineRebarResult> results,
-            RebarBarType barType, Element host)
+            List<JunctionBranch> branches, List<List<JunctionBranch>> axes,
+            List<CenterLineRebarResult> results, RebarBarType barType, Element host)
         {
-            JunctionBranch longBranch = branches
-                .OrderByDescending(branch => GetDistanceToLineSegmentInXY(
-                    junctionPoint, results[branch.ResultIndex].CenterLine))
-                .ThenBy(branch => branch.ResultIndex)
-                .First();
-            // 10.08.26 - новые узлы для ростверков
+            // Направление сохраняем по предыдущему правилу: длинное плечо относится
+            // к примыкающей ветви, короткие плечи T делятся по проходной части.
+            // В T примыкающая ветвь определяется топологией: это единственная
+            // ветвь своей оси. Расстояния до трёх ближних граней могут совпадать,
+            // поэтому выбор по расстоянию давал случайный приоритет проходной части.
+            List<JunctionBranch> adjoiningAxis = axes == null
+                ? null
+                : axes.FirstOrDefault(axis => axis.Count == 1);
+            JunctionBranch longBranch = adjoiningAxis != null
+                ? adjoiningAxis[0]
+                : branches
+                    .OrderByDescending(branch => GetDistanceToLineSegmentInXY(
+                        junctionPoint, results[branch.ResultIndex].CenterLine))
+                    .ThenBy(branch => branch.ResultIndex)
+                    .First();
             List<JunctionBranch> shortBranches = branches
                 .Where(branch => !AreParallelInXY(branch.Direction, longBranch.Direction))
                 .OrderBy(branch => branch.ResultIndex)
@@ -2596,21 +2664,28 @@ namespace FerrumAddinDev.GrillageCreator_v3
         {
             const double longLegLength = 600.0 / 304.8;
             const double shortLegLength = 200.0 / 304.8;
+            const double minimumAnchorageBeyondBoundary = 100.0 / 304.8;
             if (longLines == null || longLines.Count == 0 || shortBranches.Count == 0)
                 return;
 
             JunctionBranch referenceShortBranch = shortBranches[0];
-            List<Line> referenceShortLines = GetJunctionLayerLines(
-                results[referenceShortBranch.ResultIndex], isTopLayer);
-            Line referenceFarLine = GetFarJunctionLine(
-                referenceShortLines, junctionPoint, longDirection);
-            if (referenceFarLine == null)
+            CenterLineRebarResult referenceShortResult = results[referenceShortBranch.ResultIndex];
+            List<Line> referenceShortLines = GetJunctionLayerLines(referenceShortResult, isTopLayer);
+            if (referenceShortLines == null || referenceShortLines.Count == 0)
                 return;
 
             XYZ shortAxis = GetCanonicalAxisDirection(referenceShortBranch.Direction);
+            Line referenceFarLine;
+            bool referenceWasShifted;
+            Line referenceBendLine = GetCornerBendLine(referenceShortResult, referenceShortLines,
+                junctionPoint, longDirection, longLegLength,
+                minimumAnchorageBeyondBoundary, out referenceFarLine, out referenceWasShifted);
+            if (referenceBendLine == null)
+                return;
+
             List<Line> orderedLongLines = longLines
                 .OrderBy(line => GetCornerPositionAlongAxis(
-                    line, referenceFarLine, junctionPoint, shortAxis))
+                    line, referenceBendLine, junctionPoint, shortAxis))
                 .ToList();
 
             JunctionBranch negativeShortBranch = shortBranches
@@ -2628,13 +2703,17 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 JunctionBranch selectedShortBranch = index < negativeDirectionCount
                     ? negativeShortBranch
                     : positiveShortBranch;
-                List<Line> selectedShortLines = GetJunctionLayerLines(
-                    results[selectedShortBranch.ResultIndex], isTopLayer);
-                Line farLine = GetFarJunctionLine(selectedShortLines, junctionPoint, longDirection);
-                if (farLine == null)
+                CenterLineRebarResult shortResult = results[selectedShortBranch.ResultIndex];
+                List<Line> shortLines = GetJunctionLayerLines(shortResult, isTopLayer);
+                Line extremeFarLine;
+                bool wasShifted;
+                Line bendLine = GetCornerBendLine(shortResult, shortLines,
+                    junctionPoint, longDirection, longLegLength,
+                    minimumAnchorageBeyondBoundary, out extremeFarLine, out wasShifted);
+                if (bendLine == null)
                     continue;
 
-                XYZ bendPoint = GetIntersectionPoint(orderedLongLines[index], farLine);
+                XYZ bendPoint = GetIntersectionPoint(orderedLongLines[index], bendLine);
                 if (bendPoint == null)
                     continue;
 
@@ -2657,6 +2736,9 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     if (position != null && !position.IsReadOnly)
                         position.Set("1");
                 }
+
+                if (wasShifted)
+                    RestoreHorizontalTransverseDistribution(doc, shortResult);
             }
         }
 
@@ -2665,14 +2747,77 @@ namespace FerrumAddinDev.GrillageCreator_v3
             return isTopLayer ? result.TopLines : result.BottomLines;
         }
 
-        private Line GetFarJunctionLine(List<Line> lines, XYZ junctionPoint, XYZ longDirection)
+        private Line GetCornerBendLine(CenterLineRebarResult shortResult, List<Line> lines,
+            XYZ junctionPoint, XYZ longDirection, double longLegLength,
+            double minimumAnchorageBeyondBoundary, out Line extremeFarLine, out bool wasShifted)
         {
+            extremeFarLine = null;
+            wasShifted = false;
             if (lines == null || lines.Count == 0)
                 return null;
 
             XYZ direction = new XYZ(longDirection.X, longDirection.Y, 0).Normalize();
-            return lines.OrderBy(line =>
-                (GetLineMidPoint(line) - junctionPoint).DotProduct(direction)).First();
+            List<Line> orderedLines = lines.OrderBy(line =>
+                (GetLineMidPoint(line) - junctionPoint).DotProduct(direction)).ToList();
+            extremeFarLine = orderedLines[0];
+
+            double negativeBoundaryDistance;
+            double positiveBoundaryDistance;
+            GetBoundaryDistancesAlongDirection(shortResult, direction,
+                out negativeBoundaryDistance, out positiveBoundaryDistance);
+
+            for (int lineIndex = 0; lineIndex < orderedLines.Count; lineIndex++)
+            {
+                double lineProjection = (GetLineMidPoint(orderedLines[lineIndex]) - junctionPoint)
+                    .DotProduct(direction);
+                double anchorageBeyondBoundary = lineProjection + longLegLength
+                    - positiveBoundaryDistance;
+                if (anchorageBeyondBoundary < minimumAnchorageBeyondBoundary - GeometryTolerance)
+                    continue;
+
+                wasShifted = lineIndex > 0;
+                return orderedLines[lineIndex];
+            }
+
+            wasShifted = orderedLines.Count > 1;
+            return orderedLines[orderedLines.Count - 1];
+        }
+
+        private void RestoreHorizontalTransverseDistribution(Document doc,
+            CenterLineRebarResult result)
+        {
+            if (result == null || result.HorizontalDistributionRestored
+                || result.HorizontalTransverseRebars == null
+                || result.HorizontalTransverseRebars.Count == 0
+                || result.HorizontalStep <= GeometryTolerance)
+                return;
+
+            XYZ move = result.DistributionStartOffset == null
+                ? XYZ.Zero
+                : -result.DistributionStartOffset;
+            int count = Math.Max(1, (int)(result.CenterLine.Length / result.HorizontalStep) + 1);
+
+            foreach (Rebar rebar in result.HorizontalTransverseRebars)
+            {
+                if (rebar == null || !rebar.IsValidObject)
+                    continue;
+
+                if (move.GetLength() > GeometryTolerance)
+                    ElementTransformUtils.MoveElement(doc, rebar.Id, move);
+
+                Parameter layoutRule = rebar.get_Parameter(BuiltInParameter.REBAR_ELEM_LAYOUT_RULE);
+                Parameter spacing = rebar.get_Parameter(BuiltInParameter.REBAR_ELEM_BAR_SPACING);
+                Parameter quantity = rebar.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS);
+                if (layoutRule != null && !layoutRule.IsReadOnly)
+                    layoutRule.Set(3);
+                if (spacing != null && !spacing.IsReadOnly)
+                    spacing.Set(result.HorizontalStep);
+                if (quantity != null && !quantity.IsReadOnly)
+                    quantity.Set(count);
+                rebar.GetShapeDrivenAccessor().BarsOnNormalSide = true;
+            }
+
+            result.HorizontalDistributionRestored = true;
         }
 
         private double GetCornerPositionAlongAxis(Line longLine, Line farLine,
@@ -2934,14 +3079,15 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
             return result;
         }
-
-        private void CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step, bool poz)
+        // 13.08.26 - ростверки доработка узлов
+        private List<Rebar> CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step, bool poz)
         {
-            CreateRebarSet(doc, lines, barType, style, host, dir, count, step, poz, WindowGrillageCreator_v3.isKnittedMode);
+            return CreateRebarSet(doc, lines, barType, style, host, dir, count, step, poz, WindowGrillageCreator_v3.isKnittedMode);
         }
 
-        private void CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step, bool poz, bool isKnittedMode)
+        private List<Rebar> CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step, bool poz, bool isKnittedMode)
         {
+            List<Rebar> result = new List<Rebar>();
             RebarShape shape = (RebarShape)new FilteredElementCollector(doc).OfClass(typeof(RebarShape)).WhereElementIsElementType().Where(x => x.Name == "Х_51").First();
             using (Transaction tx = new Transaction(doc))
             {
@@ -2959,6 +3105,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     //rebarSet.LookupParameter("ADSK_A").Set(extendedLine.Length);
                     if (rebarSet != null)
                     {
+                        result.Add(rebarSet);
                         rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_LAYOUT_RULE).Set(3);
                         rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_BAR_SPACING).Set(step);
                         rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS).Set(count);
@@ -3005,6 +3152,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
                         if (rebarSet != null)
                         {
+                            result.Add(rebarSet);
                             rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_LAYOUT_RULE).Set(3);
                             rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_BAR_SPACING).Set(step);
                             rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS).Set(count);
@@ -3022,6 +3170,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 }
                 tx.Commit();
             }
+            return result;
         }
 
         private List<Line> ExtendCenterLines(List<Line> centerLines, double modLength)
@@ -3344,8 +3493,10 @@ namespace FerrumAddinDev.GrillageCreator_v3
                                 // 15.04.26 - ошибки в коротких линиях
                                 if (centerLine != null)
                                 {
+                                    // 13.08.26 - ростверки доработка узлов
                                     // Проверяем, что линии полностью внутри контура
-                                    if (IsLineInsideBoundary(centerLine, sideCurves) && LinesNormalDoesntIntersectProfile(line1, line2, sideCurves, centerLine) && (centerLine.Direction.IsAlmostEqualTo(line1.Direction) || centerLine.Direction.IsAlmostEqualTo(line1.Direction.Negate())))
+                                    if (IsCenterLineSupportedByNearestBoundaries(line1, line2, sideCurves, centerLine)
+                                        && AreParallelInXY(centerLine.Direction, line1.Direction))
                                     {
                                         // Проверяем, что средняя линия еще не была добавлена
                                         if (!IsLineAlreadyAdded(centerLine, centerLines))
@@ -3372,6 +3523,79 @@ namespace FerrumAddinDev.GrillageCreator_v3
             modLength = CalculateModeDistance(distances);
 
             return centerLines;
+        }
+        // 13.08.26 - ростверки доработка узлов
+        private bool IsCenterLineSupportedByNearestBoundaries(Line line1, Line line2,
+            List<Line> profile, Line centerLine)
+        {
+            XYZ direction = GetHorizontalDirection(centerLine);
+            XYZ perpendicular = new XYZ(-direction.Y, direction.X, 0).Normalize();
+            XYZ centerMidPoint = GetLineMidPoint(centerLine);
+            double firstOffset = (GetLineMidPoint(line1) - centerMidPoint).DotProduct(perpendicular);
+            double secondOffset = (GetLineMidPoint(line2) - centerMidPoint).DotProduct(perpendicular);
+
+            if (firstOffset * secondOffset >= -GeometryTolerance)
+                return false;
+
+            double expectedPositiveDistance = Math.Max(firstOffset, secondOffset);
+            double expectedNegativeDistance = -Math.Min(firstOffset, secondOffset);
+            if (expectedPositiveDistance <= GeometryTolerance
+                || expectedNegativeDistance <= GeometryTolerance)
+                return false;
+
+            double searchDistance = Math.Max(expectedPositiveDistance, expectedNegativeDistance)
+                + 100.0 / 304.8;
+            const double boundaryTolerance = 2.0 / 304.8;
+            XYZ start = centerLine.GetEndPoint(0);
+            XYZ end = centerLine.GetEndPoint(1);
+
+            // Проверяем не только середину: короткие ветви у T/L часто имеют узел
+            // около одного конца, но по основной длине должны оставаться обычным коридором.
+            foreach (double parameter in new[] { 0.1, 0.5, 0.9 })
+            {
+                XYZ point = start + (end - start) * parameter;
+                if (!IsPointInsideProfileXY(point, profile))
+                    return false;
+
+                double positiveDistance;
+                double negativeDistance;
+                if (!TryFindNearestBoundaryDistance(point, perpendicular, profile,
+                        searchDistance, out positiveDistance)
+                    || !TryFindNearestBoundaryDistance(point, -perpendicular, profile,
+                        searchDistance, out negativeDistance))
+                    return false;
+
+                if (Math.Abs(positiveDistance - expectedPositiveDistance) > boundaryTolerance
+                    || Math.Abs(negativeDistance - expectedNegativeDistance) > boundaryTolerance)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private bool IsPointInsideProfileXY(XYZ point, List<Line> profile)
+        {
+            const double boundaryTolerance = 1.0 / 304.8;
+            bool inside = false;
+
+            foreach (Line edge in profile)
+            {
+                XYZ first = edge.GetEndPoint(0);
+                XYZ second = edge.GetEndPoint(1);
+                if (GetDistanceToLineSegmentInXY(point, edge) <= boundaryTolerance)
+                    return true;
+
+                bool crossesHorizontalRay = (first.Y > point.Y) != (second.Y > point.Y);
+                if (!crossesHorizontalRay)
+                    continue;
+
+                double intersectionX = first.X
+                    + (point.Y - first.Y) * (second.X - first.X) / (second.Y - first.Y);
+                if (intersectionX > point.X + boundaryTolerance)
+                    inside = !inside;
+            }
+
+            return inside;
         }
 
         private bool LinesNormalDoesntIntersectProfile(Line line1, Line line2, List<Line> profile, Line center)
@@ -3482,33 +3706,14 @@ namespace FerrumAddinDev.GrillageCreator_v3
             BoundaryDistances distances = CalculateBoundaryDistances(centerLine, profile);
             return Math.Min(distances.Left, distances.Right);
         }
-
+        // 13.08.26 - ростверки доработка узлов
         private double FindDistanceToIntersection(XYZ startPoint, XYZ direction, List<Line> profile)
         {
             double maxDistance = 1000; // Максимальное расстояние для поиска
-            Line ray = Line.CreateBound(startPoint, startPoint + direction * maxDistance);
-
-            double minDistance = double.MaxValue;
-
-            // Проходим по всем линиям контура
-            foreach (Curve curve in profile)
-            {
-                if (curve is Line boundaryLine)
-                {
-                    if (DoLinesIntersect(ray, boundaryLine))
-                    {
-                        XYZ intersectionPoint = GetIntersectionPoint(ray, boundaryLine);
-                        double distance = startPoint.DistanceTo(intersectionPoint);
-
-                        if (distance < minDistance)
-                        {
-                            minDistance = distance;
-                        }
-                    }
-                }
-            }
-
-            return minDistance;
+            double distance;
+            return TryFindNearestBoundaryDistance(startPoint, direction, profile, maxDistance, out distance)
+                ? distance
+                : double.MaxValue;
         }
 
         private XYZ GetIntersectionPoint(Line line1, Line line2)
@@ -3538,28 +3743,13 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
         private bool DoLinesIntersect(Line line1, Line line2)
         {
-            XYZ p1 = line1.GetEndPoint(0);
-            XYZ p2 = line1.GetEndPoint(1);
-            XYZ p3 = line2.GetEndPoint(0);
-            XYZ p4 = line2.GetEndPoint(1);
-
-            // Векторы направлений
-            // 23.10.25 - исправления в ростверках
-            XYZ dir1 = line1.Direction;
-            XYZ dir2 = line2.Direction;
-
-            double p1_ = line1.GetEndPoint(0).DotProduct(dir1);
-            double p2_ = line1.GetEndPoint(1).DotProduct(dir1);
-            double p3_ = line2.GetEndPoint(0).DotProduct(dir2);
-            double p4_ = line2.GetEndPoint(1).DotProduct(dir2);
-
-            // Проверка пересечения
-            if (line1.Intersect(line2) == SetComparisonResult.Overlap || (p1_ - p2_ == 0 || p1_ - p4_ == 0 || p3_ - p1_ == 0 || p3_ - p4_ == 0))
-            {
-                return true;
-            }
-
-            return false;
+            IntersectionResultArray intersections;
+            SetComparisonResult comparison = line1.Intersect(line2, out intersections);
+            return (intersections != null && intersections.Size > 0)
+                || comparison == SetComparisonResult.Overlap
+                || comparison == SetComparisonResult.Equal
+                || comparison == SetComparisonResult.Subset
+                || comparison == SetComparisonResult.Superset;
         }
 
         private bool IsLineInsideBoundary(Line line, List<Line> profile)
