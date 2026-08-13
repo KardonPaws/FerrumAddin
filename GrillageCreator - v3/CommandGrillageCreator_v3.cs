@@ -578,10 +578,10 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 tg.Assimilate();
             }
         }
-
+        //13.08.26 - максимальная ширина разрыва ростверка 1200
         private List<Line> PrepareCenterLinesForModelLines(List<Line> centerLines, List<Line> profile)
         {
-            const double maxExtendDistance = 1000.0 / 304.8;
+            const double maxExtendDistance = 1200.0 / 304.8;
             const double boundaryGap = 50.0 / 304.8;
 
             return ApplyJunctionExtensionRules(centerLines, profile, maxExtendDistance, boundaryGap);
@@ -618,7 +618,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
         private void ApplyCollinearJunctionRules(List<Line> centerLines, List<JunctionEndCandidate> candidates,
             XYZ[][] endPoints, double maxGapDistance, Random random)
         {
-            List<CollinearGapPair> gapPairs = CollectCollinearGapPairs(centerLines, maxGapDistance);
+            List<CollinearGapPair> gapPairs = CollectCollinearGapPairs(
+                centerLines, candidates, maxGapDistance);
             foreach (List<CollinearGapPair> junctionPairs in GroupCollinearGapPairs(gapPairs))
             {
                 CollinearGapPair firstPair = junctionPairs[0];
@@ -644,7 +645,8 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
         }
 
-        private List<CollinearGapPair> CollectCollinearGapPairs(List<Line> centerLines, double maxGapDistance)
+        private List<CollinearGapPair> CollectCollinearGapPairs(List<Line> centerLines,
+            List<JunctionEndCandidate> candidates, double maxGapDistance)
         {
             List<CollinearGapPair> possiblePairs = new List<CollinearGapPair>();
 
@@ -657,16 +659,26 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
                     LineEndPair closestEnds;
                     if (!TryGetFacingCollinearEnds(centerLines[i], i, centerLines[j], j, out closestEnds)
-                        || closestEnds.Distance <= GeometryTolerance
-                        || closestEnds.Distance > maxGapDistance + GeometryTolerance)
+                        || closestEnds.Distance <= GeometryTolerance)
+                        continue;
+
+                    XYZ junctionPoint = (closestEnds.First.Point + closestEnds.Second.Point) / 2;
+                    XYZ pairDirection = GetHorizontalDirection(centerLines[i]);
+
+                    // 1000 мм остаётся обычным пределом поиска. Более широкий разрыв
+                    // разрешаем только для подтверждённого T: перпендикулярная ветвь
+                    // своим конечным отрезком действительно проходит через его центр.
+                    if (closestEnds.Distance > maxGapDistance + GeometryTolerance
+                        && !HasPerpendicularCandidateAtJunction(
+                            candidates, junctionPoint, pairDirection))
                         continue;
 
                     possiblePairs.Add(new CollinearGapPair
                     {
                         First = closestEnds.First,
                         Second = closestEnds.Second,
-                        Direction = GetHorizontalDirection(centerLines[i]),
-                        JunctionPoint = (closestEnds.First.Point + closestEnds.Second.Point) / 2,
+                        Direction = pairDirection,
+                        JunctionPoint = junctionPoint,
                         Distance = closestEnds.Distance
                     });
                 }
@@ -688,6 +700,26 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
 
             return result;
+        }
+
+        private bool HasPerpendicularCandidateAtJunction(
+            List<JunctionEndCandidate> candidates, XYZ junctionPoint, XYZ pairDirection)
+        {
+            const double junctionTolerance = 10.0 / 304.8;
+            foreach (JunctionEndCandidate candidate in candidates)
+            {
+                if (AreParallelInXY(candidate.Direction, pairDirection))
+                    continue;
+
+                Line candidateExtension = Line.CreateBound(
+                    candidate.Point, candidate.BoundaryPoint);
+                if (GetDistanceToLineSegmentInXY(junctionPoint, candidateExtension)
+                        < junctionTolerance
+                    && Math.Abs(candidate.Point.Z - junctionPoint.Z) < junctionTolerance)
+                    return true;
+            }
+
+            return false;
         }
         // 13.08.26 - ростверки доработка узлов
         private bool TryGetFacingCollinearEnds(Line firstLine, int firstLineIndex,
