@@ -1492,8 +1492,14 @@ namespace FerrumAddinDev.LintelCreator_v2
                         }
 
                         string baseType = wall.WallType.Name.IndexOf("_НСЩ_", StringComparison.OrdinalIgnoreCase) >= 0
-                            ? "Каркас"
-                            : "Перегородка";
+                                    ? "Каркас"
+                                    : "Перегородка";
+                        //21.08.26 - параметр основы стены у вложенных семейств + Марка КС
+                        string constructionMark = GetParameterText(wall?.LookupParameter("ZH_Марка КС"));
+                        string baseTypeValue = string.IsNullOrWhiteSpace(constructionMark)
+                            ? baseType
+                            : $"{baseType}_{constructionMark.Trim().Trim('_')}";
+
 
                         foreach (ElementId id in lintel.GetSubComponentIds())
                         {
@@ -1504,7 +1510,7 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 && !parameter.IsReadOnly
                                 && parameter.StorageType == StorageType.String)
                             {
-                                parameter.Set(baseType);
+                                parameter.Set(baseTypeValue);
                                 updatedParameters++;
                             }
                         }
@@ -1532,6 +1538,15 @@ namespace FerrumAddinDev.LintelCreator_v2
 
             TaskDialog.Show("Тип основы", result);
         }
+        private static string GetParameterText(Parameter parameter)
+        {
+            if (parameter == null || !parameter.HasValue)
+                return null;
+
+            return parameter.StorageType == StorageType.String
+                ? parameter.AsString()
+                : parameter.AsValueString();
+        }
 
         private static FamilyInstance GetTopLevelFamilyInstance(FamilyInstance instance)
         {
@@ -1558,7 +1573,10 @@ namespace FerrumAddinDev.LintelCreator_v2
                    || string.Equals(keyNote, "ПР", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static Wall FindHostWall(Document doc, FamilyInstance lintel)
+        internal static Wall FindHostWall(
+            Document doc,
+            FamilyInstance lintel,
+            string wallTypeName = null)
         {
             BoundingBoxXYZ lintelBox = lintel.get_BoundingBox(null);
             if (lintelBox == null)
@@ -1573,6 +1591,11 @@ namespace FerrumAddinDev.LintelCreator_v2
                 .WherePasses(new BoundingBoxIntersectsFilter(searchOutline))
                 .OfType<Wall>()
                 .Where(wall => wall.WallType != null && wall.WallType.Kind != WallKind.Curtain)
+                .Where(wall => string.IsNullOrWhiteSpace(wallTypeName)
+                               || string.Equals(
+                                   wall.WallType.Name,
+                                   wallTypeName,
+                                   StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (!candidateWalls.Any())
@@ -2429,21 +2452,31 @@ namespace FerrumAddinDev.LintelCreator_v2
                                 newLintel.LookupParameter("ZH_Этаж_Числовой").SetValueString(intLev.ToString());
                                 newLintel.LookupParameter("Видимость.Глубина").SetValueString("2000");
 
-                                //29.07.26 - параметр основы стены у вложенных семейств
+                                //21.08.26 - параметр основы стены у вложенных семейств + Марка КС
+                                Wall hostWall = SetLintelBaseType.FindHostWall(
+                                    doc,
+                                    newLintel,
+                                    selectedWallType);
+
+                                string baseType = selectedWallType.IndexOf("_НСЩ_", StringComparison.OrdinalIgnoreCase) >= 0
+                                    ? "Каркас"
+                                    : "Перегородка";
+                                string constructionMark = GetParameterText(hostWall?.LookupParameter("ZH_Марка КС"));
+                                string baseTypeValue = string.IsNullOrWhiteSpace(constructionMark)
+                                    ? baseType
+                                    : $"{baseType}_{constructionMark.Trim().Trim('_')}";
+
                                 var subComponents = newLintel.GetSubComponentIds();
 
                                 foreach (ElementId id in subComponents)
                                 {
                                     Element subElem = doc.GetElement(id);
-                                    Parameter p = subElem.LookupParameter("ZH_Тип_Основы_Стена");
+                                    Parameter p = subElem?.LookupParameter("ZH_Тип_Основы_Стена");
 
-                                    if (p != null && !p.IsReadOnly)
-                                    {
-                                        if (selectedWallType.Contains("_НСЩ_"))
-                                            p.Set("Каркас");
-                                        else
-                                            p.Set("Перегородка");
-                                    }
+                                    if (p != null
+                                        && !p.IsReadOnly
+                                        && p.StorageType == StorageType.String)
+                                        p.Set(baseTypeValue);
                                 }
 
                                 // Переделать удаление списков - тут удалять из списка Walls сам элемент, после группы проверять колиество элементов и удалять если нет
@@ -2556,6 +2589,17 @@ namespace FerrumAddinDev.LintelCreator_v2
             }
 
         }
+        //21.08.26 - параметр основы стены у вложенных семейств + Марка КС
+        private static string GetParameterText(Parameter parameter)
+        {
+            if (parameter == null || !parameter.HasValue)
+                return null;
+
+            return parameter.StorageType == StorageType.String
+                ? parameter.AsString()
+                : parameter.AsValueString();
+        }
+
         //04.01.26 - ошибочные перемычки перемещены
         private static bool IsErrorTypeName(string typeName)
         {
