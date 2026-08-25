@@ -238,10 +238,41 @@
             </Grid>
         </Border>
 
-        <!-- Этапы процесса -->
+        <!-- Ход сбора проёмов и расчёта вариантов -->
+        <Border Grid.Row="1"
+                Background="White"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="20,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding ActiveProgressTitle}"
+                           Foreground="#344054"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <ProgressBar Grid.Column="1"
+                             Height="14"
+                             Margin="14,0"
+                             Minimum="0"
+                             Maximum="{Binding ActiveProgressMaximum, Mode=OneWay}"
+                             Value="{Binding ActiveProgressValue, Mode=OneWay}"
+                             VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2"
+                           Text="{Binding ActiveProgressText}"
+                           Foreground="{StaticResource PrimaryBrush}"
+                           FontWeight="SemiBold"
+                           MinWidth="70"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
 
         <!-- Основная рабочая область -->
-        <Grid Grid.Row="2" Margin="14">
+        <Grid Grid.Row="2" Margin="14" IsEnabled="{Binding CanInteract}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="380"/>
                 <ColumnDefinition Width="9"/>
@@ -397,7 +428,7 @@
                                 Background="Transparent"
                                 BorderBrush="{StaticResource BorderBrush}"
                                 Padding="0">
-                        <TabItem Header="Проёмы">
+                        <TabItem Header="{Binding OpeningsWithoutLintelTabHeader}">
                             <Grid Margin="8">
                                 <ListBox x:Name="OpeningGroupsListBox"
                                          ItemsSource="{Binding VisibleGroups}"
@@ -454,12 +485,81 @@
                             </Grid>
                         </TabItem>
 
-                        <TabItem Header="Проёмы с перемычками">
+                        <TabItem Header="{Binding ExistingLintelsTabHeader}">
                             <Grid Margin="8">
-                                <TextBlock Text="Будет подключено на следующем этапе"
-                                           Style="{StaticResource CaptionStyle}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0"
+                                            Orientation="Horizontal"
+                                            Margin="0,0,0,8">
+                                    <TextBlock Text="Группировка:"
+                                               Style="{StaticResource CaptionStyle}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <RadioButton Content="По проёму"
+                                                 GroupName="ExistingLintelGrouping"
+                                                 IsChecked="{Binding IsExistingGroupedByOpening, Mode=TwoWay}"
+                                                 VerticalAlignment="Center"
+                                                 Margin="0,0,12,0"/>
+                                    <RadioButton Content="По перемычке"
+                                                 GroupName="ExistingLintelGrouping"
+                                                 IsChecked="{Binding IsExistingGroupedByLintel, Mode=TwoWay}"
+                                                 VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <ListBox x:Name="ExistingLintelGroupsListBox"
+                                         Grid.Row="1"
+                                         ItemsSource="{Binding ExistingLintelGroups}"
+                                         SelectedItem="{Binding SelectedGroup, Mode=TwoWay}"
+                                         SelectionChanged="OpeningGroups_SelectionChanged"
+                                         PreviewMouseLeftButtonDown="ExistingLintelGroups_PreviewMouseLeftButtonDown"
+                                         PreviewMouseWheel="OpeningGroups_PreviewMouseWheel"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ItemContainerStyle="{StaticResource OpeningItemStyle}"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.CanContentScroll="True"
+                                         VirtualizingPanel.IsVirtualizing="True"
+                                         VirtualizingPanel.VirtualizationMode="Recycling"
+                                         VirtualizingPanel.ScrollUnit="Pixel">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource OpeningCardStyle}"
+                                                    ToolTip="{Binding DetailsText}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Text="{Binding ExistingCardTitle}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding ExistingCardDescription}"
+                                                                   Foreground="{StaticResource SuccessBrush}"
+                                                                   FontWeight="SemiBold"
+                                                                   Margin="0,5,0,0"
+                                                                   TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding WallDescription}"
+                                                                   Style="{StaticResource CaptionStyle}"
+                                                                   Margin="0,3,0,0"
+                                                                   TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding ExistingLintelIdsText}"
+                                                                   Style="{StaticResource CaptionStyle}"
+                                                                   FontSize="10"
+                                                                   Margin="0,3,0,0"
+                                                                   TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding CountText}"
+                                                               HorizontalAlignment="Right"
+                                                               Foreground="#344054"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </Grid>
                         </TabItem>
                     </TabControl>
@@ -467,7 +567,9 @@
             </Border>
 
             <!-- Варианты расчёта -->
-            <Border Grid.Column="2" Style="{StaticResource PanelStyle}">
+            <Border Grid.Column="2"
+                    Style="{StaticResource PanelStyle}"
+                    IsEnabled="{Binding IsVariantsPanelEnabled}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -765,7 +867,11 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <Grid Grid.Row="0">
@@ -780,21 +886,251 @@
                                        Margin="0,3,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Content="Развернуть порядок" Style="{StaticResource CompactButtonStyle}" IsEnabled="False"/>
-                            <Button Content="Вернуть расчёт"
+                            <Button Content="Развернуть порядок"
                                     Style="{StaticResource CompactButtonStyle}"
-                                    IsEnabled="False"
+                                    IsEnabled="{Binding CanReverseEditor}"
+                                    Click="ReverseEditorRows_Click"/>
+                            <Button Content="{Binding EditorRestoreButtonText}"
+                                    Style="{StaticResource CompactButtonStyle}"
+                                    IsEnabled="{Binding HasEditorVariant}"
+                                    Click="RestoreEditor_Click"
                                     Margin="0"/>
                         </StackPanel>
                     </Grid>
 
-                    <!-- Содержимое редактора комплекта будет добавлено позже. -->
-                    <ScrollViewer Grid.Row="1"
-                                  Margin="0,13,0,0"
+                    <Border Grid.Row="1"
+                            Background="#F8FAFC"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="10"
+                            Margin="0,13,0,10"
+                            IsEnabled="{Binding HasEditorVariant}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="155"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Имя типа" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="{Binding EditorTypeName, Mode=OneWay}"
+                                         Style="{StaticResource InputStyle}"
+                                         IsReadOnly="True"
+                                         ToolTip="Имя строится по логике v2: кладка, толщина стены, допустимый пролёт и раскладка."/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1"
+                                        Margin="12,18,0,0"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <Border Width="20" Height="20" CornerRadius="10" Margin="0,0,6,0">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding EditorTypeExists}" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding EditorTypeStatusGlyph}"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontWeight="Bold"/>
+                                </Border>
+                                <TextBlock Text="{Binding EditorTypeStatusText}"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding EditorTypeExists}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="2" Margin="0,0,0,6" IsEnabled="{Binding HasEditorVariant}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="100"/>
+                            <ColumnDefinition Width="65"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="94"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="№" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="1" Text="Тип вложенной перемычки" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="2" Text="Назначение" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="3" Text="Длина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="4" Text="Ширина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="5" Text="Зазор" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="6" Text="Действия" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="3"
                                   VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel/>
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  IsEnabled="{Binding HasEditorVariant}">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding EditorRows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="1"
+                                                Background="White"
+                                                CornerRadius="4"
+                                                Padding="7"
+                                                Margin="0,0,0,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="27"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="100"/>
+                                                    <ColumnDefinition Width="65"/>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="94"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Index}"
+                                                           VerticalAlignment="Center"
+                                                           FontWeight="SemiBold"/>
+                                                <ComboBox Grid.Column="1"
+                                                          ItemsSource="{Binding DataContext.EditorCatalogItems, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          SelectedItem="{Binding SelectedCatalogItem, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          DisplayMemberPath="DisplayName"
+                                                          Style="{StaticResource ComboStyle}"
+                                                          Margin="0,0,6,0"/>
+                                                <ComboBox Grid.Column="2"
+                                                          ItemsSource="{Binding DataContext.EditorPurposeOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          SelectedItem="{Binding Purpose, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          Style="{StaticResource ComboStyle}"
+                                                          Margin="0,0,6,0"/>
+                                                <TextBox Grid.Column="3"
+                                                         Text="{Binding LengthMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                         Style="{StaticResource InputStyle}"
+                                                         Margin="0,0,6,0"
+                                                         TextAlignment="Right"/>
+                                                <TextBox Grid.Column="4"
+                                                         Text="{Binding WidthMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                         Style="{StaticResource InputStyle}"
+                                                         Margin="0,0,6,0"
+                                                         TextAlignment="Right"/>
+                                                <TextBox Grid.Column="5"
+                                                         Text="{Binding GapMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                         Style="{StaticResource InputStyle}"
+                                                         Margin="0,0,6,0"
+                                                         TextAlignment="Right"/>
+                                                <StackPanel Grid.Column="6" Orientation="Horizontal">
+                                                    <Button Content="↑"
+                                                            Style="{StaticResource CompactButtonStyle}"
+                                                            IsEnabled="{Binding CanMoveUp}"
+                                                            Click="MoveEditorRowUp_Click"/>
+                                                    <Button Content="↓"
+                                                            Style="{StaticResource CompactButtonStyle}"
+                                                            IsEnabled="{Binding CanMoveDown}"
+                                                            Click="MoveEditorRowDown_Click"/>
+                                                    <Button Content="×"
+                                                            Style="{StaticResource CompactButtonStyle}"
+                                                            Foreground="{StaticResource ErrorBrush}"
+                                                            Click="RemoveEditorRow_Click"
+                                                            Margin="0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="＋ Добавить перемычку"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    IsEnabled="{Binding HasEditorVariant}"
+                                    Click="AddEditorRow_Click"
+                                    Margin="0,3,0,0"/>
+                        </StackPanel>
                     </ScrollViewer>
+
+                    <Border Grid.Row="4"
+                            Background="#F8FAFC"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="10"
+                            Margin="0,10,0,8"
+                            IsEnabled="{Binding HasEditorVariant}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Стена" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="{Binding EditorWallWidthText}" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Комплект" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="{Binding EditorPackageWidthText}" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Отклонение" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="{Binding EditorWidthDeltaText}" FontWeight="SemiBold">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding EditorWidthIsWithinTolerance}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3">
+                                <TextBlock Text="Допуск" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="{Binding WallWidthToleranceMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                         Style="{StaticResource InputStyle}"
+                                         Width="72"
+                                         HorizontalAlignment="Left"
+                                         ToolTip="Допуск по ширине комплекта, мм"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Expander Grid.Row="5"
+                              Header="Дополнительные параметры типа (опорные подушки, уголки, планка)"
+                              Foreground="#344054"
+                              IsEnabled="{Binding HasEditorVariant}">
+                        <Grid Margin="0,9,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="ОП_левая" Style="{StaticResource FieldLabelStyle}"/>
+                                <ComboBox ItemsSource="{Binding SupportPadOptions}"
+                                          SelectedItem="{Binding SelectedLeftSupportPad, Mode=TwoWay}"
+                                          Style="{StaticResource ComboStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="ОП_правая" Style="{StaticResource FieldLabelStyle}"/>
+                                <ComboBox ItemsSource="{Binding SupportPadOptions}"
+                                          SelectedItem="{Binding SelectedRightSupportPad, Mode=TwoWay}"
+                                          Style="{StaticResource ComboStyle}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Expander>
                 </Grid>
             </Border>
         </Grid>

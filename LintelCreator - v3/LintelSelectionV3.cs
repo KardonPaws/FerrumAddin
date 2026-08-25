@@ -48,6 +48,12 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int Issue { get; set; }
         public int MasonryCourseHeightMm { get; set; }
         public double MassKg { get; set; }
+        public string RevitFamilyName { get; set; }
+
+        public string DisplayName => (string.IsNullOrWhiteSpace(RevitFamilyName)
+                                         ? string.IsNullOrWhiteSpace(Family) ? "Перемычка" : Family
+                                         : RevitFamilyName)
+                                     + " : " + Mark;
     }
 
     public sealed class LintelSelectionRequestV3

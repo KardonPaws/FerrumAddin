@@ -5,6 +5,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using System.Threading;
+using System.Threading.Tasks;
 using RevitExternalEvent = Autodesk.Revit.UI.ExternalEvent;
 
 namespace FerrumAddinDev.LintelCreator_v3
@@ -16,8 +19,13 @@ namespace FerrumAddinDev.LintelCreator_v3
         private bool _isClosing;
         private double _smoothScrollTarget = double.NaN;
         private DateTime _smoothScrollUntilUtc = DateTime.MinValue;
+        private double _existingLintelsSmoothScrollTarget = double.NaN;
+        private DateTime _existingLintelsSmoothScrollUntilUtc = DateTime.MinValue;
         private double _variantsSmoothScrollTarget = double.NaN;
         private DateTime _variantsSmoothScrollUntilUtc = DateTime.MinValue;
+        private readonly CancellationTokenSource _calculationCancellation = new CancellationTokenSource();
+        private bool _initialCalculationStarted;
+        private DateTime _lastProgressRenderUtc = DateTime.MinValue;
 
         public LintelCreatorForm_v3(
             LintelOpeningWorkspaceV3 workspace,
@@ -34,11 +42,31 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         public LintelOpeningWorkspaceV3 Workspace { get; }
 
-        private void Refresh_Click(object sender, RoutedEventArgs e)
+        public async void StartInitialCalculation()
+        {
+            if (_initialCalculationStarted || _isClosing) return;
+            _initialCalculationStarted = true;
+            await CalculateAllVariantsAsync();
+        }
+
+        public void RefreshProgressDisplay(bool force = false)
+        {
+            if (_isClosing || !IsVisible) return;
+            DateTime now = DateTime.UtcNow;
+            if (!force && now - _lastProgressRenderUtc < TimeSpan.FromMilliseconds(33)) return;
+
+            _lastProgressRenderUtc = now;
+            UpdateLayout();
+            Dispatcher.Invoke(DispatcherPriority.Render, new Action(() => { }));
+        }
+
+        private async void Refresh_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                Workspace.Reload();
+                Workspace.Reload((processed, total) => RefreshProgressDisplay());
+                RefreshProgressDisplay(true);
+                await Workspace.RecalculateAllVariantsAsync(_calculationCancellation.Token);
             }
             catch (Exception exception)
             {
@@ -118,23 +146,94 @@ namespace FerrumAddinDev.LintelCreator_v3
             _selectionEvent.Raise();
         }
 
+        private void ExistingLintelGroups_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_isClosing || Workspace == null) return;
+            DependencyObject source = e.OriginalSource as DependencyObject;
+            var item = ItemsControl.ContainerFromElement(ExistingLintelGroupsListBox, source) as ListBoxItem;
+            var group = item?.DataContext as OpeningGroupCardV3;
+            if (group == null || ReferenceEquals(Workspace.SelectedGroup, group)) return;
+
+            Workspace.SelectedGroup = group;
+            _selectionHandler.Request(group.ElementIds);
+            _selectionEvent.Raise();
+            e.Handled = true;
+        }
+
         private void Recalculate_Click(object sender, RoutedEventArgs e)
         {
             Workspace?.RecalculateVariants();
         }
 
-        private void RecalculateAll_Click(object sender, RoutedEventArgs e)
+        private async void RecalculateAll_Click(object sender, RoutedEventArgs e)
         {
-            Workspace?.RecalculateAllVariants();
+            await CalculateAllVariantsAsync();
+        }
+
+        private async Task CalculateAllVariantsAsync()
+        {
+            if (Workspace == null || _isClosing) return;
+            try
+            {
+                await Workspace.RecalculateAllVariantsAsync(_calculationCancellation.Token);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(exception.Message, "Расчёт вариантов", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ReverseEditorRows_Click(object sender, RoutedEventArgs e)
+        {
+            Workspace?.ReverseEditorRows();
+        }
+
+        private void RestoreEditor_Click(object sender, RoutedEventArgs e)
+        {
+            Workspace?.RestoreEditorFromCalculation();
+        }
+
+        private void AddEditorRow_Click(object sender, RoutedEventArgs e)
+        {
+            Workspace?.AddEditorRow();
+        }
+
+        private void MoveEditorRowUp_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as Button)?.DataContext is LintelEditorRowV3 row)
+                Workspace?.MoveEditorRow(row, -1);
+        }
+
+        private void MoveEditorRowDown_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as Button)?.DataContext is LintelEditorRowV3 row)
+                Workspace?.MoveEditorRow(row, 1);
+        }
+
+        private void RemoveEditorRow_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as Button)?.DataContext is LintelEditorRowV3 row)
+                Workspace?.RemoveEditorRow(row);
         }
 
         private void OpeningGroups_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            SmoothScrollListBox(
-                OpeningGroupsListBox,
-                ref _smoothScrollTarget,
-                ref _smoothScrollUntilUtc,
-                e);
+            if (ReferenceEquals(sender, ExistingLintelGroupsListBox))
+            {
+                SmoothScrollListBox(
+                    ExistingLintelGroupsListBox,
+                    ref _existingLintelsSmoothScrollTarget,
+                    ref _existingLintelsSmoothScrollUntilUtc,
+                    e);
+            }
+            else
+            {
+                SmoothScrollListBox(
+                    OpeningGroupsListBox,
+                    ref _smoothScrollTarget,
+                    ref _smoothScrollUntilUtc,
+                    e);
+            }
         }
 
         private void Variants_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -194,6 +293,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         private void Form_Closed(object sender, EventArgs e)
         {
             _isClosing = true;
+            _calculationCancellation.Cancel();
             try
             {
                 _selectionEvent?.Dispose();

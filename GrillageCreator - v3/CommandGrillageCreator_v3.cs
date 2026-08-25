@@ -1339,12 +1339,16 @@ namespace FerrumAddinDev.GrillageCreator_v3
             double horizontalStep = settings.HorizontalStep / 304.8;
             if (horizontalStep <= GeometryTolerance)
                 horizontalStep = 200 / 304.8;
-            int numberOfLinesBot = (int)(centerLineLength / horizontalStep) + 1;
 
             double offsetTop = topRadius + typeHorizontal.BarModelDiameter / 2;
             double offsetBot = bottomRadius + typeHorizontal.BarModelDiameter / 2;
             double offsetLen = verticalRadius + typeHorizontal.BarModelDiameter / 2;
             XYZ offsetL = centerLine.Direction * offsetLen;
+            // 25.08.26 - Изменения в Г для армирования ростверка
+            XYZ horizontalDistributionStartPoint = distributionStartPoint + offsetL;
+            int numberOfLinesBot = GetRebarDistributionCountToOriginalEnd(
+                centerLine, lineData, horizontalDistributionStartPoint,
+                direction, horizontalStep);
 
             List<Line> horizontalLines = new List<Line>
             {
@@ -1817,6 +1821,44 @@ namespace FerrumAddinDev.GrillageCreator_v3
             // TryFindFloorContextForLine укорачивает рабочую ось на 25 мм с каждого конца.
             // Сохраняем этот штатный отступ, но считаем его от исходной, непродлённой точки.
             return pointOnCenterLine + direction * (25.0 / 304.8);
+        }
+        // 25.08.26 - Изменения в Г для армирования ростверка
+        private int GetRebarDistributionCountToOriginalEnd(Line centerLine,
+            GrillageLineData lineData, XYZ firstBarPoint, XYZ distributionDirection,
+            double step)
+        {
+            if (step <= GeometryTolerance)
+                return 1;
+
+            XYZ direction = new XYZ(
+                distributionDirection.X,
+                distributionDirection.Y,
+                0).Normalize();
+            List<XYZ> endCandidates = new List<XYZ>();
+            if (lineData != null)
+            {
+                if (IsUsablePoint(lineData.OriginalStartPoint))
+                    endCandidates.Add(lineData.OriginalStartPoint);
+                if (IsUsablePoint(lineData.OriginalEndPoint))
+                    endCandidates.Add(lineData.OriginalEndPoint);
+            }
+
+            if (endCandidates.Count == 0)
+            {
+                endCandidates.Add(centerLine.GetEndPoint(0));
+                endCandidates.Add(centerLine.GetEndPoint(1));
+            }
+
+            double firstBarProjection = firstBarPoint.DotProduct(direction);
+            double originalEndProjection = endCandidates
+                .Max(point => point.DotProduct(direction));
+            double availableLength = originalEndProjection - firstBarProjection;
+            if (availableLength <= GeometryTolerance)
+                return 1;
+
+            // Последний стержень может находиться на грани, но не после неё.
+            return Math.Max(1,
+                (int)Math.Floor((availableLength + GeometryTolerance) / step) + 1);
         }
 
         // 18.06.2026 - настройки всегда из окна
@@ -2497,9 +2539,9 @@ namespace FerrumAddinDev.GrillageCreator_v3
                         CreateCrossStraightRebars(doc, junction.Point, axes, results, barType, host);
                         continue;
                     }
-                    // 13.08.26 - ростверки доработка узлов
+                    // 25.08.26 - Изменения в Г для армирования ростверка
                     if (IsLJunction(branches) || IsTJunction(branches, axes))
-                        CreateLOrTCornerRebars(doc, junction.Point, branches, axes, results, barType, host);
+                        CreateLOrTCornerRebars(doc, junction.Point, branches, results, barType, host);
                 }
 
                 tx.Commit();
@@ -2645,26 +2687,19 @@ namespace FerrumAddinDev.GrillageCreator_v3
             XYZ second = new XYZ(secondDirection.X, secondDirection.Y, 0).Normalize();
             return first.DotProduct(second) < -0.999;
         }
-        // 13.08.26 - ростверки доработка узлов
+        // 25.08.26 - Изменения в Г для армирования ростверка
         private void CreateLOrTCornerRebars(Document doc, XYZ junctionPoint,
-            List<JunctionBranch> branches, List<List<JunctionBranch>> axes,
-            List<CenterLineRebarResult> results, RebarBarType barType, Element host)
+            List<JunctionBranch> branches, List<CenterLineRebarResult> results,
+            RebarBarType barType, Element host)
         {
-            // Направление сохраняем по предыдущему правилу: длинное плечо относится
-            // к примыкающей ветви, короткие плечи T делятся по проходной части.
-            // В T примыкающая ветвь определяется топологией: это единственная
-            // ветвь своей оси. Расстояния до трёх ближних граней могут совпадать,
-            // поэтому выбор по расстоянию давал случайный приоритет проходной части.
-            List<JunctionBranch> adjoiningAxis = axes == null
-                ? null
-                : axes.FirstOrDefault(axis => axis.Count == 1);
-            JunctionBranch longBranch = adjoiningAxis != null
-                ? adjoiningAxis[0]
-                : branches
-                    .OrderByDescending(branch => GetDistanceToLineSegmentInXY(
-                        junctionPoint, results[branch.ResultIndex].CenterLine))
-                    .ThenBy(branch => branch.ResultIndex)
-                    .First();
+            // Длинное плечо должно идти вдоль продольной арматуры, которая
+            // заканчивается перед узлом. У такой ветви расстояние от рабочей
+            // оси арматуры до центра узла больше, чем у ветви, вошедшей в него.
+            JunctionBranch longBranch = branches
+                .OrderByDescending(branch => GetDistanceToLineSegmentInXY(
+                    junctionPoint, results[branch.ResultIndex].CenterLine))
+                .ThenBy(branch => branch.ResultIndex)
+                .First();
             List<JunctionBranch> shortBranches = branches
                 .Where(branch => !AreParallelInXY(branch.Direction, longBranch.Direction))
                 .OrderBy(branch => branch.ResultIndex)
@@ -2736,15 +2771,22 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
                 XYZ longDirectionInXY = new XYZ(longDirection.X, longDirection.Y, 0).Normalize();
                 XYZ shortDirectionInXY = selectedShortBranch.Direction;
+                // 25.08.26 - Изменения в Г для армирования ростверка
+                double cornerBarOffset = barType.BarModelDiameter;
+                // Сдвигаем Г-стержень от обеих продольных арматур внутрь угла
+                // между его плечами на полный диаметр Г-стержня.
+                XYZ cornerBendPoint = bendPoint
+                    + longDirectionInXY * cornerBarOffset
+                    + shortDirectionInXY * cornerBarOffset;
                 double requiredLongLegLength = GetRequiredCornerLongLegLength(
-                    shortResult, bendLine, junctionPoint, longDirectionInXY,
+                    shortResult, cornerBendPoint, junctionPoint, longDirectionInXY,
                     longLegLength, minimumAnchorageBeyondBoundary);
-                XYZ longEnd = bendPoint + longDirectionInXY * requiredLongLegLength;
-                XYZ shortEnd = bendPoint + shortDirectionInXY * shortLegLength;
+                XYZ longEnd = cornerBendPoint + longDirectionInXY * requiredLongLegLength;
+                XYZ shortEnd = cornerBendPoint + shortDirectionInXY * shortLegLength;
                 List<Curve> curves = new List<Curve>
                 {
-                    Line.CreateBound(longEnd, bendPoint),
-                    Line.CreateBound(bendPoint, shortEnd)
+                    Line.CreateBound(longEnd, cornerBendPoint),
+                    Line.CreateBound(cornerBendPoint, shortEnd)
                 };
 
                 Rebar rebar = Rebar.CreateFromCurves(doc, RebarStyle.Standard, barType,
@@ -2774,9 +2816,9 @@ namespace FerrumAddinDev.GrillageCreator_v3
             return lines.OrderBy(line =>
                 (GetLineMidPoint(line) - junctionPoint).DotProduct(direction)).First();
         }
-
+        // 25.08.26 - Изменения в Г для армирования ростверка
         private double GetRequiredCornerLongLegLength(CenterLineRebarResult mainResult,
-            Line bendLine, XYZ junctionPoint, XYZ longDirection,
+            XYZ bendPoint, XYZ junctionPoint, XYZ longDirection,
             double baseLength, double minimumAnchorageBeyondBoundary)
         {
             double negativeBoundaryDistance;
@@ -2784,7 +2826,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
             GetBoundaryDistancesAlongDirection(mainResult, longDirection,
                 out negativeBoundaryDistance, out positiveBoundaryDistance);
 
-            double lineProjection = (GetLineMidPoint(bendLine) - junctionPoint)
+            double lineProjection = (bendPoint - junctionPoint)
                 .DotProduct(longDirection);
             double requiredLength = positiveBoundaryDistance
                 + minimumAnchorageBeyondBoundary - lineProjection;

@@ -263,7 +263,7 @@ namespace FerrumAddinDev
             panelKR = a.CreateRibbonPanel(tabName, "КР");
             panelKR.Visible = false;
 
-            PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.LintelCreator_v2.CommandLintelCreator_v2");
+            PushButtonData LintelCreator = new PushButtonData("LintelCreator", "Создание перемычек", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.LintelCreator_v3.CommandLintelCreator_v3");
             panelKR.AddItem(LintelCreator);
 
             PushButtonData GrillageCreator = new PushButtonData("GrillageCreator", "Армирование ростверка", Assembly.GetExecutingAssembly().Location, "FerrumAddinDev.GrillageCreator_v3.CommandGrillageCreator_v3");
