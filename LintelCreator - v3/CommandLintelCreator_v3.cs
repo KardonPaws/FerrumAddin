@@ -1352,20 +1352,37 @@ namespace FerrumAddinDev.LintelCreator_v3
 
             foreach (string token in parts.Skip(3).SelectMany(part => part.Split('-')))
             {
-                bool isBearing = token.Any(char.IsLetter);
-                string number = new string(token.Where(char.IsDigit).ToArray());
-                if (!int.TryParse(number, NumberStyles.Integer, CultureInfo.InvariantCulture, out int widthMm))
-                    continue;
-
-                LintelCatalogItemV3 item = EditorCatalogItems
-                    .Where(candidate => candidate.WidthMm == widthMm && candidate.IsBearing == isBearing)
+                string normalizedToken = token.Trim();
+                IEnumerable<LintelCatalogItemV3> candidates = EditorCatalogItems
+                    .Concat(_lintelCatalog)
+                    .Where(candidate => candidate != null)
+                    .Distinct();
+                LintelCatalogItemV3 item = candidates
+                    .Where(candidate => string.Equals(
+                        GetLintelTypeCode(candidate, candidate.IsBearing, candidate.WidthMm),
+                        normalizedToken,
+                        StringComparison.Ordinal))
                     .OrderBy(candidate => maximumOpeningWidth > 0
                         ? Math.Abs(candidate.MaximumOpeningWidthMm - maximumOpeningWidth)
                         : 0)
                     .ThenBy(candidate => candidate.LengthMm)
-                    .FirstOrDefault()
-                    ?? _lintelCatalog.FirstOrDefault(candidate =>
-                        candidate.WidthMm == widthMm && candidate.IsBearing == isBearing);
+                    .FirstOrDefault();
+
+                if (item == null)
+                {
+                    bool isBearing = normalizedToken.StartsWith("Н", StringComparison.Ordinal);
+                    string number = new string(normalizedToken.Where(char.IsDigit).ToArray());
+                    if (int.TryParse(number, NumberStyles.Integer, CultureInfo.InvariantCulture, out int widthMm))
+                    {
+                        item = candidates
+                            .Where(candidate => candidate.WidthMm == widthMm && candidate.IsBearing == isBearing)
+                            .OrderBy(candidate => maximumOpeningWidth > 0
+                                ? Math.Abs(candidate.MaximumOpeningWidthMm - maximumOpeningWidth)
+                                : 0)
+                            .ThenBy(candidate => candidate.LengthMm)
+                            .FirstOrDefault();
+                    }
+                }
                 if (item != null)
                     AddExistingEditorRow(item);
             }
@@ -1552,45 +1569,50 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private string BuildEditorLayoutName()
         {
-            List<LintelEditorRowV3> rows = EditorRows.ToList();
-            List<string> tokens = rows
-                .Select(row => (row.IsBearing ? "Н" : string.Empty)
-                               + row.WidthMm.ToString(CultureInfo.InvariantCulture))
+            List<string> tokens = EditorRows
+                .Select(row => GetLintelTypeCode(row.SelectedCatalogItem, row.IsBearing, row.WidthMm))
+                .Where(token => !string.IsNullOrWhiteSpace(token))
                 .ToList();
-            if (tokens.Count == 0) return string.Empty;
-
-            int splitIndex = FindSecondBearingSideStart(rows);
-            if (splitIndex <= 0 || splitIndex >= tokens.Count)
-                return string.Join("-", tokens);
-
-            return string.Join("-", tokens.Take(splitIndex))
-                   + "_" + string.Join("-", tokens.Skip(splitIndex));
+            return string.Join("_", tokens);
         }
 
-        private int FindSecondBearingSideStart(IReadOnlyList<LintelEditorRowV3> rows)
+        private static string GetLintelTypeCode(
+            LintelCatalogItemV3 item,
+            bool isBearing,
+            int widthMm)
         {
-            if (SelectedGroup == null || SelectedGroup.SupportType < 2 || rows.Count < 2)
-                return -1;
+            if (item == null) return string.Empty;
 
-            int trailingStart = rows.Count;
-            while (trailingStart > 0 && rows[trailingStart - 1].IsBearing)
-                trailingStart--;
-            if (trailingStart > 0
-                && trailingStart < rows.Count
-                && rows.Take(trailingStart).Any(row => row.IsBearing))
-                return trailingStart;
-
-            if (trailingStart != 0) return -1;
-
-            double requiredFirst = Math.Max(0, SelectedGroup.RequiredSupportWidth1Mm);
-            int accumulated = 0;
-            for (int index = 0; index < rows.Count - 1; index++)
+            string description = string.Join(" ", new[]
             {
-                accumulated += rows[index].WidthMm;
-                if (accumulated + 0.5 >= requiredFirst)
-                    return index + 1;
-            }
-            return rows.Count / 2;
+                item.Family,
+                item.TypeCode,
+                item.Mark,
+                item.RevitFamilyName,
+                item.Material
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+            if (Contains(description, "пенополист")
+                || Contains(description, "легкий бетон")
+                || Contains(description, "лёгкий бетон"))
+                return "лб";
+            if (Contains(description, "монолит"))
+                return "МП";
+            if (Contains(description, "прогон"))
+                return "ПР";
+            if (Contains(description, "швел"))
+                return "Шв";
+            if (Contains(description, "двутавр") || Contains(description, "двутав"))
+                return "Дв";
+            if (Contains(description, "арматур"))
+                return "А";
+            if (Contains(description, "угол"))
+                return widthMm >= 125 || Contains(description, "125") ? "У" : "у";
+            if (Contains(description, "плит") || widthMm >= 350)
+                return isBearing ? "ППП" : "ппп";
+            if (widthMm >= 200)
+                return isBearing ? "ББ" : "бб";
+            return isBearing ? "Б" : "б";
         }
 
         private static int NormalizeWallWidth(int wallWidthMm)
