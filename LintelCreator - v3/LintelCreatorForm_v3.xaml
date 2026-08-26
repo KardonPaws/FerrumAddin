@@ -31,6 +31,64 @@
             <Setter Property="Padding" Value="14"/>
         </Style>
 
+        <Style x:Key="VerticalSplitterStyle" TargetType="GridSplitter">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="ResizeDirection" Value="Columns"/>
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext"/>
+            <Setter Property="ShowsPreview" Value="False"/>
+            <Setter Property="Cursor" Value="SizeWE"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Grid Background="Transparent">
+                            <Border x:Name="SplitterLine"
+                                    Width="1"
+                                    HorizontalAlignment="Center"
+                                    Background="{StaticResource BorderBrush}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SplitterLine" Property="Width" Value="3"/>
+                                <Setter TargetName="SplitterLine" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HorizontalSplitterStyle" TargetType="GridSplitter">
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="ResizeDirection" Value="Rows"/>
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext"/>
+            <Setter Property="ShowsPreview" Value="False"/>
+            <Setter Property="Cursor" Value="SizeNS"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Grid Background="Transparent">
+                            <Border x:Name="SplitterLine"
+                                    Height="1"
+                                    VerticalAlignment="Center"
+                                    Background="{StaticResource BorderBrush}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SplitterLine" Property="Height" Value="3"/>
+                                <Setter TargetName="SplitterLine" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -208,35 +266,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <Border Grid.Row="0"
-                Background="White"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="0,0,0,1"
-                Padding="20,14">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="Автоматическая раскладка перемычек"
-                               FontSize="21"
-                               FontWeight="SemiBold"
-                               Foreground="#17202A"/>
-                    <TextBlock Text="Этап 2 · характеристики проёма и подбор комплектов"
-                               Style="{StaticResource CaptionStyle}"
-                               Margin="0,3,0,0"/>
-                </StackPanel>
-                <Border Grid.Column="1"
-                        Background="{StaticResource ErrorLightBrush}"
-                        CornerRadius="13"
-                        Padding="10,5"
-                        VerticalAlignment="Center">
-                    <TextBlock Text="{Binding HeaderSummary}" Foreground="{StaticResource ErrorBrush}"/>
-                </Border>
-            </Grid>
-        </Border>
+
 
         <!-- Ход сбора проёмов и расчёта вариантов -->
         <Border Grid.Row="1"
@@ -248,6 +278,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding ActiveProgressTitle}"
@@ -264,22 +295,41 @@
                 <TextBlock Grid.Column="2"
                            Text="{Binding ActiveProgressText}"
                            Foreground="{StaticResource PrimaryBrush}"
+                           Margin="14,0"
                            FontWeight="SemiBold"
                            MinWidth="70"
                            TextAlignment="Right"
                            VerticalAlignment="Center"/>
+                <Border Grid.Column="3"
+        Background="{StaticResource ErrorLightBrush}"
+        CornerRadius="13"
+        Padding="10,5"
+        VerticalAlignment="Center">
+                    <TextBlock Text="{Binding HeaderSummary}" Foreground="{StaticResource ErrorBrush}"/>
+                </Border>
             </Grid>
         </Border>
 
         <!-- Основная рабочая область -->
-        <Grid Grid.Row="2" Margin="14" IsEnabled="{Binding CanInteract}">
+        <Grid x:Name="MainWorkspaceGrid"
+              Grid.Row="2"
+              Margin="14"
+              IsEnabled="{Binding CanInteract}"
+              SizeChanged="MainWorkspaceGrid_SizeChanged">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="380"/>
-                <ColumnDefinition Width="9"/>
-                <ColumnDefinition Width="420"/>
-                <ColumnDefinition Width="9"/>
-                <ColumnDefinition Width="*" MinWidth="450"/>
+                <ColumnDefinition x:Name="OpeningsColumn" Width="380" MinWidth="280"/>
+                <ColumnDefinition x:Name="FirstSplitterColumn" Width="9"/>
+                <ColumnDefinition x:Name="VariantsColumn" Width="420" MinWidth="340"/>
+                <ColumnDefinition x:Name="SecondSplitterColumn" Width="9"/>
+                <ColumnDefinition x:Name="EditorColumn" Width="*" MinWidth="450"/>
             </Grid.ColumnDefinitions>
+
+            <GridSplitter Grid.Column="1"
+                          Style="{StaticResource VerticalSplitterStyle}"
+                          Panel.ZIndex="10"/>
+            <GridSplitter Grid.Column="3"
+                          Style="{StaticResource VerticalSplitterStyle}"
+                          Panel.ZIndex="10"/>
 
             <!-- Проёмы -->
             <Border Grid.Column="0" Style="{StaticResource PanelStyle}">
@@ -311,6 +361,7 @@
                                 Style="{StaticResource CompactButtonStyle}"
                                 Height="30"
                                 VerticalAlignment="Top"
+                                IsEnabled="{Binding CanInteract}"
                                 Click="Refresh_Click"/>
                     </Grid>
 
@@ -424,15 +475,17 @@
                         </Border>
                     </Expander>
 
-                    <TabControl Grid.Row="4"
+                    <TabControl x:Name="OpeningTabs"
+                                Grid.Row="4"
                                 Background="Transparent"
                                 BorderBrush="{StaticResource BorderBrush}"
-                                Padding="0">
+                                Padding="0"
+                                SelectionChanged="OpeningTabs_SelectionChanged">
                         <TabItem Header="{Binding OpeningsWithoutLintelTabHeader}">
                             <Grid Margin="8">
                                 <ListBox x:Name="OpeningGroupsListBox"
                                          ItemsSource="{Binding VisibleGroups}"
-                                         SelectedItem="{Binding SelectedGroup, Mode=TwoWay}"
+                                         SelectedItem="{Binding SelectedOpeningGroup, Mode=TwoWay}"
                                          SelectionChanged="OpeningGroups_SelectionChanged"
                                          PreviewMouseWheel="OpeningGroups_PreviewMouseWheel"
                                          BorderThickness="0"
@@ -475,7 +528,8 @@
                                                                    Foreground="#344054"/>
                                                         <TextBlock Text="{Binding StatusText}"
                                                                    Style="{StaticResource OpeningStatusTextStyle}"
-                                                                   Margin="0,18,0,0"/>
+                                                                   Margin="0,18,0,0"
+                                                                   TextWrapping="Wrap"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -511,7 +565,7 @@
                                 <ListBox x:Name="ExistingLintelGroupsListBox"
                                          Grid.Row="1"
                                          ItemsSource="{Binding ExistingLintelGroups}"
-                                         SelectedItem="{Binding SelectedGroup, Mode=TwoWay}"
+                                         SelectedItem="{Binding SelectedExistingLintelGroup, Mode=TwoWay}"
                                          SelectionChanged="OpeningGroups_SelectionChanged"
                                          PreviewMouseLeftButtonDown="ExistingLintelGroups_PreviewMouseLeftButtonDown"
                                          PreviewMouseWheel="OpeningGroups_PreviewMouseWheel"
@@ -568,17 +622,29 @@
 
             <!-- Варианты расчёта -->
             <Border Grid.Column="2"
-                    Style="{StaticResource PanelStyle}"
-                    IsEnabled="{Binding IsVariantsPanelEnabled}">
+                    Style="{StaticResource PanelStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="3*" MinHeight="220"/>
+                        <RowDefinition Height="9"/>
+                        <RowDefinition Height="2*" MinHeight="140"/>
                     </Grid.RowDefinitions>
+
+                    <ScrollViewer Grid.Row="0"
+                                  IsEnabled="{Binding IsVariantsPanelEnabled}"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ScrollViewer.Style>
+                            <Style TargetType="ScrollViewer">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ScrollViewer.Style>
+                        <StackPanel>
 
                     <Grid Grid.Row="0">
                         <Grid.ColumnDefinitions>
@@ -622,36 +688,32 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
 
                             <StackPanel Margin="0,0,0,9">
-                                <TextBlock Text="Ширина проёма" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBlock Text="{Binding SelectedOpeningWidthText}" Style="{StaticResource FieldValueStyle}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Margin="0,0,0,9">
-                                <TextBlock Text="Требуемая длина" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBlock Text="{Binding RequiredLengthText}" Style="{StaticResource FieldValueStyle}"/>
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="1" Margin="0,0,0,9">
-                                <TextBlock Text="Толщина стены" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBlock Text="{Binding SelectedWallWidthText}" Style="{StaticResource FieldValueStyle}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,9">
                                 <TextBlock Text="Несущая сторона" Style="{StaticResource FieldLabelStyle}"/>
                                 <TextBlock Text="{Binding SelectedBearingSideText}" Style="{StaticResource FieldValueStyle}"/>
                             </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="0,0,0,9">
+                                <TextBlock Text="Несущая зона" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="{Binding SelectedBearingZoneText}" Style="{StaticResource FieldValueStyle}"/>
+                            </StackPanel>
 
-                            <StackPanel Grid.Row="2">
+                            <StackPanel Grid.Row="1" Margin="0,0,0,9">
+                                <TextBlock Text="Ширина проёма" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="{Binding SelectedOpeningWidthText}" Style="{StaticResource FieldValueStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,9">
+                                <TextBlock Text="Толщина стены" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="{Binding SelectedWallWidthText}" Style="{StaticResource FieldValueStyle}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.ColumnSpan="3">
                                 <TextBlock Text="Тип стены" Style="{StaticResource FieldLabelStyle}"/>
                                 <TextBlock Text="{Binding SelectedWallTypeText}"
                                            Style="{StaticResource FieldValueStyle}"
                                            ToolTip="{Binding SelectedWallTypeText}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="2" Grid.Column="2">
-                                <TextBlock Text="Несущая зона" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBlock Text="{Binding SelectedBearingZoneText}" Style="{StaticResource FieldValueStyle}"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -711,18 +773,7 @@
                             </Grid>
 
                             <Grid Grid.Row="2" Margin="0,10,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Мин. опирание, мм" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox Text="{Binding MinimumBearingMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                             Style="{StaticResource InputStyle}"
-                                             ToolTip="Минимальная величина опирания с каждой стороны"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
                                     <TextBlock Text="Допуск по толщине, ± мм" Style="{StaticResource FieldLabelStyle}"/>
                                     <TextBox Text="{Binding WallWidthToleranceMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                              Style="{StaticResource InputStyle}"
@@ -743,12 +794,28 @@
                                    TextWrapping="Wrap"/>
                     </Border>
 
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <GridSplitter Grid.Row="1" Panel.ZIndex="10">
+                        <GridSplitter.Style>
+                            <Style TargetType="GridSplitter" BasedOn="{StaticResource HorizontalSplitterStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </GridSplitter.Style>
+                    </GridSplitter>
+
                     <ListBox x:Name="VariantsListBox"
-                             Grid.Row="5"
+                             Grid.Row="2"
+                             IsEnabled="{Binding IsVariantsPanelEnabled}"
                              ItemsSource="{Binding Variants}"
                              SelectedItem="{Binding SelectedVariant, Mode=TwoWay}"
                              PreviewMouseWheel="Variants_PreviewMouseWheel"
-                             Margin="0,8,0,0"
+                             Margin="0"
                              BorderThickness="0"
                              Background="Transparent"
                              ItemContainerStyle="{StaticResource VariantItemStyle}"
@@ -757,9 +824,19 @@
                              ScrollViewer.CanContentScroll="False"
                              VirtualizingPanel.IsVirtualizing="True"
                              VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.Style>
+                            <Style TargetType="ListBox">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.Style>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Style="{StaticResource VariantCardStyle}">
+                                <Border Style="{StaticResource VariantCardStyle}"
+                                        ToolTip="{Binding ExistingTypeDifferenceText}">
                                     <StackPanel>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -777,6 +854,9 @@
                                                             <DataTrigger Binding="{Binding IsExact}" Value="True">
                                                                 <Setter Property="Background" Value="{StaticResource SuccessLightBrush}"/>
                                                             </DataTrigger>
+                                                            <DataTrigger Binding="{Binding HasExistingTypeDifference}" Value="True">
+                                                                <Setter Property="Background" Value="{StaticResource WarningLightBrush}"/>
+                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Border.Style>
@@ -788,6 +868,9 @@
                                                                 <DataTrigger Binding="{Binding IsExact}" Value="True">
                                                                     <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
                                                                 </DataTrigger>
+                                                                <DataTrigger Binding="{Binding HasExistingTypeDifference}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </TextBlock.Style>
@@ -798,6 +881,21 @@
                                                     FontWeight="SemiBold"
                                                     TextWrapping="Wrap"
                                                     Margin="0,7,0,0"/>
+                                        <TextBlock Text="Имя типа совпадает, состав отличается. Будет использован существующий тип."
+                                                   Foreground="{StaticResource WarningBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasExistingTypeDifference}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <Border Width="350"
                                                 Height="42"
                                                 HorizontalAlignment="Left"
@@ -859,6 +957,170 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+
+                    <Grid Grid.RowSpan="3">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*" MinHeight="160"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Text="Выбор существующего типа"
+                                       Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="{Binding ExistingLintelCurrentTypeText}"
+                                       Style="{StaticResource CaptionStyle}"
+                                       Margin="0,3,0,0"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <Border Grid.Row="1"
+                                Style="{StaticResource SubPanelStyle}"
+                                Margin="0,10,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="Несущая сторона" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="{Binding SelectedBearingSideText}" Style="{StaticResource FieldValueStyle}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="0,0,0,8">
+                                    <TextBlock Text="Несущая зона" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="{Binding SelectedBearingZoneText}" Style="{StaticResource FieldValueStyle}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                                    <TextBlock Text="Ширина проёма" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="{Binding SelectedOpeningWidthText}" Style="{StaticResource FieldValueStyle}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,8">
+                                    <TextBlock Text="Толщина стены" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="{Binding SelectedWallWidthText}" Style="{StaticResource FieldValueStyle}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.ColumnSpan="3">
+                                    <TextBlock Text="Тип стены" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="{Binding SelectedWallTypeText}"
+                                               Style="{StaticResource FieldValueStyle}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="2"
+                                Style="{StaticResource SubPanelStyle}"
+                                Margin="0,8,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Тип кладки" Style="{StaticResource FieldLabelStyle}"/>
+                                    <RadioButton Content="Кирпич 65 мм"
+                                                 GroupName="ExistingMasonryTypeV3"
+                                                 IsChecked="{Binding IsMasonry65, Mode=TwoWay}"/>
+                                    <RadioButton Content="Кирпич 88 мм"
+                                                 GroupName="ExistingMasonryTypeV3"
+                                                 IsChecked="{Binding IsMasonry88, Mode=TwoWay}"
+                                                 Margin="0,3,0,0"/>
+                                    <RadioButton Content="Перегородки"
+                                                 GroupName="ExistingMasonryTypeV3"
+                                                 IsChecked="{Binding IsPartition, Mode=TwoWay}"
+                                                 Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Материал перемычки" Style="{StaticResource FieldLabelStyle}"/>
+                                    <RadioButton Content="Железобетонная"
+                                                 GroupName="ExistingLintelMaterialV3"
+                                                 IsChecked="{Binding IsReinforcedConcrete, Mode=TwoWay}"/>
+                                    <RadioButton Content="Металлическая"
+                                                 GroupName="ExistingLintelMaterialV3"
+                                                 IsChecked="{Binding IsMetal, Mode=TwoWay}"
+                                                 Margin="0,3,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Row="3">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Доступные типы"
+                                           FontWeight="SemiBold"
+                                           Foreground="#344054"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding ExistingLintelTypesSummaryText}"
+                                           Style="{StaticResource CaptionStyle}"/>
+                            </Grid>
+                            <ListBox Grid.Row="1"
+                                     Margin="0,7,0,0"
+                                     ItemsSource="{Binding ExistingLintelTypeOptions}"
+                                     SelectedItem="{Binding SelectedExistingLintelType, Mode=TwoWay}"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.VirtualizationMode="Recycling">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource OpeningCardStyle}"
+                                                Margin="0,0,0,6">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding TypeName}"
+                                                           FontWeight="SemiBold"
+                                                           TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding FamilyName}"
+                                                           Style="{StaticResource CaptionStyle}"
+                                                           Margin="0,3,0,0"
+                                                           TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding SupportDescription}"
+                                                           Style="{StaticResource CaptionStyle}"
+                                                           Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+
+                        <Border Grid.Row="4"
+                                Background="{StaticResource PrimaryLightBrush}"
+                                CornerRadius="5"
+                                Padding="8,6"
+                                Margin="0,8,0,0">
+                            <TextBlock Text="{Binding ExistingLintelTypeSelectionText}"
+                                       Foreground="#344054"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Border>
 
@@ -890,6 +1152,10 @@
                                     Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding CanReverseEditor}"
                                     Click="ReverseEditorRows_Click"/>
+                            <Button Content="Загрузить тип"
+                                    Style="{StaticResource CompactButtonStyle}"
+                                    IsEnabled="{Binding CanLoadExistingEditorType}"
+                                    Click="LoadExistingEditorType_Click"/>
                             <Button Content="{Binding EditorRestoreButtonText}"
                                     Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding HasEditorVariant}"
@@ -911,6 +1177,11 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="155"/>
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Имя типа" Style="{StaticResource FieldLabelStyle}"/>
                                 <TextBox Text="{Binding EditorTypeName, Mode=OneWay}"
@@ -929,6 +1200,9 @@
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding EditorTypeExists}" Value="True">
                                                     <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding EditorHasExistingTypeDifferences}" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -949,11 +1223,64 @@
                                                 <DataTrigger Binding="{Binding EditorTypeExists}" Value="True">
                                                     <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
                                                 </DataTrigger>
+                                                <DataTrigger Binding="{Binding EditorHasExistingTypeDifferences}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                                                </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
                             </StackPanel>
+                            <TextBlock Grid.Row="1"
+                                       Grid.ColumnSpan="2"
+                                       Text="{Binding EditorExistingTypeDifferencesText}"
+                                       Foreground="{StaticResource WarningBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,9,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditorHasExistingTypeDifferences}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <Grid Grid.Row="2"
+                                  Grid.ColumnSpan="2"
+                                  Margin="0,10,0,0">
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditorHasExistingTypeDifferences}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="230"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Стратегия для отличающегося типа"
+                                               Style="{StaticResource FieldLabelStyle}"/>
+                                    <ComboBox ItemsSource="{Binding TypeNameConflictOptions}"
+                                              SelectedItem="{Binding SelectedTypeNameConflictOption, Mode=TwoWay}"
+                                              DisplayMemberPath="Name"
+                                              Style="{StaticResource ComboStyle}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding TypeNameConflictDescription}"
+                                           Style="{StaticResource CaptionStyle}"
+                                           VerticalAlignment="Bottom"
+                                           Margin="0,0,0,4"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
                         </Grid>
                     </Border>
 
@@ -965,15 +1292,17 @@
                             <ColumnDefinition Width="65"/>
                             <ColumnDefinition Width="60"/>
                             <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="60"/>
                             <ColumnDefinition Width="94"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="№" Style="{StaticResource FieldLabelStyle}"/>
                         <TextBlock Grid.Column="1" Text="Тип вложенной перемычки" Style="{StaticResource FieldLabelStyle}"/>
                         <TextBlock Grid.Column="2" Text="Назначение" Style="{StaticResource FieldLabelStyle}"/>
                         <TextBlock Grid.Column="3" Text="Длина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="4" Text="Ширина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="5" Text="Зазор" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="6" Text="Действия" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="4" Text="Высота" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="5" Text="Ширина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="6" Text="Зазор" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="7" Text="Действия" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
                     </Grid>
 
                     <ScrollViewer Grid.Row="3"
@@ -984,12 +1313,24 @@
                             <ItemsControl ItemsSource="{Binding EditorRows}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderBrush="{StaticResource BorderBrush}"
-                                                BorderThickness="1"
-                                                Background="White"
-                                                CornerRadius="4"
+                                        <Border CornerRadius="4"
                                                 Padding="7"
-                                                Margin="0,0,0,6">
+                                                Margin="0,0,0,6"
+                                                ToolTip="{Binding ExistingTypeDifferenceText}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                    <Setter Property="Background" Value="White"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasExistingTypeDifference}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="{StaticResource WarningBrush}"/>
+                                                            <Setter Property="BorderThickness" Value="2"/>
+                                                            <Setter Property="Background" Value="{StaticResource WarningLightBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="27"/>
@@ -998,13 +1339,32 @@
                                                     <ColumnDefinition Width="65"/>
                                                     <ColumnDefinition Width="60"/>
                                                     <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="60"/>
                                                     <ColumnDefinition Width="94"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Index}"
-                                                           VerticalAlignment="Center"
-                                                           FontWeight="SemiBold"/>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Index}"
+                                                               HorizontalAlignment="Center"
+                                                               FontWeight="SemiBold"/>
+                                                    <TextBlock Text="!"
+                                                               Foreground="{StaticResource WarningBrush}"
+                                                               HorizontalAlignment="Center"
+                                                               FontWeight="Bold"
+                                                               ToolTip="{Binding ExistingTypeDifferenceText}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasExistingTypeDifference}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
                                                 <ComboBox Grid.Column="1"
-                                                          ItemsSource="{Binding DataContext.EditorCatalogItems, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          ItemsSource="{Binding AvailableCatalogItems}"
                                                           SelectedItem="{Binding SelectedCatalogItem, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                           DisplayMemberPath="DisplayName"
                                                           Style="{StaticResource ComboStyle}"
@@ -1019,17 +1379,24 @@
                                                          Style="{StaticResource InputStyle}"
                                                          Margin="0,0,6,0"
                                                          TextAlignment="Right"/>
-                                                <TextBox Grid.Column="4"
-                                                         Text="{Binding WidthMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 <TextBox Grid.Column="4"
+                                                          Text="{Binding HeightMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                          Style="{StaticResource InputStyle}"
+                                                          Margin="0,0,6,0"
+                                                          TextAlignment="Right"/>
+                                                 <TextBox Grid.Column="5"
+                                                          Text="{Binding WidthMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                          Style="{StaticResource InputStyle}"
                                                          Margin="0,0,6,0"
                                                          TextAlignment="Right"/>
-                                                <TextBox Grid.Column="5"
+                                                 <TextBox Grid.Column="6"
                                                          Text="{Binding GapMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                          Style="{StaticResource InputStyle}"
+                                                         IsReadOnly="True"
+                                                         ToolTip="Фиксированный зазор между соседними перемычками — 10 мм"
                                                          Margin="0,0,6,0"
                                                          TextAlignment="Right"/>
-                                                <StackPanel Grid.Column="6" Orientation="Horizontal">
+                                                 <StackPanel Grid.Column="7" Orientation="Horizontal">
                                                     <Button Content="↑"
                                                             Style="{StaticResource CompactButtonStyle}"
                                                             IsEnabled="{Binding CanMoveUp}"
@@ -1175,17 +1542,19 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="Подбор вариантов включён · размещение перемычек пока отключено"
+                <TextBlock Text="Для размещения отметьте проёмы флажками и выберите активный вариант"
                            Style="{StaticResource CaptionStyle}"
                            VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button Content="Закрыть" Style="{StaticResource SecondaryButtonStyle}" Click="Close_Click"/>
-                    <Button Content="Сохранить изменения варианта"
+                    <Button Content="{Binding SaveVariantButtonText}"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            IsEnabled="False"/>
-                    <Button Content="Создать типы и поставить перемычки"
+                            IsEnabled="{Binding CanSaveVariantChanges}"
+                            Click="SaveVariantChanges_Click"/>
+                    <Button Content="{Binding CreateLintelsButtonText}"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            IsEnabled="False"
+                            IsEnabled="{Binding CanPlaceSelectedLintels}"
+                            Click="CreateAndPlaceLintels_Click"
                             Margin="0"/>
                 </StackPanel>
             </Grid>

@@ -66,7 +66,6 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string ValidationError { get; set; }
         public int MasonryCourseHeightMm { get; set; }
         public LintelMaterialV3 Material { get; set; }
-        public int MinimumBearingMm { get; set; }
         public int WallWidthToleranceMm { get; set; }
         public int MaximumVariants { get; set; } = 5;
     }
@@ -102,14 +101,21 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int DistinctMarkCount { get; set; }
         public int MinimumLengthMm { get; set; }
         public int MaximumLengthMm { get; set; }
+        public int OpeningWidthExcessScore { get; set; }
         public int LengthExcessScore { get; set; }
         public int PriorityScore { get; set; }
+        public int MinimumPriority { get; set; }
+        public double AveragePriority { get; set; }
         public int WallWidthToleranceMm { get; set; }
+        public bool HasExistingTypeDifference { get; set; }
+        public string ExistingTypeDifferenceText { get; set; }
         public List<LintelLayoutSegmentV3> LayoutSegments { get; set; } = new List<LintelLayoutSegmentV3>();
 
         public bool IsExact => WidthDeltaMm == 0;
         public string RankText => "Вариант " + Rank;
-        public string FitText => IsExact ? "Точно" : "В допуске";
+        public string FitText => HasExistingTypeDifference
+            ? "Предупреждение"
+            : IsExact ? "Точно" : "В допуске";
         public string WidthSummaryText => "Ширина комплекта: " + TotalWidthMm + " мм · отклонение "
             + (SignedWidthDeltaMm > 0 ? "+" : string.Empty) + SignedWidthDeltaMm + " мм";
         public string LengthSummaryText => MinimumLengthMm == MaximumLengthMm
@@ -119,10 +125,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             ? "Несущая часть: " + BearingWidthMm + " мм · требуется ≥ " + RequiredBearingWidthMm + " мм"
             : "Несущая часть не требуется";
         public string LayoutDifferenceText => SignedWidthDeltaMm < 0
-            ? "Зазор " + Math.Abs(SignedWidthDeltaMm) + " мм · допуск ±" + WallWidthToleranceMm + " мм"
+            ? "Недобор " + Math.Abs(SignedWidthDeltaMm) + " мм · допуск ±" + WallWidthToleranceMm + " мм"
             : SignedWidthDeltaMm > 0
                 ? "Превышение " + SignedWidthDeltaMm + " мм · допуск ±" + WallWidthToleranceMm + " мм"
-                : "Без зазора · допуск ±" + WallWidthToleranceMm + " мм";
+                : "Без отклонения · допуск ±" + WallWidthToleranceMm + " мм";
     }
 
     public sealed class LintelSelectionResultV3
@@ -164,6 +170,8 @@ namespace FerrumAddinDev.LintelCreator_v3
 
     internal static class LintelSelectionEngineV3
     {
+        internal const int InterElementGapMm = 10;
+
         public static LintelSelectionResultV3 Calculate(
             IEnumerable<LintelCatalogItemV3> catalog,
             LintelSelectionRequestV3 request)
@@ -180,19 +188,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 return result;
             }
 
-            string materialCode = request.Material == LintelMaterialV3.Metal
-                ? "metal"
-                : "reinforcedConcrete";
-
             List<LintelCatalogItemV3> eligible = catalog
-                .Where(item => item != null
-                               && item.AutoSelectionAllowed
-                               && item.WidthMm > 0
-                               && string.Equals(item.Material, materialCode, StringComparison.OrdinalIgnoreCase)
-                               && item.MasonryCourseHeightMm == request.MasonryCourseHeightMm
-                               && request.OpeningWidthMm + 0.5 >= item.MinimumOpeningWidthMm
-                               && (item.MaximumOpeningWidthMm <= 0 || request.OpeningWidthMm <= item.MaximumOpeningWidthMm + 0.5)
-                               && item.LengthMm + 0.5 >= GetRequiredLength(request, item))
+                .Where(item => IsSuitableCatalogItem(item, request, true))
                 .ToList();
 
             result.EligibleItemCount = eligible.Count;
@@ -210,10 +207,12 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
 
             List<LintelCatalogItemV3> representatives = eligible
+                .Where(item => requiredBearingWidth > 0 || !item.IsBearing)
                 .GroupBy(item => item.WidthMm + "|" + item.IsBearing)
                 .Select(group => group
-                    .OrderBy(item => GetLengthExcess(request, item))
-                    .ThenByDescending(item => item.Priority)
+                    .OrderByDescending(item => item.Priority)
+                    .ThenBy(item => GetOpeningWidthExcess(request, item))
+                    .ThenBy(item => GetLengthExcess(request, item))
                     .ThenBy(item => item.IsBearing ? item.LoadCapacityKgfPerM : 0)
                     .ThenBy(item => item.Mark, StringComparer.OrdinalIgnoreCase)
                     .First())
@@ -223,16 +222,20 @@ namespace FerrumAddinDev.LintelCreator_v3
 
             var search = new LintelCombinationSearchV3(request, representatives, requiredBearingWidth);
             List<LintelSelectionVariantV3> calculatedVariants = search.Run();
-            int minimumBearingWidth = calculatedVariants.Count == 0
-                ? 0
-                : calculatedVariants.Min(variant => variant.BearingWidthMm);
             List<LintelSelectionVariantV3> variants = calculatedVariants
-                .Where(variant => variant.BearingWidthMm == minimumBearingWidth)
+                // Все оставшиеся варианты уже прошли геометрические ограничения.
+                // Сначала сравниваем приоритет всех элементов. При одинаковом
+                // приоритете выбираем минимальную достаточную несущую ширину.
                 .OrderBy(variant => variant.WidthDeltaMm)
+                .ThenByDescending(variant => variant.MinimumPriority)
+                .ThenByDescending(variant => variant.AveragePriority)
+                .ThenBy(variant => Math.Max(
+                    0,
+                    variant.BearingWidthMm - variant.RequiredBearingWidthMm))
                 .ThenBy(variant => variant.ElementCount)
+                .ThenBy(variant => variant.OpeningWidthExcessScore)
                 .ThenBy(variant => variant.DistinctMarkCount)
                 .ThenBy(variant => variant.LengthExcessScore)
-                .ThenByDescending(variant => variant.PriorityScore)
                 .ThenBy(variant => variant.CompositionKey, StringComparer.OrdinalIgnoreCase)
                 .Take(Math.Max(1, request.MaximumVariants))
                 .ToList();
@@ -258,9 +261,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (request.MasonryCourseHeightMm == 0)
                 return "В каталоге нет перемычек для перегородок.";
 
-            int requiredLength = (int)Math.Ceiling(request.OpeningWidthMm + 2.0 * request.MinimumBearingMm);
             return "Нет перемычек для кладки " + request.MasonryCourseHeightMm
-                   + " мм и требуемой длины ≥ " + requiredLength + " мм.";
+                   + " мм с длиной, достаточной для проёма и табличного опирания.";
         }
 
         private static int GetRequiredBearingWidth(LintelSelectionRequestV3 request)
@@ -273,13 +275,39 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         internal static double GetRequiredLength(LintelSelectionRequestV3 request, LintelCatalogItemV3 item)
         {
-            int bearing = Math.Max(request.MinimumBearingMm, item.MinimumBearingMm);
-            return request.OpeningWidthMm + 2.0 * bearing;
+            return request.OpeningWidthMm + 2.0 * Math.Max(0, item.MinimumBearingMm);
+        }
+
+        internal static bool IsSuitableCatalogItem(
+            LintelCatalogItemV3 item,
+            LintelSelectionRequestV3 request,
+            bool requireAutoSelection)
+        {
+            if (item == null || request == null || item.WidthMm <= 0)
+                return false;
+            if (requireAutoSelection && !item.AutoSelectionAllowed)
+                return false;
+
+            string materialCode = request.Material == LintelMaterialV3.Metal
+                ? "metal"
+                : "reinforcedConcrete";
+            return string.Equals(item.Material, materialCode, StringComparison.OrdinalIgnoreCase)
+                   && item.MasonryCourseHeightMm == request.MasonryCourseHeightMm
+                   && request.OpeningWidthMm + 0.5 >= item.MinimumOpeningWidthMm
+                   && (item.MaximumOpeningWidthMm <= 0
+                       || request.OpeningWidthMm <= item.MaximumOpeningWidthMm + 0.5)
+                   && item.LengthMm + 0.5 >= GetRequiredLength(request, item);
         }
 
         internal static int GetLengthExcess(LintelSelectionRequestV3 request, LintelCatalogItemV3 item)
         {
             return Math.Max(0, (int)Math.Round(item.LengthMm - GetRequiredLength(request, item)));
+        }
+
+        internal static int GetOpeningWidthExcess(LintelSelectionRequestV3 request, LintelCatalogItemV3 item)
+        {
+            if (item.MaximumOpeningWidthMm <= 0) return 1000000;
+            return Math.Max(0, (int)Math.Round(item.MaximumOpeningWidthMm - request.OpeningWidthMm));
         }
     }
 
@@ -336,7 +364,9 @@ namespace FerrumAddinDev.LintelCreator_v3
             for (int index = startIndex; index < _candidates.Count; index++)
             {
                 LintelCatalogItemV3 item = _candidates[index];
-                int nextWidth = totalWidth + item.WidthMm;
+                int nextWidth = totalWidth
+                                + item.WidthMm
+                                + (_current.Count > 0 ? LintelSelectionEngineV3.InterElementGapMm : 0);
                 if (nextWidth > _maximumTotalWidth) continue;
 
                 _current.Add(item);
@@ -358,25 +388,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .ThenBy(item => item.Mark)
                 .ToList();
             List<LintelCatalogItemV3> ordered;
-            int gapInsertionIndex;
 
             if (_request.SupportType == 2)
             {
-                if (!TryArrangeTwoBearingSides(bearing, ordinary, out ordered, out gapInsertionIndex))
+                if (!TryArrangeTwoBearingSides(bearing, ordinary, out ordered))
                     return null;
             }
             else if (_request.SupportType == 1)
             {
-                bool bearingOnFirstSide = _request.RequiredBearingWidth1Mm > 0;
-                ordered = bearingOnFirstSide
-                    ? bearing.Concat(ordinary).ToList()
-                    : ordinary.Concat(bearing).ToList();
-                gapInsertionIndex = bearingOnFirstSide ? ordered.Count : 0;
+                // Фактическая сторона опоры влияет на размещение в Revit, но не на
+                // представление комплекта: несущая часть всегда показывается слева.
+                ordered = bearing.Concat(ordinary).ToList();
             }
             else
             {
                 ordered = ordinary.Concat(bearing).ToList();
-                gapInsertionIndex = ordered.Count;
             }
 
             List<IGrouping<string, LintelCatalogItemV3>> markGroups = ordered
@@ -402,21 +428,22 @@ namespace FerrumAddinDev.LintelCreator_v3
                 DistinctMarkCount = markGroups.Count,
                 MinimumLengthMm = ordered.Min(item => item.LengthMm),
                 MaximumLengthMm = ordered.Max(item => item.LengthMm),
+                OpeningWidthExcessScore = ordered.Max(item => LintelSelectionEngineV3.GetOpeningWidthExcess(_request, item)),
                 LengthExcessScore = ordered.Sum(item => LintelSelectionEngineV3.GetLengthExcess(_request, item)),
                 PriorityScore = ordered.Sum(item => item.Priority),
+                MinimumPriority = ordered.Min(item => item.Priority),
+                AveragePriority = ordered.Average(item => item.Priority),
                 WallWidthToleranceMm = _request.WallWidthToleranceMm,
-                LayoutSegments = CreateLayoutSegments(ordered, totalWidth, roundedWallWidth, gapInsertionIndex)
+                LayoutSegments = CreateLayoutSegments(ordered, totalWidth)
             };
         }
 
         private bool TryArrangeTwoBearingSides(
             List<LintelCatalogItemV3> bearing,
             List<LintelCatalogItemV3> ordinary,
-            out List<LintelCatalogItemV3> ordered,
-            out int gapInsertionIndex)
+            out List<LintelCatalogItemV3> ordered)
         {
             ordered = null;
-            gapInsertionIndex = 0;
             int requiredFirst = Math.Max(0, (int)Math.Ceiling(_request.RequiredBearingWidth1Mm));
             int requiredSecond = Math.Max(0, (int)Math.Ceiling(_request.RequiredBearingWidth2Mm));
             if (bearing.Count == 1
@@ -424,7 +451,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                 && bearing[0].WidthMm + 0.5 >= _request.WallWidthMm)
             {
                 ordered = new List<LintelCatalogItemV3>(bearing);
-                gapInsertionIndex = 1;
                 return true;
             }
             if (bearing.Count == 0 || bearing.Count > 20) return false;
@@ -470,35 +496,20 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
 
             ordered = firstSide.Concat(ordinary).Concat(secondSide).ToList();
-            gapInsertionIndex = firstSide.Count + ordinary.Count;
             return true;
         }
 
         private static List<LintelLayoutSegmentV3> CreateLayoutSegments(
             IEnumerable<LintelCatalogItemV3> ordered,
-            int totalWidth,
-            int wallWidth,
-            int gapInsertionIndex)
+            int totalWidth)
         {
             const double diagramWidth = 348.0;
-            int referenceWidth = Math.Max(1, Math.Max(totalWidth, wallWidth));
+            int referenceWidth = Math.Max(1, totalWidth);
             double scale = diagramWidth / referenceWidth;
             List<LintelCatalogItemV3> items = ordered.ToList();
             var result = new List<LintelLayoutSegmentV3>();
-            int gap = Math.Max(0, wallWidth - totalWidth);
-            for (int index = 0; index <= items.Count; index++)
+            for (int index = 0; index < items.Count; index++)
             {
-                if (gap > 0 && index == Math.Max(0, Math.Min(gapInsertionIndex, items.Count)))
-                {
-                    result.Add(new LintelLayoutSegmentV3
-                    {
-                        Mark = "Зазор",
-                        WidthMm = gap,
-                        DisplayWidth = Math.Max(1, gap * scale),
-                        IsGap = true
-                    });
-                }
-                if (index == items.Count) continue;
                 LintelCatalogItemV3 item = items[index];
                 result.Add(new LintelLayoutSegmentV3
                 {
@@ -507,6 +518,16 @@ namespace FerrumAddinDev.LintelCreator_v3
                     DisplayWidth = Math.Max(1, item.WidthMm * scale),
                     IsBearing = item.IsBearing
                 });
+                if (index < items.Count - 1)
+                {
+                    result.Add(new LintelLayoutSegmentV3
+                    {
+                        Mark = "Зазор",
+                        WidthMm = LintelSelectionEngineV3.InterElementGapMm,
+                        DisplayWidth = Math.Max(1, LintelSelectionEngineV3.InterElementGapMm * scale),
+                        IsGap = true
+                    });
+                }
             }
             return result;
         }

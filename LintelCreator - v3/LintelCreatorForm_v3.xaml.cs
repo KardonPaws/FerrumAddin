@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -8,7 +10,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using RevitExternalEvent = Autodesk.Revit.UI.ExternalEvent;
+using RevitExternalEventRequest = Autodesk.Revit.UI.ExternalEventRequest;
 
 namespace FerrumAddinDev.LintelCreator_v3
 {
@@ -16,6 +20,12 @@ namespace FerrumAddinDev.LintelCreator_v3
     {
         private readonly OpeningSelectionHandlerV3 _selectionHandler;
         private readonly RevitExternalEvent _selectionEvent;
+        private readonly OpeningReloadHandlerV3 _reloadHandler;
+        private readonly RevitExternalEvent _reloadEvent;
+        private readonly LintelPlacementHandlerV3 _placementHandler;
+        private readonly RevitExternalEvent _placementEvent;
+        private readonly LintelTypeReplacementHandlerV3 _typeReplacementHandler;
+        private readonly RevitExternalEvent _typeReplacementEvent;
         private bool _isClosing;
         private double _smoothScrollTarget = double.NaN;
         private DateTime _smoothScrollUntilUtc = DateTime.MinValue;
@@ -26,21 +36,56 @@ namespace FerrumAddinDev.LintelCreator_v3
         private readonly CancellationTokenSource _calculationCancellation = new CancellationTokenSource();
         private bool _initialCalculationStarted;
         private DateTime _lastProgressRenderUtc = DateTime.MinValue;
+        private bool _reloadPending;
 
         public LintelCreatorForm_v3(
             LintelOpeningWorkspaceV3 workspace,
             OpeningSelectionHandlerV3 selectionHandler,
-            RevitExternalEvent selectionEvent)
+            RevitExternalEvent selectionEvent,
+            OpeningReloadHandlerV3 reloadHandler,
+            RevitExternalEvent reloadEvent,
+            LintelPlacementHandlerV3 placementHandler,
+            RevitExternalEvent placementEvent,
+            LintelTypeReplacementHandlerV3 typeReplacementHandler,
+            RevitExternalEvent typeReplacementEvent)
         {
             InitializeComponent();
             Workspace = workspace;
             _selectionHandler = selectionHandler;
             _selectionEvent = selectionEvent;
+            _reloadHandler = reloadHandler;
+            _reloadEvent = reloadEvent;
+            _placementHandler = placementHandler;
+            _placementEvent = placementEvent;
+            _typeReplacementHandler = typeReplacementHandler;
+            _typeReplacementEvent = typeReplacementEvent;
             DataContext = Workspace;
             Closed += Form_Closed;
         }
 
         public LintelOpeningWorkspaceV3 Workspace { get; }
+
+        private void MainWorkspaceGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (MainWorkspaceGrid == null
+                || OpeningsColumn == null
+                || VariantsColumn == null
+                || EditorColumn == null)
+                return;
+
+            double splitterWidth = (FirstSplitterColumn?.ActualWidth ?? 0)
+                                   + (SecondSplitterColumn?.ActualWidth ?? 0);
+            double maximumVariantsWidth = Math.Max(
+                VariantsColumn.MinWidth,
+                MainWorkspaceGrid.ActualWidth
+                - OpeningsColumn.MinWidth
+                - EditorColumn.MinWidth
+                - splitterWidth);
+
+            VariantsColumn.MaxWidth = maximumVariantsWidth;
+            if (VariantsColumn.ActualWidth > maximumVariantsWidth + 0.5)
+                VariantsColumn.Width = new GridLength(maximumVariantsWidth, GridUnitType.Pixel);
+        }
 
         public async void StartInitialCalculation()
         {
@@ -60,18 +105,35 @@ namespace FerrumAddinDev.LintelCreator_v3
             Dispatcher.Invoke(DispatcherPriority.Render, new Action(() => { }));
         }
 
-        private async void Refresh_Click(object sender, RoutedEventArgs e)
+        private void Refresh_Click(object sender, RoutedEventArgs e)
         {
-            try
+            if (_reloadPending || _isClosing || Workspace == null) return;
+            if (!Workspace.BeginReload()) return;
+
+            _reloadPending = true;
+            _reloadHandler.Request(
+                (processed, total) => RefreshProgressDisplay(),
+                ReloadCompleted);
+            if (_reloadEvent.Raise() != RevitExternalEventRequest.Accepted)
             {
-                Workspace.Reload((processed, total) => RefreshProgressDisplay());
-                RefreshProgressDisplay(true);
-                await Workspace.RecalculateAllVariantsAsync(_calculationCancellation.Token);
+                _reloadPending = false;
+                Workspace.CancelReload("Revit не принял запрос на повторный сбор проёмов.");
             }
-            catch (Exception exception)
+        }
+
+        private async void ReloadCompleted(Exception error)
+        {
+            _reloadPending = false;
+            if (_isClosing) return;
+            if (error != null)
             {
-                MessageBox.Show(exception.Message, "Сбор проёмов", MessageBoxButton.OK, MessageBoxImage.Error);
+                Workspace.CancelReload(error.Message);
+                MessageBox.Show(error.Message, "Сбор проёмов", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
             }
+
+            RefreshProgressDisplay(true);
+            await Workspace.RecalculateAllVariantsAsync(_calculationCancellation.Token);
         }
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -146,6 +208,12 @@ namespace FerrumAddinDev.LintelCreator_v3
             _selectionEvent.Raise();
         }
 
+        private void OpeningTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!ReferenceEquals(e.OriginalSource, sender) || Workspace == null) return;
+            Workspace.IsExistingLintelsTabActive = (sender as TabControl)?.SelectedIndex == 1;
+        }
+
         private void ExistingLintelGroups_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (_isClosing || Workspace == null) return;
@@ -191,6 +259,51 @@ namespace FerrumAddinDev.LintelCreator_v3
         private void RestoreEditor_Click(object sender, RoutedEventArgs e)
         {
             Workspace?.RestoreEditorFromCalculation();
+        }
+
+        private void LoadExistingEditorType_Click(object sender, RoutedEventArgs e)
+        {
+            Workspace?.LoadEditorFromExistingType();
+        }
+
+        private void SaveVariantChanges_Click(object sender, RoutedEventArgs e)
+        {
+            if (Workspace == null || _isClosing) return;
+            if (!Workspace.IsExistingLintelsTabActive)
+            {
+                Workspace.SaveEditorChangesToActiveVariant();
+                return;
+            }
+
+            LintelTypeReplacementRequestV3 request = Workspace.CreateTypeReplacementRequest();
+            if (request == null)
+            {
+                Workspace.CancelLintelTypeReplacement(
+                    "Выберите существующую перемычку и тип для замены.");
+                return;
+            }
+
+            _typeReplacementHandler.Request(request);
+            Workspace.BeginLintelTypeReplacement(request.LintelIds.Count);
+            if (_typeReplacementEvent.Raise() != RevitExternalEventRequest.Accepted)
+                Workspace.CancelLintelTypeReplacement("Revit не принял запрос на замену типа перемычек.");
+        }
+
+        private void CreateAndPlaceLintels_Click(object sender, RoutedEventArgs e)
+        {
+            if (Workspace == null || _isClosing) return;
+            LintelPlacementRequestV3 request = Workspace.CreatePlacementRequest();
+            if (request == null)
+            {
+                Workspace.CancelLintelPlacement(
+                    "Не выбраны проёмы с рассчитанными вариантами для размещения.");
+                return;
+            }
+
+            _placementHandler.Request(request);
+            Workspace.BeginLintelPlacement(request.Groups.Count);
+            if (_placementEvent.Raise() != RevitExternalEventRequest.Accepted)
+                Workspace.CancelLintelPlacement("Revit не принял запрос на размещение перемычек.");
         }
 
         private void AddEditorRow_Click(object sender, RoutedEventArgs e)
@@ -297,6 +410,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             try
             {
                 _selectionEvent?.Dispose();
+                _placementEvent?.Dispose();
+                _typeReplacementEvent?.Dispose();
             }
             catch
             {
@@ -339,6 +454,152 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (sender is ScrollViewer scrollViewer && e.NewValue is double offset)
                 scrollViewer.ScrollToVerticalOffset(offset);
+        }
+    }
+
+    internal sealed class LintelPlacementReportWindowV3 : Window
+    {
+        private readonly string _report;
+
+        private LintelPlacementReportWindowV3(string report)
+        {
+            _report = report ?? string.Empty;
+            Title = "Отчёт о простановке перемычек";
+            Width = 920;
+            Height = 680;
+            MinWidth = 650;
+            MinHeight = 420;
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            ShowInTaskbar = false;
+
+            var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var title = new TextBlock
+            {
+                Text = "Результаты создания типов и размещения перемычек",
+                FontSize = 17,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            root.Children.Add(title);
+
+            var reportBox = new TextBox
+            {
+                Text = _report,
+                IsReadOnly = true,
+                AcceptsReturn = true,
+                AcceptsTab = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                Padding = new Thickness(10)
+            };
+            Grid.SetRow(reportBox, 1);
+            root.Children.Add(reportBox);
+
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            var copyButton = new Button
+            {
+                Content = "Копировать",
+                MinWidth = 105,
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 7, 0)
+            };
+            copyButton.Click += (sender, args) =>
+            {
+                try
+                {
+                    Clipboard.SetText(_report);
+                }
+                catch (Exception exception)
+                {
+                    MessageBox.Show(
+                        this,
+                        exception.Message,
+                        "Копирование отчёта",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            };
+            buttons.Children.Add(copyButton);
+
+            var saveButton = new Button
+            {
+                Content = "Сохранить в TXT",
+                MinWidth = 125,
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 7, 0)
+            };
+            saveButton.Click += SaveReport_Click;
+            buttons.Children.Add(saveButton);
+
+            var closeButton = new Button
+            {
+                Content = "Закрыть",
+                MinWidth = 95,
+                Padding = new Thickness(10, 5, 10, 5),
+                IsDefault = true
+            };
+            closeButton.Click += (sender, args) => Close();
+            buttons.Children.Add(closeButton);
+            Grid.SetRow(buttons, 2);
+            root.Children.Add(buttons);
+            Content = root;
+        }
+
+        public static void ShowReport(string report)
+        {
+            var window = new LintelPlacementReportWindowV3(report);
+            if (Application.Current != null)
+            {
+                foreach (Window candidate in Application.Current.Windows)
+                {
+                    if (candidate is LintelCreatorForm_v3 && candidate.IsVisible)
+                    {
+                        window.Owner = candidate;
+                        window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                        break;
+                    }
+                }
+            }
+            window.ShowDialog();
+        }
+
+        private void SaveReport_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Title = "Сохранить отчёт о простановке перемычек",
+                Filter = "Текстовый файл (*.txt)|*.txt|Все файлы (*.*)|*.*",
+                FileName = "Отчёт_перемычки_"
+                           + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".txt",
+                AddExtension = true,
+                DefaultExt = ".txt"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                File.WriteAllText(dialog.FileName, _report, new UTF8Encoding(true));
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(
+                    this,
+                    exception.Message,
+                    "Сохранение отчёта",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
         }
     }
 }

@@ -26,7 +26,24 @@ namespace FerrumAddinDev.LintelCreator_v3
                 var workspace = new LintelOpeningWorkspaceV3(uiDocument.Document, uiDocument.Selection);
                 var selectionHandler = new OpeningSelectionHandlerV3();
                 ExternalEvent selectionEvent = ExternalEvent.Create(selectionHandler);
-                form = new LintelCreatorForm_v3(workspace, selectionHandler, selectionEvent);
+                var reloadHandler = new OpeningReloadHandlerV3(workspace);
+                ExternalEvent reloadEvent = ExternalEvent.Create(reloadHandler);
+                var placementHandler = new LintelPlacementHandlerV3(uiDocument.Document, workspace);
+                ExternalEvent placementEvent = ExternalEvent.Create(placementHandler);
+                var typeReplacementHandler = new LintelTypeReplacementHandlerV3(
+                    uiDocument.Document,
+                    workspace);
+                ExternalEvent typeReplacementEvent = ExternalEvent.Create(typeReplacementHandler);
+                form = new LintelCreatorForm_v3(
+                    workspace,
+                    selectionHandler,
+                    selectionEvent,
+                    reloadHandler,
+                    reloadEvent,
+                    placementHandler,
+                    placementEvent,
+                    typeReplacementHandler,
+                    typeReplacementEvent);
                 form.Show();
                 form.RefreshProgressDisplay(true);
                 workspace.Reload((processed, total) => form.RefreshProgressDisplay());
@@ -66,6 +83,26 @@ namespace FerrumAddinDev.LintelCreator_v3
         Success = 0,
         Warning = 1,
         Error = 2
+    }
+
+    public enum CompositeTypeNameConflictActionV3
+    {
+        UseExisting = 1,
+        ReplaceExisting = 2,
+        AppendNumber = 3,
+        Cancel = 4
+    }
+
+    public sealed class CompositeTypeNameConflictOptionV3
+    {
+        public CompositeTypeNameConflictActionV3 Action { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
+
+        public override string ToString()
+        {
+            return Name;
+        }
     }
 
     public enum OpeningSortFieldV3
@@ -228,6 +265,35 @@ namespace FerrumAddinDev.LintelCreator_v3
         public double OffsetToNextMm { get; set; }
     }
 
+    public sealed class ExistingLintelTypeOptionV3
+    {
+        public ElementId TypeId { get; set; }
+        public string FamilyName { get; set; }
+        public string TypeName { get; set; }
+        public int SupportCategory { get; set; }
+        public List<ExistingLintelComponentV3> Components { get; }
+            = new List<ExistingLintelComponentV3>();
+
+        public string DisplayName => (FamilyName ?? string.Empty) + " : " + (TypeName ?? string.Empty);
+        public string SupportDescription => SupportCategory == 2
+            ? "Опирание с двух сторон"
+            : SupportCategory == 1
+                ? "Опирание с одной стороны"
+                : "Без опирания";
+    }
+
+    public sealed class OpeningPlacementTargetV3
+    {
+        public ElementId WallId { get; set; }
+        public ElementId LevelId { get; set; }
+        public XYZ Location { get; set; }
+        public double TopElevation { get; set; }
+        public XYZ WallOrientation { get; set; }
+        public XYZ SupportDirection { get; set; }
+        public int SupportType { get; set; }
+        public List<ElementId> OpeningIds { get; } = new List<ElementId>();
+    }
+
     public sealed class OpeningGroupCardV3 : NotifyObjectV3
     {
         private bool _isChecked;
@@ -257,9 +323,12 @@ namespace FerrumAddinDev.LintelCreator_v3
         public List<ElementId> ElementIds { get; } = new List<ElementId>();
         public List<ElementId> ExistingLintelIds { get; } = new List<ElementId>();
         public List<ExistingLintelComponentV3> ExistingLintelComponents { get; } = new List<ExistingLintelComponentV3>();
+        public List<OpeningPlacementTargetV3> PlacementTargets { get; } = new List<OpeningPlacementTargetV3>();
         public List<LintelSelectionVariantV3> CalculatedVariants { get; } = new List<LintelSelectionVariantV3>();
+        public LintelSelectionVariantV3 ActiveVariant { get; set; }
         public bool IsCalculated { get; set; }
         public string CalculationMessage { get; set; }
+        public string CalculationBaseMessage { get; set; }
 
         public bool IsChecked
         {
@@ -334,16 +403,22 @@ namespace FerrumAddinDev.LintelCreator_v3
         private LintelCatalogItemV3 _selectedCatalogItem;
         private string _purpose;
         private int _lengthMm;
+        private int _heightMm;
         private int _widthMm;
         private int _gapMm;
         private bool _canMoveUp;
         private bool _canMoveDown;
         private bool _isApplyingCatalogItem;
+        private bool _hasExistingTypeDifference;
+        private string _existingTypeDifferenceText = string.Empty;
 
         public LintelEditorRowV3(LintelCatalogItemV3 item)
         {
             ApplyCatalogItem(item);
         }
+
+        public ObservableCollection<LintelCatalogItemV3> AvailableCatalogItems { get; }
+            = new ObservableCollection<LintelCatalogItemV3>();
 
         public int Index
         {
@@ -381,9 +456,42 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         public bool IsBearing => string.Equals(Purpose, "Несущая", StringComparison.Ordinal);
         internal bool IsApplyingCatalogItem => _isApplyingCatalogItem;
+
+        public bool HasExistingTypeDifference
+        {
+            get => _hasExistingTypeDifference;
+            internal set
+            {
+                if (_hasExistingTypeDifference == value) return;
+                _hasExistingTypeDifference = value;
+                RaisePropertyChanged(nameof(HasExistingTypeDifference));
+            }
+        }
+
+        public string ExistingTypeDifferenceText
+        {
+            get => _existingTypeDifferenceText;
+            internal set
+            {
+                string normalized = value ?? string.Empty;
+                if (string.Equals(_existingTypeDifferenceText, normalized, StringComparison.Ordinal)) return;
+                _existingTypeDifferenceText = normalized;
+                RaisePropertyChanged(nameof(ExistingTypeDifferenceText));
+            }
+        }
+
         internal void ApplyCatalogSuggestion(LintelCatalogItemV3 item)
         {
             ApplyCatalogItem(item);
+        }
+
+        internal void ReplaceAvailableCatalogItems(IEnumerable<LintelCatalogItemV3> items)
+        {
+            AvailableCatalogItems.Clear();
+            foreach (LintelCatalogItemV3 item in items ?? Enumerable.Empty<LintelCatalogItemV3>())
+                AvailableCatalogItems.Add(item);
+            RaisePropertyChanged(nameof(AvailableCatalogItems));
+            RaisePropertyChanged(nameof(SelectedCatalogItem));
         }
 
         public int LengthMm
@@ -407,6 +515,18 @@ namespace FerrumAddinDev.LintelCreator_v3
                 if (_widthMm == normalized) return;
                 _widthMm = normalized;
                 RaisePropertyChanged(nameof(WidthMm));
+            }
+        }
+
+        public int HeightMm
+        {
+            get => _heightMm;
+            set
+            {
+                int normalized = Math.Max(0, value);
+                if (_heightMm == normalized) return;
+                _heightMm = normalized;
+                RaisePropertyChanged(nameof(HeightMm));
             }
         }
 
@@ -453,6 +573,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _selectedCatalogItem = item;
                 RaisePropertyChanged(nameof(SelectedCatalogItem));
                 LengthMm = item.LengthMm;
+                HeightMm = item.HeightMm;
                 WidthMm = item.WidthMm;
                 Purpose = item.IsBearing ? "Несущая" : "Ненесущая";
             }
@@ -461,6 +582,83 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _isApplyingCatalogItem = false;
             }
         }
+    }
+
+    internal sealed class LintelPlacementRequestV3
+    {
+        public CompositeTypeNameConflictActionV3 NameConflictAction { get; set; }
+        public List<LintelPlacementGroupRequestV3> Groups { get; } = new List<LintelPlacementGroupRequestV3>();
+    }
+
+    internal sealed class LintelPlacementGroupRequestV3
+    {
+        public string GroupKey { get; set; }
+        public string CompositeTypeName { get; set; }
+        public string WallTypeName { get; set; }
+        public bool HasExistingTypeDifference { get; set; }
+        public string ExistingTypeDifferenceText { get; set; }
+        public List<OpeningPlacementTargetV3> Targets { get; } = new List<OpeningPlacementTargetV3>();
+        public List<LintelPlacementComponentRequestV3> Components { get; } = new List<LintelPlacementComponentRequestV3>();
+    }
+
+    internal sealed class LintelPlacementComponentRequestV3
+    {
+        public string Mark { get; set; }
+        public string RevitFamilyName { get; set; }
+        public int WidthMm { get; set; }
+        public int GapAfterMm { get; set; }
+        public bool IsBearing { get; set; }
+        public int MaximumOpeningWidthMm { get; set; }
+        public int MasonryCourseHeightMm { get; set; }
+        public string TypeCode { get; set; }
+    }
+
+    internal sealed class LintelPlacementResultV3
+    {
+        public List<LintelPlacementGroupResultV3> Groups { get; } = new List<LintelPlacementGroupResultV3>();
+        public string FatalError { get; set; }
+    }
+
+    internal sealed class LintelPlacementGroupResultV3
+    {
+        public string GroupKey { get; set; }
+        public bool IsSuccess { get; set; }
+        public string Error { get; set; }
+        public string FamilyName { get; set; }
+        public string RequestedTypeName { get; set; }
+        public string TypeName { get; set; }
+        public bool HasTypeNameConflict { get; set; }
+        public bool WasCancelledByTypeNameConflict { get; set; }
+        public string TypeNameConflictAction { get; set; }
+        public string TypeNameConflictDifferences { get; set; }
+        public List<ElementId> CreatedLintelIds { get; } = new List<ElementId>();
+        public List<ExistingLintelComponentV3> Components { get; } = new List<ExistingLintelComponentV3>();
+    }
+
+    internal sealed class LintelTypeReplacementRequestV3
+    {
+        public ElementId TypeId { get; set; }
+        public string FamilyName { get; set; }
+        public string TypeName { get; set; }
+        public List<ElementId> LintelIds { get; } = new List<ElementId>();
+    }
+
+    internal sealed class LintelTypeReplacementItemResultV3
+    {
+        public ElementId OriginalId { get; set; }
+        public ElementId ResultId { get; set; }
+    }
+
+    internal sealed class LintelTypeReplacementResultV3
+    {
+        public string FamilyName { get; set; }
+        public string TypeName { get; set; }
+        public string FatalError { get; set; }
+        public List<string> Errors { get; } = new List<string>();
+        public List<LintelTypeReplacementItemResultV3> ChangedItems { get; }
+            = new List<LintelTypeReplacementItemResultV3>();
+        public List<ExistingLintelComponentV3> Components { get; }
+            = new List<ExistingLintelComponentV3>();
     }
 
     public sealed class LintelOpeningWorkspaceV3 : NotifyObjectV3
@@ -482,7 +680,6 @@ namespace FerrumAddinDev.LintelCreator_v3
         private LintelSelectionVariantV3 _selectedVariant;
         private LintelMasonryTypeV3 _masonryType = LintelMasonryTypeV3.Brick65;
         private LintelMaterialV3 _lintelMaterial = LintelMaterialV3.ReinforcedConcrete;
-        private int _minimumBearingMm = 250;
         private int _wallWidthToleranceMm = 20;
         private string _selectionMessage = "Выберите группу проёмов для расчёта.";
         private readonly HashSet<string> _existingCompositeTypeNames;
@@ -495,6 +692,15 @@ namespace FerrumAddinDev.LintelCreator_v3
         private int _processedCollectionOpeningCount;
         private int _collectionOpeningTotal;
         private bool _isExistingGroupedByOpening = true;
+        private bool _isExistingLintelsTabActive;
+        private bool _isPlacementInProgress;
+        private List<ExistingLintelTypeOptionV3> _allExistingLintelTypeOptions
+            = new List<ExistingLintelTypeOptionV3>();
+        private ExistingLintelTypeOptionV3 _selectedExistingLintelType;
+        private CompositeTypeNameConflictOptionV3 _selectedTypeNameConflictOption;
+        private bool _isUpdatingEditorDifferences;
+        private int _editorExistingTypeDifferenceCount;
+        private string _editorExistingTypeDifferencesText = string.Empty;
 
         public LintelOpeningWorkspaceV3(Document document, Selection selection)
         {
@@ -502,9 +708,38 @@ namespace FerrumAddinDev.LintelCreator_v3
             _initialSelectionIds = selection.GetElementIds()
                 .Where(id => OpeningCollectorV3.IsSupportedOpening(document, document.GetElement(id)))
                 .ToList();
-            _existingCompositeTypeNames = CollectExistingCompositeTypeNames(document);
+            _existingCompositeTypeNames = new HashSet<string>(StringComparer.Ordinal);
+            RefreshExistingCompositeTypeCache(document);
 
             EditorPurposeOptions = new ObservableCollection<string> { "Несущая", "Ненесущая" };
+            TypeNameConflictOptions = new ObservableCollection<CompositeTypeNameConflictOptionV3>
+            {
+                new CompositeTypeNameConflictOptionV3
+                {
+                    Action = CompositeTypeNameConflictActionV3.UseExisting,
+                    Name = "1. Использовать текущее",
+                    Description = "Разместить существующий тип без изменения его состава."
+                },
+                new CompositeTypeNameConflictOptionV3
+                {
+                    Action = CompositeTypeNameConflictActionV3.ReplaceExisting,
+                    Name = "2. Заменить на новое",
+                    Description = "Изменить состав существующего типа на выбранный вариант."
+                },
+                new CompositeTypeNameConflictOptionV3
+                {
+                    Action = CompositeTypeNameConflictActionV3.AppendNumber,
+                    Name = "3. Добавить номер к имени",
+                    Description = "Создать новый тип с суффиксом _2, _3 и далее."
+                },
+                new CompositeTypeNameConflictOptionV3
+                {
+                    Action = CompositeTypeNameConflictActionV3.Cancel,
+                    Name = "4. Отменить",
+                    Description = "Не размещать группы с конфликтующим именем."
+                }
+            };
+            _selectedTypeNameConflictOption = TypeNameConflictOptions.Last();
             SupportPadOptions = CollectSupportPadOptions(document);
             _selectedLeftSupportPad = SupportPadOptions.FirstOrDefault();
             _selectedRightSupportPad = SupportPadOptions.FirstOrDefault();
@@ -569,6 +804,9 @@ namespace FerrumAddinDev.LintelCreator_v3
         public ObservableCollection<LintelSelectionVariantV3> Variants { get; } = new ObservableCollection<LintelSelectionVariantV3>();
         public ObservableCollection<LintelEditorRowV3> EditorRows { get; } = new ObservableCollection<LintelEditorRowV3>();
         public ObservableCollection<LintelCatalogItemV3> EditorCatalogItems { get; } = new ObservableCollection<LintelCatalogItemV3>();
+        public ObservableCollection<ExistingLintelTypeOptionV3> ExistingLintelTypeOptions { get; }
+            = new ObservableCollection<ExistingLintelTypeOptionV3>();
+        public ObservableCollection<CompositeTypeNameConflictOptionV3> TypeNameConflictOptions { get; }
         public ObservableCollection<string> EditorPurposeOptions { get; }
         public ObservableCollection<string> SupportPadOptions { get; }
 
@@ -580,6 +818,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 if (ReferenceEquals(_selectedGroup, value)) return;
                 _selectedGroup = value;
                 RaisePropertyChanged(nameof(SelectedGroup));
+                RaisePropertyChanged(nameof(SelectedOpeningGroup));
+                RaisePropertyChanged(nameof(SelectedExistingLintelGroup));
                 RaiseSelectedGroupProperties();
                 if (SelectedGroup?.HasExistingLintel == true)
                     DisplayExistingLintel(SelectedGroup);
@@ -597,6 +837,30 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
 
+        public OpeningGroupCardV3 SelectedOpeningGroup
+        {
+            get => SelectedGroup != null && !SelectedGroup.HasExistingLintel
+                ? SelectedGroup
+                : null;
+            set
+            {
+                if (value != null && !value.HasExistingLintel)
+                    SelectedGroup = value;
+            }
+        }
+
+        public OpeningGroupCardV3 SelectedExistingLintelGroup
+        {
+            get => SelectedGroup?.HasExistingLintel == true
+                ? SelectedGroup
+                : null;
+            set
+            {
+                if (value?.HasExistingLintel == true)
+                    SelectedGroup = value;
+            }
+        }
+
         public LintelSelectionVariantV3 SelectedVariant
         {
             get => _selectedVariant;
@@ -604,7 +868,17 @@ namespace FerrumAddinDev.LintelCreator_v3
             {
                 if (ReferenceEquals(_selectedVariant, value)) return;
                 _selectedVariant = value;
+                if (SelectedGroup != null
+                    && !SelectedGroup.HasExistingLintel
+                    && value != null
+                    && SelectedGroup.CalculatedVariants.Contains(value))
+                {
+                    SelectedGroup.ActiveVariant = value;
+                    ApplyActiveVariantStatus(SelectedGroup);
+                }
                 RaisePropertyChanged(nameof(SelectedVariant));
+                RaisePropertyChanged(nameof(CanSaveVariantChanges));
+                RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
                 RestoreEditorFromCalculation();
             }
         }
@@ -617,10 +891,23 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string EditorTypeName => BuildEditorTypeName();
         public bool EditorTypeExists => !string.IsNullOrWhiteSpace(EditorTypeName)
                                         && _existingCompositeTypeNames.Contains(EditorTypeName);
+        public bool CanLoadExistingEditorType => CanInteract
+                                                 && EditorTypeExists
+                                                 && FindExistingEditorTypeOption(EditorTypeName) != null;
+        public bool EditorHasExistingTypeDifferences => _editorExistingTypeDifferenceCount > 0;
+        public int EditorExistingTypeDifferenceCount => _editorExistingTypeDifferenceCount;
+        public string EditorExistingTypeDifferencesText => _editorExistingTypeDifferencesText;
         public string EditorTypeStatusText => string.IsNullOrWhiteSpace(EditorTypeName)
             ? "Тип не определён"
-            : EditorTypeExists ? "Существующий тип" : "Будет создан";
-        public string EditorTypeStatusGlyph => EditorTypeExists ? "✓" : "+";
+            : EditorTypeExists
+                ? EditorHasExistingTypeDifferences
+                    ? "Существующий тип · состав отличается ("
+                      + EditorExistingTypeDifferenceCount.ToString(CultureInfo.InvariantCulture) + ")"
+                    : "Существующий тип"
+                : "Будет создан";
+        public string EditorTypeStatusGlyph => EditorHasExistingTypeDifferences
+            ? "!"
+            : EditorTypeExists ? "✓" : "+";
         public int EditorWallWidthMm => SelectedGroup == null ? 0 : (int)Math.Round(SelectedGroup.WallWidthMm);
         public int EditorPackageWidthMm => EditorRows.Sum(row => row.WidthMm + row.GapMm);
         public int EditorSignedWidthDeltaMm => EditorPackageWidthMm - EditorWallWidthMm;
@@ -631,6 +918,44 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string EditorWidthDeltaText => EditorRows.Count == 0
             ? "—"
             : (EditorSignedWidthDeltaMm > 0 ? "+" : string.Empty) + EditorSignedWidthDeltaMm + " мм";
+
+        public ExistingLintelTypeOptionV3 SelectedExistingLintelType
+        {
+            get => _selectedExistingLintelType;
+            set
+            {
+                if (ReferenceEquals(_selectedExistingLintelType, value)) return;
+                _selectedExistingLintelType = value;
+                RaisePropertyChanged(nameof(SelectedExistingLintelType));
+                RaisePropertyChanged(nameof(CanSaveVariantChanges));
+                RaisePropertyChanged(nameof(ExistingLintelTypeSelectionText));
+            }
+        }
+
+        public string ExistingLintelTypesSummaryText => ExistingLintelTypeOptions.Count == 0
+            ? "Подходящие типы не найдены"
+            : "Подходящих типов: " + ExistingLintelTypeOptions.Count.ToString(CultureInfo.InvariantCulture);
+        public string ExistingLintelCurrentTypeText => SelectedGroup?.HasExistingLintel == true
+            ? "Текущий тип: " + (SelectedGroup.ExistingLintelTypeNames ?? "—")
+            : "Текущий тип: —";
+        public string ExistingLintelTypeSelectionText => SelectedExistingLintelType == null
+            ? "Выберите тип для замены."
+            : "Будет установлен тип «" + SelectedExistingLintelType.TypeName + "».";
+
+        public CompositeTypeNameConflictOptionV3 SelectedTypeNameConflictOption
+        {
+            get => _selectedTypeNameConflictOption;
+            set
+            {
+                if (ReferenceEquals(_selectedTypeNameConflictOption, value) || value == null) return;
+                _selectedTypeNameConflictOption = value;
+                RaisePropertyChanged(nameof(SelectedTypeNameConflictOption));
+                RaisePropertyChanged(nameof(TypeNameConflictDescription));
+            }
+        }
+
+        public string TypeNameConflictDescription => SelectedTypeNameConflictOption?.Description
+                                                     ?? string.Empty;
 
         public string SelectedLeftSupportPad
         {
@@ -655,7 +980,64 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
 
         public bool HasSelectedGroup => SelectedGroup != null;
-        public bool CanInteract => !IsCollectionInProgress && !IsCalculationInProgress;
+        public bool CanInteract => !IsCollectionInProgress
+                                   && !IsCalculationInProgress
+                                   && !IsPlacementInProgress;
+        public bool IsPlacementInProgress
+        {
+            get => _isPlacementInProgress;
+            private set
+            {
+                if (_isPlacementInProgress == value) return;
+                _isPlacementInProgress = value;
+                RaisePropertyChanged(nameof(IsPlacementInProgress));
+                RaisePropertyChanged(nameof(CanInteract));
+                RaisePropertyChanged(nameof(IsVariantsPanelEnabled));
+                RaisePropertyChanged(nameof(CanRecalculate));
+                RaisePropertyChanged(nameof(CanRecalculateAll));
+                RaisePropertyChanged(nameof(CanSaveVariantChanges));
+                RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
+                RaisePropertyChanged(nameof(ExistingLintelTypesSummaryText));
+            }
+        }
+        public bool IsExistingLintelsTabActive
+        {
+            get => _isExistingLintelsTabActive;
+            set
+            {
+                if (_isExistingLintelsTabActive == value) return;
+                _isExistingLintelsTabActive = value;
+                RaisePropertyChanged(nameof(IsExistingLintelsTabActive));
+                RaisePropertyChanged(nameof(SaveVariantButtonText));
+                RaisePropertyChanged(nameof(CreateLintelsButtonText));
+                RaisePropertyChanged(nameof(CanSaveVariantChanges));
+                RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
+            }
+        }
+        public string SaveVariantButtonText => IsExistingLintelsTabActive
+            ? "Заменить тип"
+            : "Сохранить изменения варианта";
+        public string CreateLintelsButtonText => IsExistingLintelsTabActive
+            ? "Пересоздать перемычки"
+            : "Создать типы и проставить";
+        public bool CanSaveVariantChanges => CanInteract
+                                             && (IsExistingLintelsTabActive
+                                                 ? SelectedGroup?.HasExistingLintel == true
+                                                   && SelectedExistingLintelType != null
+                                                   && SelectedGroup.ExistingLintelIds.Count > 0
+                                                 : SelectedGroup != null
+                                                   && !SelectedGroup.HasExistingLintel
+                                                   && SelectedVariant != null
+                                                   && EditorRows.Count > 0);
+        public bool CanPlaceSelectedLintels => CanInteract
+                                               && !IsExistingLintelsTabActive
+                                               && _allGroups
+                                                   .Where(group => group.IsChecked && !group.HasExistingLintel)
+                                                   .Any()
+                                               && _allGroups
+                                                   .Where(group => group.IsChecked && !group.HasExistingLintel)
+                                                   .All(group => group.ActiveVariant != null
+                                                                 && group.PlacementTargets.Count > 0);
         public bool IsVariantsPanelEnabled => CanInteract
                                               && SelectedGroup != null
                                               && !SelectedGroup.HasExistingLintel;
@@ -702,6 +1084,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RaisePropertyChanged(nameof(IsVariantsPanelEnabled));
                 RaisePropertyChanged(nameof(CanRecalculate));
                 RaisePropertyChanged(nameof(CanRecalculateAll));
+                RaisePropertyChanged(nameof(CanSaveVariantChanges));
+                RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
                 RaisePropertyChanged(nameof(CalculationProgressText));
                 RaiseActiveProgressProperties();
             }
@@ -746,6 +1130,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _isCollectionInProgress = value;
                 RaisePropertyChanged(nameof(IsCollectionInProgress));
                 RaisePropertyChanged(nameof(CanInteract));
+                RaisePropertyChanged(nameof(CanSaveVariantChanges));
+                RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
                 RaiseActiveProgressProperties();
             }
         }
@@ -802,9 +1188,6 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
         public string SelectedOpeningWidthText => SelectedGroup == null ? "—" : Math.Round(SelectedGroup.OpeningWidthMm) + " мм";
-        public string RequiredLengthText => SelectedGroup == null
-            ? "—"
-            : "≥ " + Math.Ceiling(SelectedGroup.OpeningWidthMm + 2.0 * MinimumBearingMm) + " мм";
         public string SelectedWallWidthText => SelectedGroup == null ? "—" : Math.Round(SelectedGroup.WallWidthMm) + " мм";
         public string SelectedWallTypeText => SelectedGroup?.WallTypeName ?? "—";
         public string SelectedBearingSideText => SelectedGroup == null
@@ -879,20 +1262,6 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             get => _lintelMaterial == LintelMaterialV3.Metal;
             set { if (value) SetLintelMaterial(LintelMaterialV3.Metal); }
-        }
-
-        public int MinimumBearingMm
-        {
-            get => _minimumBearingMm;
-            set
-            {
-                int normalized = Math.Max(0, Math.Min(1000, value));
-                if (_minimumBearingMm == normalized) return;
-                _minimumBearingMm = normalized;
-                RaisePropertyChanged(nameof(MinimumBearingMm));
-                RaisePropertyChanged(nameof(RequiredLengthText));
-                RecalculateVariants();
-            }
         }
 
         public int WallWidthToleranceMm
@@ -1129,7 +1498,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(IsMasonry65));
             RaisePropertyChanged(nameof(IsMasonry88));
             RaisePropertyChanged(nameof(IsPartition));
-            RecalculateVariants();
+            if (SelectedGroup?.HasExistingLintel == true)
+                RefreshExistingLintelTypeOptions(SelectedGroup);
+            else
+                RecalculateVariants();
         }
 
         private void SetLintelMaterial(LintelMaterialV3 value)
@@ -1138,7 +1510,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             _lintelMaterial = value;
             RaisePropertyChanged(nameof(IsReinforcedConcrete));
             RaisePropertyChanged(nameof(IsMetal));
-            RecalculateVariants();
+            if (SelectedGroup?.HasExistingLintel == true)
+                RefreshExistingLintelTypeOptions(SelectedGroup);
+            else
+                RecalculateVariants();
         }
 
         private void RaiseSelectedGroupProperties()
@@ -1147,13 +1522,19 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(IsVariantsPanelEnabled));
             RaisePropertyChanged(nameof(CanRecalculate));
             RaisePropertyChanged(nameof(CanRecalculateAll));
+            RaisePropertyChanged(nameof(CanSaveVariantChanges));
+            RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
+            RaisePropertyChanged(nameof(SaveVariantButtonText));
+            RaisePropertyChanged(nameof(CreateLintelsButtonText));
             RaisePropertyChanged(nameof(SelectedOpeningCaption));
             RaisePropertyChanged(nameof(SelectedOpeningWidthText));
-            RaisePropertyChanged(nameof(RequiredLengthText));
             RaisePropertyChanged(nameof(SelectedWallWidthText));
             RaisePropertyChanged(nameof(SelectedWallTypeText));
             RaisePropertyChanged(nameof(SelectedBearingSideText));
             RaisePropertyChanged(nameof(SelectedBearingZoneText));
+            RaisePropertyChanged(nameof(ExistingLintelCurrentTypeText));
+            RaisePropertyChanged(nameof(ExistingLintelTypesSummaryText));
+            RaisePropertyChanged(nameof(ExistingLintelTypeSelectionText));
         }
 
         private void RaiseVariantsProperties()
@@ -1183,7 +1564,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                 ValidationError = group.SupportParameterError,
                 MasonryCourseHeightMm = (int)_masonryType,
                 Material = _lintelMaterial,
-                MinimumBearingMm = MinimumBearingMm,
                 WallWidthToleranceMm = WallWidthToleranceMm,
                 MaximumVariants = 5
             };
@@ -1199,10 +1579,23 @@ namespace FerrumAddinDev.LintelCreator_v3
             return new LintelSelectionResultV3 { Message = _catalogLoadError };
         }
 
-        private static void StoreCalculation(OpeningGroupCardV3 group, LintelSelectionResultV3 result)
+        private void StoreCalculation(OpeningGroupCardV3 group, LintelSelectionResultV3 result)
         {
+            string activeCompositionKey = group.ActiveVariant?.CompositionKey;
+            int activeRank = group.ActiveVariant?.Rank ?? 0;
             group.CalculatedVariants.Clear();
             group.CalculatedVariants.AddRange(result.Variants);
+            foreach (LintelSelectionVariantV3 variant in group.CalculatedVariants)
+                ApplyExistingTypeWarning(group, variant);
+            group.ActiveVariant = group.CalculatedVariants.FirstOrDefault(variant =>
+                                      !string.IsNullOrWhiteSpace(activeCompositionKey)
+                                      && string.Equals(
+                                          variant.CompositionKey,
+                                          activeCompositionKey,
+                                          StringComparison.OrdinalIgnoreCase))
+                                  ?? group.CalculatedVariants.FirstOrDefault(variant => variant.Rank == activeRank)
+                                  ?? group.CalculatedVariants.FirstOrDefault();
+            group.CalculationBaseMessage = result.Message;
             group.CalculationMessage = result.Message;
             group.IsCalculated = true;
             ApplyCalculationStatus(group, result);
@@ -1213,7 +1606,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             Variants.Clear();
             foreach (LintelSelectionVariantV3 variant in group.CalculatedVariants)
                 Variants.Add(variant);
-            SelectedVariant = Variants.FirstOrDefault();
+            LintelSelectionVariantV3 activeVariant = group.ActiveVariant;
+            if (activeVariant == null || !Variants.Contains(activeVariant))
+                activeVariant = Variants.FirstOrDefault();
+            SelectedVariant = activeVariant;
             SelectionMessage = group.CalculationMessage ?? "Варианты не рассчитаны.";
             RaiseVariantsProperties();
         }
@@ -1228,7 +1624,693 @@ namespace FerrumAddinDev.LintelCreator_v3
             SelectionMessage = group?.CalculationMessage
                                ?? group?.ExistingLintelDescription
                                ?? "Для проёма найдена существующая перемычка.";
+            ApplyExistingTypeSettings(group);
+            RefreshExistingLintelTypeOptions(group);
             RaiseVariantsProperties();
+        }
+
+        private void ApplyExistingTypeSettings(OpeningGroupCardV3 group)
+        {
+            string typeName = (group?.ExistingLintelTypeNames ?? string.Empty)
+                .Split('+')
+                .Select(value => value.Trim())
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            string firstPart = (typeName ?? string.Empty).Split('_').FirstOrDefault();
+            LintelMasonryTypeV3 masonry = firstPart == "88"
+                ? LintelMasonryTypeV3.Brick88
+                : firstPart == "65"
+                    ? LintelMasonryTypeV3.Brick65
+                    : LintelMasonryTypeV3.Partition;
+            if (_masonryType != masonry)
+            {
+                _masonryType = masonry;
+                RaisePropertyChanged(nameof(IsMasonry65));
+                RaisePropertyChanged(nameof(IsMasonry88));
+                RaisePropertyChanged(nameof(IsPartition));
+            }
+
+            LintelMaterialV3 material = IsMetalCompositeTypeName(typeName)
+                ? LintelMaterialV3.Metal
+                : LintelMaterialV3.ReinforcedConcrete;
+            if (_lintelMaterial != material)
+            {
+                _lintelMaterial = material;
+                RaisePropertyChanged(nameof(IsReinforcedConcrete));
+                RaisePropertyChanged(nameof(IsMetal));
+            }
+        }
+
+        private void RefreshExistingLintelTypeOptions(OpeningGroupCardV3 selectedGroup)
+        {
+            long previousTypeId = SelectedExistingLintelType?.TypeId?.Value ?? -1;
+            List<OpeningGroupCardV3> sourceGroups = GetExistingSourceGroups(selectedGroup);
+            IEnumerable<ExistingLintelTypeOptionV3> filtered = _allExistingLintelTypeOptions
+                .Where(option => IsExistingTypeGeometrySuitable(option, sourceGroups))
+                .ToList();
+
+            List<ExistingLintelTypeOptionV3> baseFiltered = filtered.ToList();
+            int requiredSupport = sourceGroups.Count == 0
+                ? selectedGroup?.SupportType ?? 0
+                : sourceGroups.Max(group => group.SupportType);
+            bool has0 = baseFiltered.Any(option => option.SupportCategory == 0);
+            bool has1 = baseFiltered.Any(option => option.SupportCategory == 1);
+            bool has2 = baseFiltered.Any(option => option.SupportCategory == 2);
+            int chosenSupport;
+            if (requiredSupport >= 2)
+                chosenSupport = 2;
+            else if (requiredSupport == 1)
+                chosenSupport = has1 ? 1 : has2 ? 2 : 1;
+            else
+                chosenSupport = has0 ? 0 : has1 ? 1 : 2;
+
+            List<ExistingLintelTypeOptionV3> options = baseFiltered
+                .Where(option => option.SupportCategory == chosenSupport)
+                .OrderBy(option => option.FamilyName, _naturalComparer)
+                .ThenBy(option => option.TypeName, _naturalComparer)
+                .ToList();
+
+            ExistingLintelTypeOptions.Clear();
+            foreach (ExistingLintelTypeOptionV3 option in options)
+                ExistingLintelTypeOptions.Add(option);
+
+            ExistingLintelTypeOptionV3 current = options.FirstOrDefault(option =>
+                string.Equals(option.FamilyName, selectedGroup?.ExistingLintelFamilyNames, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(option.TypeName, selectedGroup?.ExistingLintelTypeNames, StringComparison.Ordinal));
+            SelectedExistingLintelType = options.FirstOrDefault(option => option.TypeId.Value == previousTypeId)
+                                         ?? current
+                                         ?? options.FirstOrDefault();
+            RaisePropertyChanged(nameof(ExistingLintelTypeOptions));
+            RaisePropertyChanged(nameof(ExistingLintelTypesSummaryText));
+            RaisePropertyChanged(nameof(ExistingLintelCurrentTypeText));
+            RaisePropertyChanged(nameof(ExistingLintelTypeSelectionText));
+            RaisePropertyChanged(nameof(CanSaveVariantChanges));
+        }
+
+        private List<OpeningGroupCardV3> GetExistingSourceGroups(OpeningGroupCardV3 selectedGroup)
+        {
+            if (selectedGroup?.HasExistingLintel != true)
+                return new List<OpeningGroupCardV3>();
+            var lintelIds = new HashSet<long>(selectedGroup.ExistingLintelIds.Select(id => id.Value));
+            List<OpeningGroupCardV3> result = _allGroups
+                .Where(group => group.HasExistingLintel
+                                && group.ExistingLintelIds.Any(id => lintelIds.Contains(id.Value)))
+                .ToList();
+            if (result.Count == 0 && !selectedGroup.IsExistingLintelAggregate)
+                result.Add(selectedGroup);
+            return result;
+        }
+
+        private bool IsExistingTypeGeometrySuitable(
+            ExistingLintelTypeOptionV3 option,
+            IList<OpeningGroupCardV3> sourceGroups)
+        {
+            if (option == null || string.IsNullOrWhiteSpace(option.TypeName)) return false;
+            if (IsErrorCompositeTypeName(option.TypeName)) return true;
+            string[] parts = option.TypeName.Split('_');
+            if (parts.Length < 4) return false;
+            if (_masonryType == LintelMasonryTypeV3.Brick65 && parts[0] != "65") return false;
+            if (_masonryType == LintelMasonryTypeV3.Brick88 && parts[0] != "88") return false;
+
+            if (!TryParseTypeNumber(parts[1], out double typeWallWidth)) return false;
+            if (!TryParseTypeNumber(parts[2], out double maximumOpeningWidth)) return false;
+            foreach (OpeningGroupCardV3 group in sourceGroups)
+            {
+                if (Math.Abs(typeWallWidth - NormalizeWallWidth((int)Math.Round(group.WallWidthMm))) > 0.5)
+                    return false;
+                if (maximumOpeningWidth + 0.5 < group.OpeningWidthMm)
+                    return false;
+            }
+
+            bool isMetal = IsMetalCompositeTypeName(option.TypeName);
+            return _lintelMaterial == LintelMaterialV3.Metal ? isMetal : !isMetal;
+        }
+
+        private static bool TryParseTypeNumber(string text, out double value)
+        {
+            return double.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out value)
+                   || double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static bool IsMetalCompositeTypeName(string typeName)
+        {
+            string name = typeName ?? string.Empty;
+            return name.Contains("у")
+                   || name.Contains("У")
+                   || name.Contains("А")
+                   || name.Contains("Шв")
+                   || name.Contains("Дв");
+        }
+
+        private static bool IsErrorCompositeTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName)) return false;
+            string cleaned = new string(typeName
+                    .Where(character => !char.IsControl(character)
+                                        && CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.Format)
+                    .ToArray())
+                .Trim();
+            return string.Equals(cleaned, "Тестовый вариант", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public bool SaveEditorChangesToActiveVariant()
+        {
+            if (!CanSaveVariantChanges) return false;
+
+            OpeningGroupCardV3 group = SelectedGroup;
+            LintelSelectionVariantV3 previousVariant = SelectedVariant;
+            LintelSelectionVariantV3 savedVariant = CreateVariantFromEditor(group, previousVariant.Rank);
+            if (savedVariant == null) return false;
+            ApplyExistingTypeWarning(group, savedVariant);
+
+            int storedIndex = group.CalculatedVariants.IndexOf(previousVariant);
+            int visibleIndex = Variants.IndexOf(previousVariant);
+            if (storedIndex < 0 || visibleIndex < 0) return false;
+
+            group.CalculatedVariants[storedIndex] = savedVariant;
+            group.ActiveVariant = savedVariant;
+            Variants[visibleIndex] = savedVariant;
+            SelectedVariant = savedVariant;
+            SelectionMessage = "Изменения варианта " + savedVariant.Rank + " сохранены для выбранного проёма.";
+            RaiseVariantsProperties();
+            return true;
+        }
+
+        internal LintelTypeReplacementRequestV3 CreateTypeReplacementRequest()
+        {
+            if (!IsExistingLintelsTabActive
+                || SelectedGroup?.HasExistingLintel != true
+                || SelectedExistingLintelType == null)
+                return null;
+
+            var request = new LintelTypeReplacementRequestV3
+            {
+                TypeId = SelectedExistingLintelType.TypeId,
+                FamilyName = SelectedExistingLintelType.FamilyName,
+                TypeName = SelectedExistingLintelType.TypeName
+            };
+            request.LintelIds.AddRange(SelectedGroup.ExistingLintelIds
+                .GroupBy(id => id.Value)
+                .Select(group => group.First()));
+            return request.LintelIds.Count == 0 ? null : request;
+        }
+
+        internal void BeginLintelTypeReplacement(int lintelCount)
+        {
+            IsPlacementInProgress = true;
+            SelectionMessage = "Замена типа перемычек: 0/"
+                               + lintelCount.ToString(CultureInfo.InvariantCulture) + ".";
+        }
+
+        internal void CancelLintelTypeReplacement(string message)
+        {
+            IsPlacementInProgress = false;
+            SelectionMessage = string.IsNullOrWhiteSpace(message)
+                ? "Замена типа перемычек не запущена."
+                : message;
+        }
+
+        internal void ApplyLintelTypeReplacementResult(LintelTypeReplacementResultV3 result)
+        {
+            try
+            {
+                Dictionary<long, ElementId> changedIds = (result?.ChangedItems
+                                                          ?? new List<LintelTypeReplacementItemResultV3>())
+                    .GroupBy(item => item.OriginalId.Value)
+                    .ToDictionary(group => group.Key, group => group.Last().ResultId);
+                if (changedIds.Count > 0)
+                {
+                    foreach (OpeningGroupCardV3 group in _allGroups.Where(group => group.HasExistingLintel))
+                    {
+                        bool isAffected = group.ExistingLintelIds.Any(id => changedIds.ContainsKey(id.Value));
+                        if (!isAffected) continue;
+
+                        List<ElementId> updatedIds = group.ExistingLintelIds
+                            .Select(id => changedIds.TryGetValue(id.Value, out ElementId changedId)
+                                ? changedId
+                                : id)
+                            .GroupBy(id => id.Value)
+                            .Select(ids => ids.First())
+                            .ToList();
+                        group.ExistingLintelIds.Clear();
+                        group.ExistingLintelIds.AddRange(updatedIds);
+                        group.ExistingLintelFamilyNames = result.FamilyName;
+                        group.ExistingLintelTypeNames = result.TypeName;
+                        group.ExistingLintelComponents.Clear();
+                        group.ExistingLintelComponents.AddRange(result.Components.Select(component =>
+                            new ExistingLintelComponentV3
+                            {
+                                FamilyName = component.FamilyName,
+                                TypeName = component.TypeName,
+                                Order = component.Order,
+                                OffsetToNextMm = component.OffsetToNextMm
+                            }));
+                        group.Status = OpeningStatusV3.Success;
+                        group.StatusText = group.ExistingLintelDescription;
+                        group.CalculationMessage = group.ExistingLintelDescription
+                                                   + ". " + group.ExistingLintelIdsText + ".";
+                    }
+
+                    RefreshExistingCompositeTypeCache(_document);
+                    _existingLintelTypeGroups = BuildExistingLintelTypeGroups(
+                        _allGroups.Where(group => group.HasExistingLintel));
+                    SelectedGroup = null;
+                    RefreshView();
+                    if (IsExistingGroupedByOpening)
+                    {
+                        var resultIds = new HashSet<long>(changedIds.Values.Select(id => id.Value));
+                        SelectedGroup = ExistingLintelGroups.FirstOrDefault(group =>
+                            group.ExistingLintelIds.Any(id => resultIds.Contains(id.Value)));
+                    }
+                    else
+                    {
+                        SelectedGroup = ExistingLintelGroups.FirstOrDefault(group =>
+                            string.Equals(group.ExistingLintelFamilyNames, result.FamilyName, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(group.ExistingLintelTypeNames, result.TypeName, StringComparison.Ordinal));
+                    }
+                }
+
+                var errors = new List<string>();
+                if (!string.IsNullOrWhiteSpace(result?.FatalError))
+                    errors.Add(result.FatalError);
+                errors.AddRange(result?.Errors.Where(error => !string.IsNullOrWhiteSpace(error))
+                                ?? Enumerable.Empty<string>());
+                SelectionMessage = changedIds.Count > 0
+                    ? "Тип заменён у " + changedIds.Count.ToString(CultureInfo.InvariantCulture)
+                      + " перемычек на «" + result.TypeName + "»."
+                      + (errors.Count > 0 ? " Ошибок: " + errors.Count + "." : string.Empty)
+                    : errors.FirstOrDefault() ?? "Тип перемычек не изменён.";
+                RaiseSummaryProperties();
+            }
+            finally
+            {
+                IsPlacementInProgress = false;
+                RaiseSelectedGroupProperties();
+            }
+        }
+
+        internal LintelPlacementRequestV3 CreatePlacementRequest()
+        {
+            var request = new LintelPlacementRequestV3
+            {
+                NameConflictAction = SelectedTypeNameConflictOption?.Action
+                                     ?? CompositeTypeNameConflictActionV3.Cancel
+            };
+            foreach (OpeningGroupCardV3 group in _allGroups
+                         .Where(item => item.IsChecked && !item.HasExistingLintel))
+            {
+                if (group.ActiveVariant == null || group.PlacementTargets.Count == 0)
+                    continue;
+
+                List<LintelPlacementComponentRequestV3> components =
+                    CreatePlacementComponents(group.ActiveVariant);
+                if (components.Count == 0)
+                    continue;
+
+                var groupRequest = new LintelPlacementGroupRequestV3
+                {
+                    GroupKey = group.Key,
+                    WallTypeName = group.WallTypeName,
+                    CompositeTypeName = BuildPlacementTypeName(group, components),
+                    HasExistingTypeDifference = group.ActiveVariant.HasExistingTypeDifference,
+                    ExistingTypeDifferenceText = group.ActiveVariant.ExistingTypeDifferenceText
+                };
+                groupRequest.Targets.AddRange(group.PlacementTargets);
+                groupRequest.Components.AddRange(components);
+                request.Groups.Add(groupRequest);
+            }
+            return request.Groups.Count == 0 ? null : request;
+        }
+
+        internal void BeginLintelPlacement(int groupCount)
+        {
+            IsPlacementInProgress = true;
+            SelectionMessage = "Создание типов и размещение перемычек: 0/"
+                               + groupCount.ToString(CultureInfo.InvariantCulture) + ".";
+        }
+
+        internal void CancelLintelPlacement(string message)
+        {
+            IsPlacementInProgress = false;
+            SelectionMessage = string.IsNullOrWhiteSpace(message)
+                ? "Размещение перемычек не запущено."
+                : message;
+        }
+
+        internal void ApplyLintelPlacementResult(LintelPlacementResultV3 result)
+        {
+            try
+            {
+                List<LintelPlacementGroupResultV3> successful = result?.Groups
+                    .Where(item => item.IsSuccess)
+                    .ToList() ?? new List<LintelPlacementGroupResultV3>();
+                var successfulKeys = new HashSet<string>(
+                    successful.Select(item => item.GroupKey),
+                    StringComparer.Ordinal);
+
+                foreach (LintelPlacementGroupResultV3 groupResult in successful)
+                {
+                    OpeningGroupCardV3 group = _allGroups.FirstOrDefault(item =>
+                        string.Equals(item.Key, groupResult.GroupKey, StringComparison.Ordinal));
+                    if (group == null) continue;
+
+                    group.HasExistingLintel = true;
+                    group.IsChecked = false;
+                    group.ExistingLintelFamilyNames = groupResult.FamilyName;
+                    group.ExistingLintelTypeNames = groupResult.TypeName;
+                    group.ExistingLintelIds.Clear();
+                    group.ExistingLintelIds.AddRange(groupResult.CreatedLintelIds);
+                    group.ExistingLintelComponents.Clear();
+                    group.ExistingLintelComponents.AddRange(groupResult.Components);
+                    group.Status = OpeningStatusV3.Success;
+                    group.StatusText = group.ExistingLintelDescription;
+                    group.CalculationMessage = group.ExistingLintelDescription
+                                               + ". " + group.ExistingLintelIdsText + ".";
+                    if (!string.IsNullOrWhiteSpace(groupResult.TypeName))
+                        _existingCompositeTypeNames.Add(groupResult.TypeName);
+                }
+
+                foreach (LintelPlacementGroupResultV3 failed in result?.Groups
+                             .Where(item => !item.IsSuccess)
+                         ?? Enumerable.Empty<LintelPlacementGroupResultV3>())
+                {
+                    OpeningGroupCardV3 group = _allGroups.FirstOrDefault(item =>
+                        string.Equals(item.Key, failed.GroupKey, StringComparison.Ordinal));
+                    if (group == null) continue;
+                    group.Status = OpeningStatusV3.Error;
+                    if (failed.WasCancelledByTypeNameConflict)
+                    {
+                        group.StatusText = "Размещение отменено";
+                        group.CalculationMessage = "Размещение отменено: имя типа «"
+                                                   + failed.RequestedTypeName
+                                                   + "» совпало, но состав отличается. Отличия: "
+                                                   + failed.TypeNameConflictDifferences + ".";
+                    }
+                    else
+                    {
+                        group.StatusText = "Ошибка размещения";
+                        group.CalculationMessage = string.IsNullOrWhiteSpace(failed.Error)
+                            ? "Размещение перемычки отменено или не выполнено."
+                            : failed.Error;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(result?.FatalError))
+                {
+                    foreach (OpeningGroupCardV3 group in _allGroups
+                                 .Where(item => item.IsChecked && !item.HasExistingLintel))
+                    {
+                        group.Status = OpeningStatusV3.Error;
+                        group.StatusText = "Размещение отменено";
+                        group.CalculationMessage = result.FatalError;
+                    }
+                }
+
+                if (successful.Count > 0)
+                    RefreshExistingCompositeTypeCache(_document);
+
+                bool selectedGroupWasPlaced = SelectedGroup != null
+                                              && successfulKeys.Contains(SelectedGroup.Key);
+                if (selectedGroupWasPlaced)
+                    SelectedGroup = null;
+
+                _existingLintelTypeGroups = BuildExistingLintelTypeGroups(
+                    _allGroups.Where(group => group.HasExistingLintel));
+                RefreshView();
+                if (selectedGroupWasPlaced)
+                    SelectedGroup = VisibleGroups.FirstOrDefault();
+
+                int placedOpeningCount = successful
+                    .Select(item => _allGroups.FirstOrDefault(group => group.Key == item.GroupKey))
+                    .Where(group => group != null)
+                    .Sum(group => group.Count);
+                List<string> errors = result?.Groups
+                    .Where(item => !item.IsSuccess && !string.IsNullOrWhiteSpace(item.Error))
+                    .Select(item => item.Error)
+                    .ToList() ?? new List<string>();
+                if (!string.IsNullOrWhiteSpace(result?.FatalError))
+                    errors.Insert(0, result.FatalError);
+
+                SelectionMessage = "Размещено перемычек: "
+                                   + successful.Sum(item => item.CreatedLintelIds.Count)
+                                   + ". Обработано проёмов: " + placedOpeningCount + "."
+                                   + (errors.Count > 0
+                                       ? " Ошибки: " + string.Join(" ", errors)
+                                       : string.Empty);
+                RaiseSummaryProperties();
+                RaiseSelectedGroupProperties();
+                RaiseEditorProperties();
+            }
+            finally
+            {
+                IsPlacementInProgress = false;
+            }
+        }
+
+        private List<LintelPlacementComponentRequestV3> CreatePlacementComponents(
+            LintelSelectionVariantV3 variant)
+        {
+            var result = new List<LintelPlacementComponentRequestV3>();
+            foreach (LintelLayoutSegmentV3 segment in variant.LayoutSegments)
+            {
+                if (segment.IsGap)
+                {
+                    if (result.Count > 0)
+                        result[result.Count - 1].GapAfterMm += segment.WidthMm;
+                    continue;
+                }
+
+                LintelCatalogItemV3 item = _lintelCatalog.FirstOrDefault(candidate =>
+                                               string.Equals(
+                                                   candidate.Mark,
+                                                   segment.Mark,
+                                                   StringComparison.OrdinalIgnoreCase)
+                                               && candidate.WidthMm == segment.WidthMm)
+                                           ?? _lintelCatalog.FirstOrDefault(candidate =>
+                                               string.Equals(
+                                                   candidate.Mark,
+                                                   segment.Mark,
+                                                   StringComparison.OrdinalIgnoreCase));
+                if (item == null) return new List<LintelPlacementComponentRequestV3>();
+
+                result.Add(new LintelPlacementComponentRequestV3
+                {
+                    Mark = item.Mark,
+                    RevitFamilyName = item.RevitFamilyName,
+                    WidthMm = segment.WidthMm,
+                    IsBearing = segment.IsBearing,
+                    MaximumOpeningWidthMm = item.MaximumOpeningWidthMm,
+                    MasonryCourseHeightMm = item.MasonryCourseHeightMm,
+                    TypeCode = GetLintelTypeCode(item, segment.IsBearing, segment.WidthMm)
+                });
+            }
+            return result;
+        }
+
+        private void ApplyExistingTypeWarning(
+            OpeningGroupCardV3 group,
+            LintelSelectionVariantV3 variant)
+        {
+            if (variant == null)
+                return;
+
+            variant.HasExistingTypeDifference = false;
+            variant.ExistingTypeDifferenceText = string.Empty;
+            List<LintelPlacementComponentRequestV3> components = CreatePlacementComponents(variant);
+            if (group == null || components.Count == 0)
+                return;
+
+            string typeName = BuildPlacementTypeName(group, components);
+            ExistingLintelTypeOptionV3 existingType = FindExistingTypeOption(typeName);
+            if (existingType == null)
+                return;
+
+            List<string> differences = GetCachedCompositionDifferences(existingType, components);
+            if (differences.Count == 0)
+                return;
+
+            variant.HasExistingTypeDifference = true;
+            variant.ExistingTypeDifferenceText = "Имя типа «" + typeName
+                                                 + "» уже существует, но состав отличается: "
+                                                 + string.Join("; ", differences) + "."
+                                                 + " При размещении будет использован существующий тип.";
+        }
+
+        private List<string> GetCachedCompositionDifferences(
+            ExistingLintelTypeOptionV3 existingType,
+            IList<LintelPlacementComponentRequestV3> selectedComponents)
+        {
+            var differences = new List<string>();
+            List<ExistingLintelComponentV3> existingComponents = existingType?.Components
+                .OrderBy(component => component.Order)
+                .ToList() ?? new List<ExistingLintelComponentV3>();
+            int commonCount = Math.Min(existingComponents.Count, selectedComponents?.Count ?? 0);
+            for (int index = 0; index < commonCount; index++)
+            {
+                ExistingLintelComponentV3 existing = existingComponents[index];
+                LintelPlacementComponentRequestV3 selected = selectedComponents[index];
+                bool typeMatches = string.Equals(
+                    existing.TypeName,
+                    selected.Mark,
+                    StringComparison.Ordinal);
+                bool familyMatches = string.IsNullOrWhiteSpace(existing.FamilyName)
+                                     || string.IsNullOrWhiteSpace(selected.RevitFamilyName)
+                                     || string.Equals(
+                                         existing.FamilyName,
+                                         selected.RevitFamilyName,
+                                         StringComparison.OrdinalIgnoreCase);
+                if (!typeMatches || !familyMatches)
+                {
+                    differences.Add(
+                        (index + 1).ToString(CultureInfo.InvariantCulture)
+                        + "ПР: существует «" + FormatExistingComponent(existing)
+                        + "», выбрано «" + FormatPlacementComponent(selected) + "»");
+                }
+
+                LintelCatalogItemV3 existingItem = FindExistingComponentCatalogItem(existing);
+                if (existingItem != null && existingItem.IsBearing != selected.IsBearing)
+                {
+                    differences.Add(
+                        (index + 1).ToString(CultureInfo.InvariantCulture)
+                        + "ПР: назначение существует «"
+                        + (existingItem.IsBearing ? "Несущая" : "Ненесущая")
+                        + "», выбрано «"
+                        + (selected.IsBearing ? "Несущая" : "Ненесущая") + "»");
+                }
+
+                if (index < commonCount - 1)
+                {
+                    int selectedOffsetMm = selected.WidthMm + selected.GapAfterMm;
+                    if (Math.Abs(existing.OffsetToNextMm - selectedOffsetMm) > 0.5)
+                    {
+                        differences.Add(
+                            "отступ от " + (index + 1).ToString(CultureInfo.InvariantCulture)
+                            + " до " + (index + 2).ToString(CultureInfo.InvariantCulture)
+                            + "ПР: существует "
+                            + Math.Round(existing.OffsetToNextMm).ToString(CultureInfo.InvariantCulture)
+                            + " мм, выбрано "
+                            + selectedOffsetMm.ToString(CultureInfo.InvariantCulture) + " мм");
+                    }
+                }
+            }
+
+            if (existingComponents.Count != (selectedComponents?.Count ?? 0))
+            {
+                differences.Add(
+                    "количество вложенных перемычек: существует "
+                    + existingComponents.Count.ToString(CultureInfo.InvariantCulture)
+                    + ", выбрано "
+                    + (selectedComponents?.Count ?? 0).ToString(CultureInfo.InvariantCulture));
+            }
+            return differences;
+        }
+
+        private static string FormatPlacementComponent(LintelPlacementComponentRequestV3 component)
+        {
+            if (component == null) return "не определено";
+            return string.IsNullOrWhiteSpace(component.RevitFamilyName)
+                ? component.Mark ?? "не определено"
+                : component.RevitFamilyName + " : " + (component.Mark ?? "не определено");
+        }
+
+        private static string BuildPlacementTypeName(
+            OpeningGroupCardV3 group,
+            IList<LintelPlacementComponentRequestV3> components)
+        {
+            int wallWidth = NormalizeWallWidth((int)Math.Round(group.WallWidthMm));
+            int maximumOpeningWidth = components
+                .Select(component => component.MaximumOpeningWidthMm)
+                .Where(value => value > 0)
+                .DefaultIfEmpty((int)Math.Round(group.OpeningWidthMm))
+                .Min();
+            int masonryCourse = components
+                .Select(component => component.MasonryCourseHeightMm)
+                .FirstOrDefault(value => value >= 0);
+            string layout = string.Join("_", components
+                .Select(component => component.TypeCode)
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+            return masonryCourse.ToString(CultureInfo.InvariantCulture)
+                   + "_" + wallWidth.ToString(CultureInfo.InvariantCulture)
+                   + "_" + maximumOpeningWidth.ToString(CultureInfo.InvariantCulture)
+                   + "_" + layout;
+        }
+
+        private LintelSelectionVariantV3 CreateVariantFromEditor(OpeningGroupCardV3 group, int rank)
+        {
+            List<LintelEditorRowV3> rows = EditorRows
+                .Where(row => row?.SelectedCatalogItem != null)
+                .ToList();
+            if (group == null || rows.Count == 0 || rows.Count != EditorRows.Count)
+                return null;
+
+            List<IGrouping<string, LintelEditorRowV3>> markGroups = rows
+                .GroupBy(
+                    row => row.SelectedCatalogItem.Mark ?? row.SelectedCatalogItem.DisplayName,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            string composition = string.Join(" + ", markGroups.Select(markGroup =>
+                markGroup.Count() > 1
+                    ? markGroup.Key + " × " + markGroup.Count()
+                    : markGroup.Key));
+            string compositionKey = string.Join("|", markGroups
+                .OrderBy(markGroup => markGroup.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(markGroup => markGroup.Key + "x" + markGroup.Count()));
+
+            int totalWidth = rows.Sum(row => row.WidthMm + row.GapMm);
+            double scale = 348.0 / Math.Max(1, totalWidth);
+            var segments = new List<LintelLayoutSegmentV3>();
+            foreach (LintelEditorRowV3 row in rows)
+            {
+                segments.Add(new LintelLayoutSegmentV3
+                {
+                    Mark = row.SelectedCatalogItem.Mark,
+                    WidthMm = row.WidthMm,
+                    DisplayWidth = Math.Max(1, row.WidthMm * scale),
+                    IsBearing = row.IsBearing
+                });
+                if (row.GapMm > 0)
+                {
+                    segments.Add(new LintelLayoutSegmentV3
+                    {
+                        Mark = "Зазор",
+                        WidthMm = row.GapMm,
+                        DisplayWidth = Math.Max(1, row.GapMm * scale),
+                        IsGap = true
+                    });
+                }
+            }
+
+            LintelSelectionRequestV3 request = CreateSelectionRequest(group);
+            int requiredBearingWidth = group.SupportType <= 0
+                ? 0
+                : (int)Math.Ceiling(Math.Min(
+                    group.WallWidthMm,
+                    Math.Max(0, group.RequiredSupportWidth1Mm)
+                    + Math.Max(0, group.RequiredSupportWidth2Mm)));
+            int roundedWallWidth = (int)Math.Round(group.WallWidthMm);
+            return new LintelSelectionVariantV3
+            {
+                Rank = rank,
+                CompositionKey = compositionKey,
+                CompositionText = composition,
+                TotalWidthMm = totalWidth,
+                SignedWidthDeltaMm = totalWidth - roundedWallWidth,
+                WidthDeltaMm = Math.Abs(totalWidth - roundedWallWidth),
+                BearingWidthMm = rows.Where(row => row.IsBearing).Sum(row => row.WidthMm),
+                RequiredBearingWidthMm = requiredBearingWidth,
+                ElementCount = rows.Count,
+                DistinctMarkCount = markGroups.Count,
+                MinimumLengthMm = rows.Min(row => row.LengthMm),
+                MaximumLengthMm = rows.Max(row => row.LengthMm),
+                OpeningWidthExcessScore = rows.Max(row =>
+                    LintelSelectionEngineV3.GetOpeningWidthExcess(request, row.SelectedCatalogItem)),
+                LengthExcessScore = rows.Sum(row =>
+                    LintelSelectionEngineV3.GetLengthExcess(request, row.SelectedCatalogItem)),
+                PriorityScore = rows.Sum(row => row.SelectedCatalogItem.Priority),
+                MinimumPriority = rows.Min(row => row.SelectedCatalogItem.Priority),
+                AveragePriority = rows.Average(row => row.SelectedCatalogItem.Priority),
+                WallWidthToleranceMm = WallWidthToleranceMm,
+                LayoutSegments = segments
+            };
         }
 
         public void AddEditorRow()
@@ -1323,6 +2405,72 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaiseEditorProperties();
         }
 
+        public bool LoadEditorFromExistingType()
+        {
+            ExistingLintelTypeOptionV3 option = FindExistingEditorTypeOption(EditorTypeName);
+            if (!CanLoadExistingEditorType || option == null) return false;
+
+            foreach (LintelEditorRowV3 row in EditorRows)
+                row.PropertyChanged -= EditorRow_PropertyChanged;
+            EditorRows.Clear();
+            RefreshEditorCatalogItems();
+
+            foreach (ExistingLintelComponentV3 component in option.Components
+                         .OrderBy(item => item.Order))
+            {
+                LintelCatalogItemV3 item = FindCatalogItem(component.TypeName, 0);
+                if (item == null) continue;
+                LintelEditorRowV3 row = AddExistingEditorRow(item);
+                if (component.OffsetToNextMm > 0)
+                {
+                    row.GapMm = Math.Max(
+                        0,
+                        (int)Math.Round(component.OffsetToNextMm - row.WidthMm));
+                }
+            }
+
+            if (EditorRows.Count == 0)
+                RestoreExistingRowsFromTypeName(option.TypeName);
+
+            UpdateEditorRowIndexes();
+            RaiseEditorProperties();
+            SelectionMessage = EditorRows.Count > 0
+                ? "В редактор загружен существующий тип «" + option.TypeName + "»."
+                : "Не удалось прочитать вложенные типы из «" + option.TypeName + "».";
+            return EditorRows.Count > 0;
+        }
+
+        private ExistingLintelTypeOptionV3 FindExistingEditorTypeOption(string typeName)
+        {
+            string preferredFamily = null;
+            if (SelectedGroup?.HasExistingLintel == true
+                && !string.IsNullOrWhiteSpace(SelectedGroup.ExistingLintelFamilyNames))
+                preferredFamily = SelectedGroup.ExistingLintelFamilyNames;
+            return FindExistingTypeOption(typeName, preferredFamily);
+        }
+
+        private ExistingLintelTypeOptionV3 FindExistingTypeOption(
+            string typeName,
+            string preferredFamilyName = null)
+        {
+            if (string.IsNullOrWhiteSpace(typeName)) return null;
+            List<ExistingLintelTypeOptionV3> matches = _allExistingLintelTypeOptions
+                .Where(option => string.Equals(option.TypeName, typeName, StringComparison.Ordinal))
+                .ToList();
+            if (!string.IsNullOrWhiteSpace(preferredFamilyName))
+            {
+                ExistingLintelTypeOptionV3 sameFamily = matches.FirstOrDefault(option => string.Equals(
+                    option.FamilyName,
+                    preferredFamilyName,
+                    StringComparison.OrdinalIgnoreCase));
+                if (sameFamily != null) return sameFamily;
+            }
+            return matches
+                .OrderByDescending(option => option.Components.Count)
+                .ThenBy(option => option.FamilyName, _naturalComparer)
+                .FirstOrDefault();
+        }
+
         private void RestoreExistingLintelRows(OpeningGroupCardV3 group)
         {
             foreach (ExistingLintelComponentV3 component in group.ExistingLintelComponents.OrderBy(item => item.Order))
@@ -1403,28 +2551,29 @@ namespace FerrumAddinDev.LintelCreator_v3
             EditorCatalogItems.Clear();
             if (SelectedGroup == null) return;
 
-            LintelSelectionRequestV3 request = CreateSelectionRequest(SelectedGroup);
-            int? existingMasonry = GetExistingLintelMasonryCourse(SelectedGroup);
-            if (existingMasonry.HasValue)
-                request.MasonryCourseHeightMm = existingMasonry.Value;
-            string materialCode = request.Material == LintelMaterialV3.Metal
-                ? "metal"
-                : "reinforcedConcrete";
+            LintelSelectionRequestV3 request = CreateEditorSelectionRequest();
 
             IEnumerable<LintelCatalogItemV3> items = _lintelCatalog
-                .Where(item => item != null
-                               && item.WidthMm > 0
-                               && string.Equals(item.Material, materialCode, StringComparison.OrdinalIgnoreCase)
-                               && item.MasonryCourseHeightMm == request.MasonryCourseHeightMm
-                               && request.OpeningWidthMm + 0.5 >= item.MinimumOpeningWidthMm
-                               && (item.MaximumOpeningWidthMm <= 0
-                                   || request.OpeningWidthMm <= item.MaximumOpeningWidthMm + 0.5)
-                               && item.LengthMm + 0.5 >= LintelSelectionEngineV3.GetRequiredLength(request, item))
-                .OrderBy(item => item.Mark, _naturalComparer);
+                .Where(item => LintelSelectionEngineV3.IsSuitableCatalogItem(item, request, false)
+                               && item.WidthMm <= request.WallWidthMm
+                                                  + request.WallWidthToleranceMm + 0.5)
+                .OrderByDescending(item => item.Priority)
+                .ThenBy(item => item.DisplayName, _naturalComparer);
 
             foreach (LintelCatalogItemV3 item in items)
                 EditorCatalogItems.Add(item);
             RaisePropertyChanged(nameof(EditorCatalogItems));
+            RefreshAllEditorRowCatalogItems();
+        }
+
+        private LintelSelectionRequestV3 CreateEditorSelectionRequest()
+        {
+            if (SelectedGroup == null) return null;
+            LintelSelectionRequestV3 request = CreateSelectionRequest(SelectedGroup);
+            int? existingMasonry = GetExistingLintelMasonryCourse(SelectedGroup);
+            if (existingMasonry.HasValue)
+                request.MasonryCourseHeightMm = existingMasonry.Value;
+            return request;
         }
 
         private static int? GetExistingLintelMasonryCourse(OpeningGroupCardV3 group)
@@ -1451,21 +2600,30 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private void SubscribeEditorRow(LintelEditorRowV3 row)
         {
-            if (row != null)
-                row.PropertyChanged += EditorRow_PropertyChanged;
+            if (row == null) return;
+            row.PropertyChanged += EditorRow_PropertyChanged;
+            RefreshEditorRowCatalogItems(row);
         }
 
         private void EditorRow_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (sender is LintelEditorRowV3 row
-                && !row.IsApplyingCatalogItem
-                && (e.PropertyName == nameof(LintelEditorRowV3.LengthMm)
-                    || e.PropertyName == nameof(LintelEditorRowV3.WidthMm)
-                    || e.PropertyName == nameof(LintelEditorRowV3.Purpose)))
+            if (_isUpdatingEditorDifferences) return;
+            if (sender is LintelEditorRowV3 row)
             {
-                LintelCatalogItemV3 suggestedItem = FindBestEditorCatalogItem(row, e.PropertyName);
-                if (suggestedItem != null)
-                    row.ApplyCatalogSuggestion(suggestedItem);
+                bool shouldRefreshCatalog = e.PropertyName == nameof(LintelEditorRowV3.Purpose);
+                if (!row.IsApplyingCatalogItem
+                    && (e.PropertyName == nameof(LintelEditorRowV3.LengthMm)
+                        || e.PropertyName == nameof(LintelEditorRowV3.HeightMm)
+                        || e.PropertyName == nameof(LintelEditorRowV3.WidthMm)
+                        || e.PropertyName == nameof(LintelEditorRowV3.Purpose)))
+                {
+                    LintelCatalogItemV3 suggestedItem = FindBestEditorCatalogItem(row, e.PropertyName);
+                    if (suggestedItem != null)
+                        row.ApplyCatalogSuggestion(suggestedItem);
+                    shouldRefreshCatalog = true;
+                }
+                if (shouldRefreshCatalog)
+                    RefreshAllEditorRowCatalogItems();
             }
             RaiseEditorProperties();
         }
@@ -1474,36 +2632,124 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (row == null || EditorCatalogItems.Count == 0) return null;
 
-            List<LintelCatalogItemV3> candidates = EditorCatalogItems
-                .Where(item => item != null && item.IsBearing == row.IsBearing)
-                .ToList();
-            if (candidates.Count == 0)
-                candidates = EditorCatalogItems.Where(item => item != null).ToList();
+            List<LintelCatalogItemV3> candidates = GetAvailableEditorCatalogItems(row).ToList();
+            if (candidates.Count == 0) return null;
 
             IOrderedEnumerable<LintelCatalogItemV3> ordered;
             if (changedProperty == nameof(LintelEditorRowV3.LengthMm))
             {
+                candidates = candidates
+                    .Where(item => item.WidthMm <= row.WidthMm)
+                    .ToList();
+                if (candidates.Count == 0) return null;
                 ordered = candidates
                     .OrderBy(item => Math.Abs(item.LengthMm - row.LengthMm))
+                    .ThenBy(item => Math.Abs(item.HeightMm - row.HeightMm))
+                    .ThenBy(item => Math.Abs(item.WidthMm - row.WidthMm));
+            }
+            else if (changedProperty == nameof(LintelEditorRowV3.HeightMm))
+            {
+                candidates = candidates
+                    .Where(item => item.WidthMm <= row.WidthMm)
+                    .ToList();
+                if (candidates.Count == 0) return null;
+                ordered = candidates
+                    .OrderBy(item => Math.Abs(item.HeightMm - row.HeightMm))
+                    .ThenBy(item => Math.Abs(item.LengthMm - row.LengthMm))
                     .ThenBy(item => Math.Abs(item.WidthMm - row.WidthMm));
             }
             else if (changedProperty == nameof(LintelEditorRowV3.WidthMm))
             {
+                LintelSelectionRequestV3 request = CreateEditorSelectionRequest();
+                candidates = candidates
+                    .Where(item => request == null
+                                   || LintelSelectionEngineV3.IsSuitableCatalogItem(item, request, false))
+                    .ToList();
+                if (candidates.Count == 0) return null;
                 ordered = candidates
                     .OrderBy(item => Math.Abs(item.WidthMm - row.WidthMm))
+                    .ThenBy(item => Math.Abs(item.HeightMm - row.HeightMm))
                     .ThenBy(item => Math.Abs(item.LengthMm - row.LengthMm));
             }
             else
             {
                 ordered = candidates
                     .OrderBy(item => Math.Abs(item.WidthMm - row.WidthMm))
+                    .ThenBy(item => Math.Abs(item.HeightMm - row.HeightMm))
                     .ThenBy(item => Math.Abs(item.LengthMm - row.LengthMm));
             }
 
             return ordered
-                .ThenBy(item => item.Priority)
+                .ThenBy(item => SelectedGroup == null
+                    ? 1000000
+                    : item.MaximumOpeningWidthMm <= 0
+                        ? 1000000
+                        : Math.Max(0, item.MaximumOpeningWidthMm - (int)Math.Round(SelectedGroup.OpeningWidthMm)))
+                .ThenByDescending(item => item.Priority)
                 .ThenBy(item => item.Mark, _naturalComparer)
                 .FirstOrDefault();
+        }
+
+        private void RefreshEditorRowCatalogItems(LintelEditorRowV3 row)
+        {
+            if (row == null) return;
+            row.ReplaceAvailableCatalogItems(GetAvailableEditorCatalogItems(row));
+        }
+
+        private void RefreshAllEditorRowCatalogItems()
+        {
+            foreach (LintelEditorRowV3 editorRow in EditorRows)
+                RefreshEditorRowCatalogItems(editorRow);
+        }
+
+        private IEnumerable<LintelCatalogItemV3> GetAvailableEditorCatalogItems(LintelEditorRowV3 row)
+        {
+            if (row == null) return Enumerable.Empty<LintelCatalogItemV3>();
+            double requiredBearingZoneWidth = row.IsBearing
+                ? GetRequiredEditorBearingZoneWidth()
+                : 0;
+            double maximumAvailableWidth = GetMaximumAvailableEditorRowWidth(row);
+            return EditorCatalogItems.Where(item => IsAvailableForEditorRow(
+                item,
+                row.IsBearing,
+                requiredBearingZoneWidth,
+                maximumAvailableWidth));
+        }
+
+        internal static bool IsAvailableForEditorRow(
+            LintelCatalogItemV3 item,
+            bool isBearing,
+            double requiredBearingZoneWidth,
+            double maximumAvailableWidth)
+        {
+            return item != null
+                   && item.IsBearing == isBearing
+                   && item.WidthMm <= maximumAvailableWidth + 0.5
+                   && (!isBearing
+                       || requiredBearingZoneWidth <= 0
+                       || item.WidthMm + 0.5 >= requiredBearingZoneWidth);
+        }
+
+        private double GetMaximumAvailableEditorRowWidth(LintelEditorRowV3 row)
+        {
+            if (SelectedGroup == null) return double.MaxValue;
+            double maximumPackageWidth = SelectedGroup.WallWidthMm + WallWidthToleranceMm;
+            double occupiedByOtherRowsAndGaps = EditorRows.Sum(editorRow =>
+                ReferenceEquals(editorRow, row)
+                    ? editorRow.GapMm
+                    : editorRow.WidthMm + editorRow.GapMm);
+            return Math.Max(0, maximumPackageWidth - occupiedByOtherRowsAndGaps);
+        }
+
+        private double GetRequiredEditorBearingZoneWidth()
+        {
+            if (SelectedGroup == null || SelectedGroup.SupportType <= 0) return 0;
+            double requiredWidth = Math.Max(
+                SelectedGroup.RequiredSupportWidthMm,
+                Math.Max(
+                    SelectedGroup.RequiredSupportWidth1Mm,
+                    SelectedGroup.RequiredSupportWidth2Mm));
+            return Math.Min(SelectedGroup.WallWidthMm, Math.Max(0, requiredWidth));
         }
 
         private void UpdateEditorRowIndexes()
@@ -1513,17 +2759,26 @@ namespace FerrumAddinDev.LintelCreator_v3
                 EditorRows[index].Index = index + 1;
                 EditorRows[index].CanMoveUp = index > 0;
                 EditorRows[index].CanMoveDown = index < EditorRows.Count - 1;
+                EditorRows[index].GapMm = index < EditorRows.Count - 1
+                    ? LintelSelectionEngineV3.InterElementGapMm
+                    : 0;
             }
+            RefreshAllEditorRowCatalogItems();
         }
 
         private void RaiseEditorProperties()
         {
+            UpdateEditorExistingTypeDifferences();
             RaisePropertyChanged(nameof(EditorRows));
             RaisePropertyChanged(nameof(HasEditorVariant));
             RaisePropertyChanged(nameof(CanReverseEditor));
             RaisePropertyChanged(nameof(EditorRestoreButtonText));
             RaisePropertyChanged(nameof(EditorTypeName));
             RaisePropertyChanged(nameof(EditorTypeExists));
+            RaisePropertyChanged(nameof(CanLoadExistingEditorType));
+            RaisePropertyChanged(nameof(EditorHasExistingTypeDifferences));
+            RaisePropertyChanged(nameof(EditorExistingTypeDifferenceCount));
+            RaisePropertyChanged(nameof(EditorExistingTypeDifferencesText));
             RaisePropertyChanged(nameof(EditorTypeStatusText));
             RaisePropertyChanged(nameof(EditorTypeStatusGlyph));
             RaisePropertyChanged(nameof(EditorWallWidthMm));
@@ -1534,6 +2789,175 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(EditorWallWidthText));
             RaisePropertyChanged(nameof(EditorPackageWidthText));
             RaisePropertyChanged(nameof(EditorWidthDeltaText));
+            RaisePropertyChanged(nameof(CanSaveVariantChanges));
+        }
+
+        private void UpdateEditorExistingTypeDifferences()
+        {
+            if (_isUpdatingEditorDifferences) return;
+            _isUpdatingEditorDifferences = true;
+            try
+            {
+                foreach (LintelEditorRowV3 row in EditorRows)
+                {
+                    row.HasExistingTypeDifference = false;
+                    row.ExistingTypeDifferenceText = string.Empty;
+                }
+
+                _editorExistingTypeDifferenceCount = 0;
+                _editorExistingTypeDifferencesText = string.Empty;
+
+                ExistingLintelTypeOptionV3 existingType = FindExistingEditorTypeOption(EditorTypeName);
+                if (!EditorTypeExists || existingType == null) return;
+
+                List<ExistingLintelComponentV3> existingComponents = existingType.Components
+                    .OrderBy(component => component.Order)
+                    .ToList();
+                int commonCount = Math.Min(EditorRows.Count, existingComponents.Count);
+                for (int index = 0; index < EditorRows.Count; index++)
+                {
+                    LintelEditorRowV3 row = EditorRows[index];
+                    var differences = new List<string>();
+                    if (index >= existingComponents.Count)
+                    {
+                        differences.Add("в существующем типе эта вложенная перемычка отсутствует");
+                    }
+                    else
+                    {
+                        ExistingLintelComponentV3 component = existingComponents[index];
+                        LintelCatalogItemV3 selectedItem = row.SelectedCatalogItem;
+                        string selectedTypeName = selectedItem?.Mark ?? string.Empty;
+                        string selectedFamilyName = selectedItem?.RevitFamilyName ?? string.Empty;
+                        bool typeMatches = string.Equals(
+                            selectedTypeName,
+                            component.TypeName,
+                            StringComparison.Ordinal);
+                        bool familyMatches = string.IsNullOrWhiteSpace(selectedFamilyName)
+                                             || string.IsNullOrWhiteSpace(component.FamilyName)
+                                             || string.Equals(
+                                                 selectedFamilyName,
+                                                 component.FamilyName,
+                                                 StringComparison.OrdinalIgnoreCase);
+                        if (!typeMatches || !familyMatches)
+                        {
+                            differences.Add(
+                                "тип: существует «" + FormatExistingComponent(component)
+                                + "», выбран «" + FormatEditorComponent(selectedItem) + "»");
+                        }
+
+                        LintelCatalogItemV3 existingItem = FindExistingComponentCatalogItem(component);
+                        if (existingItem != null)
+                        {
+                            AddDimensionDifference(differences, "длина", existingItem.LengthMm, row.LengthMm);
+                            AddDimensionDifference(differences, "высота", existingItem.HeightMm, row.HeightMm);
+                            AddDimensionDifference(differences, "ширина", existingItem.WidthMm, row.WidthMm);
+                            if (existingItem.IsBearing != row.IsBearing)
+                            {
+                                differences.Add(
+                                    "назначение: существует «"
+                                    + (existingItem.IsBearing ? "Несущая" : "Ненесущая")
+                                    + "», выбрано «" + row.Purpose + "»");
+                            }
+                        }
+
+                        if (index < commonCount - 1)
+                        {
+                            int selectedOffsetMm = row.WidthMm + row.GapMm;
+                            int existingOffsetMm = (int)Math.Round(component.OffsetToNextMm);
+                            if (Math.Abs(component.OffsetToNextMm - selectedOffsetMm) > 0.5)
+                            {
+                                differences.Add(
+                                    "отступ до следующей: существует "
+                                    + existingOffsetMm.ToString(CultureInfo.InvariantCulture)
+                                    + " мм, выбрано "
+                                    + selectedOffsetMm.ToString(CultureInfo.InvariantCulture) + " мм");
+                            }
+                        }
+                    }
+
+                    if (differences.Count == 0) continue;
+                    row.HasExistingTypeDifference = true;
+                    row.ExistingTypeDifferenceText = "Вложенная перемычка "
+                                                     + (index + 1).ToString(CultureInfo.InvariantCulture)
+                                                     + " отличается: " + string.Join("; ", differences) + ".";
+                    _editorExistingTypeDifferenceCount++;
+                }
+
+                int additionalExistingCount = Math.Max(0, existingComponents.Count - EditorRows.Count);
+                _editorExistingTypeDifferenceCount += additionalExistingCount;
+                if (_editorExistingTypeDifferenceCount == 0) return;
+
+                var summaryParts = new List<string>
+                {
+                    "Состав выбранного варианта отличается от существующего типа."
+                };
+                int highlightedRows = EditorRows.Count(row => row.HasExistingTypeDifference);
+                if (highlightedRows > 0)
+                {
+                    summaryParts.Add(
+                        "Строк с отличиями: "
+                        + highlightedRows.ToString(CultureInfo.InvariantCulture)
+                        + ". Наведите указатель на предупреждение для подробностей.");
+                }
+                if (additionalExistingCount > 0)
+                {
+                    string additionalComponents = string.Join(
+                        ", ",
+                        existingComponents.Skip(EditorRows.Count).Select(FormatExistingComponent));
+                    summaryParts.Add(
+                        "В существующем типе дополнительно: " + additionalComponents + ".");
+                }
+                _editorExistingTypeDifferencesText = string.Join(" ", summaryParts);
+            }
+            finally
+            {
+                _isUpdatingEditorDifferences = false;
+            }
+        }
+
+        private LintelCatalogItemV3 FindExistingComponentCatalogItem(ExistingLintelComponentV3 component)
+        {
+            if (component == null) return null;
+            return _lintelCatalog.FirstOrDefault(item =>
+                       string.Equals(item.Mark, component.TypeName, StringComparison.OrdinalIgnoreCase)
+                       && (string.IsNullOrWhiteSpace(component.FamilyName)
+                           || string.IsNullOrWhiteSpace(item.RevitFamilyName)
+                           || string.Equals(
+                               item.RevitFamilyName,
+                               component.FamilyName,
+                               StringComparison.OrdinalIgnoreCase)))
+                   ?? _lintelCatalog.FirstOrDefault(item =>
+                       string.Equals(item.Mark, component.TypeName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void AddDimensionDifference(
+            ICollection<string> differences,
+            string dimensionName,
+            int existingValueMm,
+            int selectedValueMm)
+        {
+            if (existingValueMm == selectedValueMm) return;
+            differences.Add(
+                dimensionName + ": существует "
+                + existingValueMm.ToString(CultureInfo.InvariantCulture)
+                + " мм, выбрано "
+                + selectedValueMm.ToString(CultureInfo.InvariantCulture) + " мм");
+        }
+
+        private static string FormatExistingComponent(ExistingLintelComponentV3 component)
+        {
+            if (component == null) return "не определено";
+            return string.IsNullOrWhiteSpace(component.FamilyName)
+                ? component.TypeName ?? "не определено"
+                : component.FamilyName + " : " + (component.TypeName ?? "не определено");
+        }
+
+        private static string FormatEditorComponent(LintelCatalogItemV3 item)
+        {
+            if (item == null) return "не определено";
+            return string.IsNullOrWhiteSpace(item.RevitFamilyName)
+                ? item.Mark ?? "не определено"
+                : item.RevitFamilyName + " : " + (item.Mark ?? "не определено");
         }
 
         private string BuildEditorTypeName()
@@ -1623,19 +3047,50 @@ namespace FerrumAddinDev.LintelCreator_v3
             return wallWidthMm;
         }
 
-        private static HashSet<string> CollectExistingCompositeTypeNames(Document document)
+        private void RefreshExistingCompositeTypeCache(Document document)
         {
-            IEnumerable<FamilySymbol> symbols = new FilteredElementCollector(document)
+            List<FamilySymbol> symbols = new FilteredElementCollector(document)
                 .OfClass(typeof(FamilySymbol))
                 .Cast<FamilySymbol>()
                 .Where(symbol => string.Equals(
                     symbol.get_Parameter(BuiltInParameter.ALL_MODEL_MODEL)?.AsString(),
                     "Перемычки составные",
-                    StringComparison.OrdinalIgnoreCase));
+                    StringComparison.OrdinalIgnoreCase))
+                .Where(symbol => !string.IsNullOrWhiteSpace(symbol.Name))
+                .ToList();
+            var options = new List<ExistingLintelTypeOptionV3>();
+            foreach (FamilySymbol symbol in symbols)
+            {
+                var option = new ExistingLintelTypeOptionV3
+                {
+                    TypeId = symbol.Id,
+                    FamilyName = symbol.FamilyName,
+                    TypeName = symbol.Name,
+                    SupportCategory = GetCompositeTypeSupportCategory(symbol.Name)
+                };
+                option.Components.AddRange(
+                    LintelPlacementEngineV3.ReadCompositeSymbolComponents(document, symbol));
+                options.Add(option);
+            }
 
-            return new HashSet<string>(
-                symbols.Select(symbol => symbol.Name?.Trim()).Where(name => !string.IsNullOrWhiteSpace(name)),
-                StringComparer.OrdinalIgnoreCase);
+            _allExistingLintelTypeOptions = options;
+            _existingCompositeTypeNames.Clear();
+            foreach (string name in options
+                         .Select(option => option.TypeName?.Trim())
+                         .Where(name => !string.IsNullOrWhiteSpace(name)))
+                _existingCompositeTypeNames.Add(name);
+        }
+
+        private static int GetCompositeTypeSupportCategory(string typeName)
+        {
+            if (IsErrorCompositeTypeName(typeName)) return 2;
+            string[] parts = (typeName ?? string.Empty).Split('_');
+            if (parts.Length < 4) return 0;
+            bool firstBearing = (parts[3] ?? string.Empty).Any(char.IsUpper);
+            if (parts.Length == 4) return firstBearing ? 1 : 0;
+            bool secondBearing = (parts[parts.Length - 1] ?? string.Empty).Any(char.IsUpper);
+            if (firstBearing && secondBearing) return 2;
+            return firstBearing || secondBearing ? 1 : 0;
         }
 
         private ObservableCollection<string> CollectSupportPadOptions(Document document)
@@ -1678,6 +3133,7 @@ namespace FerrumAddinDev.LintelCreator_v3
 
             foreach (LintelCatalogItemV3 item in catalog.Where(item => item != null))
             {
+                item.RevitFamilyName = null;
                 if (!symbolsByTypeName.TryGetValue(item.Mark ?? string.Empty, out List<FamilySymbol> matches))
                     continue;
 
@@ -1714,15 +3170,44 @@ namespace FerrumAddinDev.LintelCreator_v3
                 group.Status = OpeningStatusV3.Error;
                 group.StatusText = "Варианты не найдены";
             }
-            else if (result.Variants[0].IsExact)
+            else
+            {
+                ApplyActiveVariantStatus(group);
+            }
+        }
+
+        private static void ApplyActiveVariantStatus(OpeningGroupCardV3 group)
+        {
+            if (group == null || group.HasExistingLintel) return;
+            LintelSelectionVariantV3 activeVariant = group.ActiveVariant
+                                                     ?? group.CalculatedVariants.FirstOrDefault();
+            if (activeVariant == null)
+            {
+                group.Status = OpeningStatusV3.Error;
+                group.StatusText = "Варианты не найдены";
+            }
+            else if (activeVariant.HasExistingTypeDifference)
+            {
+                group.Status = OpeningStatusV3.Warning;
+                group.StatusText = "Состав существующего типа отличается";
+                group.CalculationMessage = (group.CalculationBaseMessage ?? string.Empty)
+                                           + (string.IsNullOrWhiteSpace(group.CalculationBaseMessage)
+                                               ? string.Empty
+                                               : " ")
+                                           + "Предупреждение: "
+                                           + activeVariant.ExistingTypeDifferenceText;
+            }
+            else if (activeVariant.IsExact)
             {
                 group.Status = OpeningStatusV3.Success;
-                group.StatusText = "Подобрано " + result.Variants.Count + " вар.";
+                group.StatusText = "Подобрано " + group.CalculatedVariants.Count + " вар.";
+                group.CalculationMessage = group.CalculationBaseMessage;
             }
             else
             {
                 group.Status = OpeningStatusV3.Warning;
-                group.StatusText = "Отклонение " + result.Variants[0].WidthDeltaMm + " мм";
+                group.StatusText = "Отклонение " + activeVariant.WidthDeltaMm + " мм";
+                group.CalculationMessage = group.CalculationBaseMessage;
             }
         }
 
@@ -1736,6 +3221,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             OpeningCollectionResultV3 collected;
             try
             {
+                RefreshExistingCompositeTypeCache(_document);
+                ApplyRevitFamilyNames(_document, _lintelCatalog);
                 collected = OpeningCollectorV3.Collect(
                     _document,
                     _initialSelectionIds,
@@ -1782,6 +3269,24 @@ namespace FerrumAddinDev.LintelCreator_v3
             {
                 IsCollectionInProgress = false;
             }
+        }
+
+        internal bool BeginReload()
+        {
+            if (!CanInteract) return false;
+            IsCollectionInProgress = true;
+            CollectionOpeningTotal = 0;
+            ProcessedCollectionOpeningCount = 0;
+            SelectionMessage = "Повторный сбор проёмов из модели Revit.";
+            return true;
+        }
+
+        internal void CancelReload(string message)
+        {
+            IsCollectionInProgress = false;
+            SelectionMessage = string.IsNullOrWhiteSpace(message)
+                ? "Повторный сбор проёмов не выполнен."
+                : message;
         }
 
         public void SetAllChecked(bool isChecked)
@@ -1868,7 +3373,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 string.Equals(
                     group.ExistingLintelTypeNames,
                     lintelTypes,
-                    StringComparison.OrdinalIgnoreCase));
+                    StringComparison.Ordinal));
             SelectedGroup = target ?? ExistingLintelGroups.FirstOrDefault();
         }
 
@@ -1912,6 +3417,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(OpeningsSummary));
             RaisePropertyChanged(nameof(SelectedCountText));
             RaisePropertyChanged(nameof(CanRecalculateAll));
+            RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
         }
 
         private int CompareGroups(OpeningGroupCardV3 left, OpeningGroupCardV3 right)
@@ -2079,12 +3585,27 @@ namespace FerrumAddinDev.LintelCreator_v3
                         .Distinct(StringComparer.OrdinalIgnoreCase)),
                     HasExistingLintel = sourceGroup.Any(x => x.HasExistingLintel),
                     ExistingLintelFamilyNames = JoinDistinctGroupValues(sourceGroup.Select(x => x.ExistingLintelFamilyNames)),
-                    ExistingLintelTypeNames = JoinDistinctGroupValues(sourceGroup.Select(x => x.ExistingLintelTypeNames)),
+                    ExistingLintelTypeNames = JoinDistinctTypeNames(sourceGroup.Select(x => x.ExistingLintelTypeNames)),
                     InstanceCount = sourceGroup.Count(),
                     Status = OpeningStatusV3.Error,
                     StatusText = "Подбор перемычки не выполнен"
                 };
                 card.ElementIds.AddRange(sourceGroup.SelectMany(x => x.ElementIds).GroupBy(x => x.Value).Select(x => x.First()));
+                foreach (OpeningRecordV3 opening in sourceGroup)
+                {
+                    var target = new OpeningPlacementTargetV3
+                    {
+                        WallId = opening.WallId,
+                        LevelId = opening.LevelId,
+                        Location = opening.Location,
+                        TopElevation = opening.TopElevation,
+                        WallOrientation = opening.WallOrientation,
+                        SupportDirection = opening.SupportDirection,
+                        SupportType = opening.SupportType
+                    };
+                    target.OpeningIds.AddRange(opening.ElementIds);
+                    card.PlacementTargets.Add(target);
+                }
                 card.ExistingLintelIds.AddRange(sourceGroup
                     .SelectMany(x => x.ExistingLintelIds)
                     .GroupBy(x => x.Value)
@@ -2166,6 +3687,15 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .Select(value => value.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
+        }
+
+        private static string JoinDistinctTypeNames(IEnumerable<string> values)
+        {
+            return string.Join(" + ", values
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal));
         }
 
         private static string BuildGroupKey(OpeningRecordV3 opening)
@@ -2265,7 +3795,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                         continue;
                     }
 
-                    DetectSupport(hostWall, location, box.Max.Z, width, supports,
+                    DetectSupport(
+                        hostWall,
+                        GetSupportNormal(opening, hostWall),
+                        location,
+                        GetSupportCheckTop(opening, box),
+                        width,
+                        supports,
                         out int supportType,
                         out XYZ supportDirection,
                         out double supportWidth,
@@ -2392,7 +3928,8 @@ namespace FerrumAddinDev.LintelCreator_v3
 
             opening.HasExistingLintel = true;
             opening.ExistingLintelFamilyNames = JoinDistinct(matches.Select(instance => instance.Symbol?.FamilyName));
-            opening.ExistingLintelTypeNames = JoinDistinct(matches.Select(instance => instance.Symbol?.Name));
+            opening.ExistingLintelTypeNames = JoinDistinctTypeNames(
+                matches.Select(instance => instance.Symbol?.Name));
             opening.ExistingLintelIds.AddRange(matches.Select(instance => instance.Id));
 
             FamilyInstance representative = matches
@@ -2801,6 +4338,15 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .OrderBy(value => value, new AlphanumComparatorFastString()));
         }
 
+        private static string JoinDistinctTypeNames(IEnumerable<string> values)
+        {
+            return string.Join(" + ", values
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal));
+        }
+
         private static List<SupportBoxV3> CollectSupportBoxes(Document document, IEnumerable<BoundingBoxXYZ> openingBoxes)
         {
             List<BoundingBoxXYZ> boxes = openingBoxes.Where(x => x != null).ToList();
@@ -2820,6 +4366,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .WherePasses(new BoundingBoxIntersectsFilter(outline))
                 .Where(element =>
                 {
+                    if (!HasParameter(element, "Опирание 1 итог")
+                        || !HasParameter(element, "Опирание 2 итог"))
+                        return false;
+
                     long typeId = element.GetTypeId().Value;
                     if (!typeCodeCache.TryGetValue(typeId, out double code))
                     {
@@ -2834,6 +4384,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .Where(x => x.Box != null)
                 .OrderBy(x => x.ElementId.Value)
                 .ToList();
+        }
+
+        private static bool HasParameter(Element element, string parameterName)
+        {
+            if (element?.LookupParameter(parameterName) != null) return true;
+            return element is FamilyInstance familyInstance
+                   && familyInstance.Symbol?.LookupParameter(parameterName) != null;
         }
 
         private static SupportBoxV3 CreateSupportBox(Element element)
@@ -2855,20 +4412,87 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
             else
             {
-                bearingZone = (firstBearing + secondBearing) / 2.0;
+                bearingZone = Math.Round((firstBearing + secondBearing) / 2.0);
             }
 
             return new SupportBoxV3
             {
                 ElementId = element.Id,
-                Box = element.get_BoundingBox(null),
+                Box = GetLargestSolidBoundingBox(element),
                 BearingZoneMm = bearingZone,
                 ParameterError = error
             };
         }
 
+        private static BoundingBoxXYZ GetLargestSolidBoundingBox(Element element)
+        {
+            try
+            {
+                GeometryElement geometry = element?.get_Geometry(new Options
+                {
+                    ComputeReferences = false,
+                    DetailLevel = ViewDetailLevel.Fine
+                });
+                if (geometry == null) return null;
+
+                var solids = new List<Solid>();
+                foreach (GeometryObject geometryObject in geometry)
+                {
+                    if (geometryObject is Solid directSolid && directSolid.Volume > 0)
+                    {
+                        solids.Add(directSolid);
+                        continue;
+                    }
+
+                    if (!(geometryObject is GeometryInstance geometryInstance)) continue;
+                    foreach (GeometryObject instanceObject in geometryInstance.GetInstanceGeometry())
+                    {
+                        if (instanceObject is Solid instanceSolid && instanceSolid.Volume > 0)
+                            solids.Add(instanceSolid);
+                    }
+                }
+
+                Solid largestSolid = solids
+                    .OrderByDescending(solid => solid.Volume)
+                    .FirstOrDefault();
+                return largestSolid == null
+                    ? null
+                    : ToWorldAxisAlignedBox(largestSolid.GetBoundingBox());
+            }
+            catch
+            {
+                // Как и в v2, элементы без доступного объёмного Solid не участвуют
+                // в определении опирания.
+                return null;
+            }
+        }
+
+        private static BoundingBoxXYZ ToWorldAxisAlignedBox(BoundingBoxXYZ source)
+        {
+            if (source == null) return null;
+            Transform transform = source.Transform ?? Transform.Identity;
+            var corners = new[]
+            {
+                new XYZ(source.Min.X, source.Min.Y, source.Min.Z),
+                new XYZ(source.Min.X, source.Min.Y, source.Max.Z),
+                new XYZ(source.Min.X, source.Max.Y, source.Min.Z),
+                new XYZ(source.Min.X, source.Max.Y, source.Max.Z),
+                new XYZ(source.Max.X, source.Min.Y, source.Min.Z),
+                new XYZ(source.Max.X, source.Min.Y, source.Max.Z),
+                new XYZ(source.Max.X, source.Max.Y, source.Min.Z),
+                new XYZ(source.Max.X, source.Max.Y, source.Max.Z)
+            }.Select(transform.OfPoint).ToList();
+
+            return new BoundingBoxXYZ
+            {
+                Min = new XYZ(corners.Min(point => point.X), corners.Min(point => point.Y), corners.Min(point => point.Z)),
+                Max = new XYZ(corners.Max(point => point.X), corners.Max(point => point.Y), corners.Max(point => point.Z))
+            };
+        }
+
         private static void DetectSupport(
             Wall wall,
+            XYZ openingNormal,
             XYZ location,
             double top,
             double openingWidthMm,
@@ -2880,14 +4504,15 @@ namespace FerrumAddinDev.LintelCreator_v3
             out double requiredSupportWidth2Mm,
             out string supportParameterError)
         {
-            XYZ normal = wall.Orientation.Normalize();
+            XYZ normal = NormalizeInPlan(openingNormal)
+                         ?? NormalizeInPlan(wall.Orientation)
+                         ?? XYZ.BasisX;
             XYZ along = normal.CrossProduct(XYZ.BasisZ).Normalize();
             XYZ center = new XYZ(location.X, location.Y, top);
-            double centerNormal = center.DotProduct(normal);
-            double centerAlong = center.DotProduct(along);
-            double wallMinimum = centerNormal - wall.Width / 2.0;
-            double wallMaximum = centerNormal + wall.Width / 2.0;
-            double openingHalfWidth = Math.Max(350, openingWidthMm / 2.0) / MillimetersPerFoot;
+            XYZ firstFaceCenter = center - normal * (wall.Width / 2.0);
+            XYZ secondFaceCenter = center + normal * (wall.Width / 2.0);
+            double openingHalfWidth = openingWidthMm / (2.0 * MillimetersPerFoot);
+            double maximumVerticalDistance = openingWidthMm / MillimetersPerFoot;
             bool first = false;
             bool second = false;
             double firstZone = 0;
@@ -2899,28 +4524,14 @@ namespace FerrumAddinDev.LintelCreator_v3
             foreach (SupportBoxV3 support in supports)
             {
                 BoundingBoxXYZ box = support.Box;
-                if (box.Max.Z < top - 50.0 / MillimetersPerFoot || box.Min.Z > top + 1000.0 / MillimetersPerFoot)
+                // Правило исходной реализации: низ опоры должен быть выше верха
+                // проёма, но не дальше величины ширины проёма.
+                double verticalDistance = box.Min.Z + 0.0001 - top;
+                if (verticalDistance < 1e-6 || verticalDistance > maximumVerticalDistance)
                     continue;
 
-                GetProjectedRange(box, along, out double alongMinimum, out double alongMaximum);
-                if (centerAlong + openingHalfWidth < alongMinimum || centerAlong - openingHalfWidth > alongMaximum)
-                    continue;
-
-                GetProjectedRange(box, normal, out double supportMinimum, out double supportMaximum);
-                double overlapMinimum = Math.Max(wallMinimum, supportMinimum);
-                double overlapMaximum = Math.Min(wallMaximum, supportMaximum);
-                if (overlapMaximum <= overlapMinimum + 1e-6) continue;
-
-                double supportCenterNormal = (supportMinimum + supportMaximum) / 2.0;
-                bool isFirstSide = supportCenterNormal < centerNormal - 1e-6;
-                bool isSecondSide = supportCenterNormal > centerNormal + 1e-6;
-                if (!isFirstSide && !isSecondSide)
-                {
-                    double firstExtension = centerNormal - supportMinimum;
-                    double secondExtension = supportMaximum - centerNormal;
-                    isFirstSide = firstExtension >= secondExtension;
-                    isSecondSide = !isFirstSide;
-                }
+                bool isFirstSide = ContainsSupportSample(box, firstFaceCenter, along, openingHalfWidth);
+                bool isSecondSide = ContainsSupportSample(box, secondFaceCenter, along, openingHalfWidth);
 
                 if (isFirstSide)
                 {
@@ -2930,7 +4541,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                     else if (!string.IsNullOrWhiteSpace(support.ParameterError))
                         firstErrors.Add(support.ParameterError);
                 }
-                else if (isSecondSide)
+                if (isSecondSide)
                 {
                     second = true;
                     if (support.BearingZoneMm > 0 && secondZone <= 0)
@@ -2954,17 +4565,47 @@ namespace FerrumAddinDev.LintelCreator_v3
             supportParameterError = string.Join(" ", errors.Distinct(StringComparer.OrdinalIgnoreCase));
         }
 
-        private static void GetProjectedRange(BoundingBoxXYZ box, XYZ direction, out double minimum, out double maximum)
+        private static XYZ GetSupportNormal(Element opening, Wall hostWall)
         {
-            var corners = new[]
+            if (opening is FamilyInstance familyInstance)
+                return NormalizeInPlan(familyInstance.FacingOrientation) ?? hostWall.Orientation;
+            if (opening?.Location is LocationCurve locationCurve)
             {
-                new XYZ(box.Min.X, box.Min.Y, box.Min.Z), new XYZ(box.Min.X, box.Min.Y, box.Max.Z),
-                new XYZ(box.Min.X, box.Max.Y, box.Min.Z), new XYZ(box.Min.X, box.Max.Y, box.Max.Z),
-                new XYZ(box.Max.X, box.Min.Y, box.Min.Z), new XYZ(box.Max.X, box.Min.Y, box.Max.Z),
-                new XYZ(box.Max.X, box.Max.Y, box.Min.Z), new XYZ(box.Max.X, box.Max.Y, box.Max.Z)
-            };
-            minimum = corners.Min(x => x.DotProduct(direction));
-            maximum = corners.Max(x => x.DotProduct(direction));
+                XYZ lineDirection = NormalizeInPlan(
+                    locationCurve.Curve.GetEndPoint(1) - locationCurve.Curve.GetEndPoint(0));
+                XYZ curveNormal = NormalizeInPlan(lineDirection?.CrossProduct(XYZ.BasisZ));
+                if (curveNormal != null) return curveNormal;
+            }
+            return hostWall.Orientation;
+        }
+
+        private static double GetSupportCheckTop(Element opening, BoundingBoxXYZ box)
+        {
+            if (opening is FamilyInstance && opening.Location is LocationPoint locationPoint)
+                return locationPoint.Point.Z + box.Max.Z - box.Min.Z;
+            return box.Max.Z;
+        }
+
+        private static bool ContainsSupportSample(
+            BoundingBoxXYZ box,
+            XYZ faceCenter,
+            XYZ widthDirection,
+            double openingHalfWidth)
+        {
+            const double tolerance = 5e-6;
+            XYZ firstEdge = faceCenter - widthDirection * openingHalfWidth;
+            XYZ secondEdge = faceCenter + widthDirection * openingHalfWidth;
+            return IsInsideHorizontalBounds(box, faceCenter, tolerance)
+                   || IsInsideHorizontalBounds(box, firstEdge, tolerance)
+                   || IsInsideHorizontalBounds(box, secondEdge, tolerance);
+        }
+
+        private static bool IsInsideHorizontalBounds(BoundingBoxXYZ box, XYZ point, double tolerance)
+        {
+            return point.X > box.Min.X + tolerance
+                   && point.X < box.Max.X - tolerance
+                   && point.Y > box.Min.Y + tolerance
+                   && point.Y < box.Max.Y - tolerance;
         }
 
         private static XYZ GetLocation(Element opening, Wall hostWall, BoundingBoxXYZ box)
@@ -3063,6 +4704,1641 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _parents[secondRoot] = firstRoot;
                 _ranks[firstRoot]++;
             }
+        }
+    }
+
+    internal static class LintelPlacementEngineV3
+    {
+        private const double MillimetersPerFoot = 304.8;
+
+        public static LintelPlacementResultV3 Execute(
+            Document document,
+            LintelPlacementRequestV3 request)
+        {
+            var result = new LintelPlacementResultV3();
+            if (document == null || request?.Groups == null || request.Groups.Count == 0)
+            {
+                result.FatalError = "Не сформировано задание на размещение перемычек.";
+                return result;
+            }
+
+            List<FamilySymbol> compositeSymbols = new FilteredElementCollector(document)
+                .OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .Where(IsCompositeLintelSymbol)
+                .ToList();
+            if (compositeSymbols.Count == 0)
+            {
+                result.FatalError = "В проекте не найдено семейство с моделью типа «Перемычки составные».";
+                return result;
+            }
+
+            Dictionary<string, List<FamilySymbol>> compositeSymbolsByName = compositeSymbols
+                .Where(symbol => !string.IsNullOrWhiteSpace(symbol.Name))
+                .GroupBy(symbol => symbol.Name, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+            var symbolsByGroup = new Dictionary<string, FamilySymbol>(StringComparer.Ordinal);
+            var typeResolutionsByGroup = new Dictionary<string, CompositeTypeResolutionV3>(StringComparer.Ordinal);
+            var typeErrors = new Dictionary<string, string>(StringComparer.Ordinal);
+            var groupsRequiringTypeChanges = new List<LintelPlacementGroupRequestV3>();
+            foreach (LintelPlacementGroupRequestV3 group in request.Groups)
+            {
+                FamilySymbol existing = compositeSymbolsByName.TryGetValue(
+                        group.CompositeTypeName,
+                        out List<FamilySymbol> exactNameMatches)
+                    ? exactNameMatches
+                        .OrderByDescending(CountAvailableSlots)
+                        .ThenBy(symbol => symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
+                        .FirstOrDefault()
+                    : null;
+                if (existing == null)
+                {
+                    groupsRequiringTypeChanges.Add(group);
+                    continue;
+                }
+
+                if (!group.HasExistingTypeDifference
+                    || request.NameConflictAction == CompositeTypeNameConflictActionV3.UseExisting)
+                {
+                    symbolsByGroup[group.GroupKey] = existing;
+                    typeResolutionsByGroup[group.GroupKey] = new CompositeTypeResolutionV3
+                    {
+                        Symbol = existing,
+                        ActualTypeName = existing.Name,
+                        HasConflict = group.HasExistingTypeDifference,
+                        ActionText = group.HasExistingTypeDifference
+                            ? "Использован текущий существующий тип без изменения."
+                            : "Использован существующий тип с совпадающим именем.",
+                        Differences = group.HasExistingTypeDifference
+                            ? group.ExistingTypeDifferenceText
+                            : string.Empty
+                    };
+                    continue;
+                }
+
+                if (request.NameConflictAction == CompositeTypeNameConflictActionV3.Cancel)
+                {
+                    string differences = group.ExistingTypeDifferenceText ?? string.Empty;
+                    typeResolutionsByGroup[group.GroupKey] = new CompositeTypeResolutionV3
+                    {
+                        ActualTypeName = group.CompositeTypeName,
+                        HasConflict = true,
+                        WasCancelled = true,
+                        ActionText = "Размещение конфликтующей группы отменено.",
+                        Differences = differences,
+                        Error = "Имя «" + group.CompositeTypeName
+                                + "» уже занято отличающимся типом. Размещение отменено согласно настройке."
+                    };
+                    typeErrors[group.GroupKey] = typeResolutionsByGroup[group.GroupKey].Error;
+                    continue;
+                }
+
+                groupsRequiringTypeChanges.Add(group);
+            }
+
+            TransactionGroup transactionGroup = groupsRequiringTypeChanges.Count > 0
+                ? new TransactionGroup(document, "Создание и размещение перемычек v3")
+                : null;
+            using (transactionGroup)
+            {
+                transactionGroup?.Start();
+                try
+                {
+                    if (groupsRequiringTypeChanges.Count > 0)
+                    {
+                        Dictionary<string, List<FamilySymbol>> unitSymbolsByName =
+                            new FilteredElementCollector(document)
+                                .OfClass(typeof(FamilySymbol))
+                                .Cast<FamilySymbol>()
+                                .Where(symbol => !string.IsNullOrWhiteSpace(symbol.Name))
+                                .GroupBy(symbol => symbol.Name, StringComparer.OrdinalIgnoreCase)
+                                .ToDictionary(
+                                    group => group.Key,
+                                    group => group.ToList(),
+                                    StringComparer.OrdinalIgnoreCase);
+                        List<FamilySymbol> compositeCandidates = compositeSymbols
+                            .OrderByDescending(CountAvailableSlots)
+                            .ThenBy(symbol => symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
+                            .ThenBy(symbol => symbol.Name, StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        using (var typeTransaction = new Transaction(document, "Создание типов перемычек"))
+                        {
+                            typeTransaction.Start();
+                            foreach (LintelPlacementGroupRequestV3 group in groupsRequiringTypeChanges)
+                            {
+                                try
+                                {
+                                    List<FamilySymbol> componentSymbols = group.Components
+                                        .Select(component => FindUnitSymbol(unitSymbolsByName, component))
+                                        .ToList();
+                                    if (componentSymbols.Any(symbol => symbol == null))
+                                    {
+                                        LintelPlacementComponentRequestV3 missing = group.Components
+                                            .Zip(componentSymbols, (component, symbol) => new { component, symbol })
+                                            .First(item => item.symbol == null)
+                                            .component;
+                                        throw new InvalidOperationException(
+                                            "Не найден тип вложенной перемычки «" + missing.Mark + "»"
+                                            + (string.IsNullOrWhiteSpace(missing.RevitFamilyName)
+                                                ? "."
+                                                : " в семействе «" + missing.RevitFamilyName + "»."));
+                                    }
+
+                                    CompositeTypeResolutionV3 resolution = GetOrCreateCompositeSymbol(
+                                        document,
+                                        compositeCandidates,
+                                        compositeSymbolsByName,
+                                        group,
+                                        componentSymbols,
+                                        request.NameConflictAction);
+                                    typeResolutionsByGroup[group.GroupKey] = resolution;
+                                    if (resolution.Symbol == null)
+                                    {
+                                        typeErrors[group.GroupKey] = resolution.Error
+                                                                     ?? "Создание типа отменено.";
+                                        continue;
+                                    }
+                                    symbolsByGroup[group.GroupKey] = resolution.Symbol;
+                                }
+                                catch (Exception exception)
+                                {
+                                    typeErrors[group.GroupKey] = exception.Message;
+                                }
+                            }
+                            typeTransaction.Commit();
+                        }
+                    }
+
+                    if (symbolsByGroup.Count == 0)
+                    {
+                        foreach (LintelPlacementGroupRequestV3 group in request.Groups)
+                        {
+                            var groupResult = new LintelPlacementGroupResultV3
+                            {
+                                GroupKey = group.GroupKey,
+                                RequestedTypeName = group.CompositeTypeName,
+                                TypeName = group.CompositeTypeName,
+                                Error = typeErrors.TryGetValue(group.GroupKey, out string typeError)
+                                    ? "Тип «" + group.CompositeTypeName + "»: " + typeError
+                                    : "Тип «" + group.CompositeTypeName + "»: размещение отменено."
+                            };
+                            if (typeResolutionsByGroup.TryGetValue(
+                                    group.GroupKey,
+                                    out CompositeTypeResolutionV3 typeResolution))
+                            {
+                                groupResult.TypeName = typeResolution.ActualTypeName
+                                                       ?? group.CompositeTypeName;
+                                groupResult.HasTypeNameConflict = typeResolution.HasConflict;
+                                groupResult.WasCancelledByTypeNameConflict = typeResolution.WasCancelled;
+                                groupResult.TypeNameConflictAction = typeResolution.ActionText;
+                                groupResult.TypeNameConflictDifferences = typeResolution.Differences;
+                            }
+                            result.Groups.Add(groupResult);
+                        }
+                        transactionGroup?.Assimilate();
+                        return result;
+                    }
+
+                    List<double> nonNegativeLevelElevations = new FilteredElementCollector(document)
+                        .OfClass(typeof(Level))
+                        .Cast<Level>()
+                        .Where(level => level.Elevation >= 0)
+                        .OrderBy(level => level.Elevation)
+                        .Select(level => level.Elevation)
+                        .ToList();
+
+                    using (var placementTransaction = new Transaction(document, "Размещение перемычек"))
+                    {
+                        placementTransaction.Start();
+                        try
+                        {
+                            var allPlacedLintels = new List<PlacedLintelDataV3>();
+                            List<FamilySymbol> symbolsToActivate = symbolsByGroup.Values
+                                .Where(symbol => symbol != null && !symbol.IsActive)
+                                .GroupBy(symbol => symbol.Id.Value)
+                                .Select(group => group.First())
+                                .ToList();
+                            foreach (FamilySymbol symbolToActivate in symbolsToActivate)
+                                symbolToActivate.Activate();
+                            // Одна регенерация подготавливает и активированные, и только что
+                            // созданные типы перед пакетным размещением всех экземпляров.
+                            bool hasChangedOrCreatedTypes = groupsRequiringTypeChanges.Any(group =>
+                                symbolsByGroup.ContainsKey(group.GroupKey));
+                            if (symbolsToActivate.Count > 0 || hasChangedOrCreatedTypes)
+                                document.Regenerate();
+
+                            var componentsBySymbolId = new Dictionary<long, List<ExistingLintelComponentV3>>();
+                            foreach (LintelPlacementGroupRequestV3 group in request.Groups)
+                            {
+                                var groupResult = new LintelPlacementGroupResultV3
+                                {
+                                    GroupKey = group.GroupKey,
+                                    RequestedTypeName = group.CompositeTypeName,
+                                    TypeName = group.CompositeTypeName
+                                };
+                                if (typeResolutionsByGroup.TryGetValue(
+                                        group.GroupKey,
+                                        out CompositeTypeResolutionV3 typeResolution))
+                                {
+                                    groupResult.TypeName = typeResolution.ActualTypeName
+                                                           ?? group.CompositeTypeName;
+                                    groupResult.HasTypeNameConflict = typeResolution.HasConflict;
+                                    groupResult.WasCancelledByTypeNameConflict = typeResolution.WasCancelled;
+                                    groupResult.TypeNameConflictAction = typeResolution.ActionText;
+                                    groupResult.TypeNameConflictDifferences = typeResolution.Differences;
+                                }
+                                result.Groups.Add(groupResult);
+
+                                if (typeErrors.TryGetValue(group.GroupKey, out string typeError)
+                                    || !symbolsByGroup.TryGetValue(group.GroupKey, out FamilySymbol symbol))
+                                {
+                                    groupResult.Error = "Тип «" + group.CompositeTypeName + "»: "
+                                                        + (typeError ?? "не удалось создать тип.");
+                                    continue;
+                                }
+
+                                if (!componentsBySymbolId.TryGetValue(
+                                        symbol.Id.Value,
+                                        out List<ExistingLintelComponentV3> actualComponents))
+                                {
+                                    actualComponents = ReadCompositeSymbolComponents(document, symbol);
+                                    componentsBySymbolId[symbol.Id.Value] = actualComponents;
+                                }
+                                groupResult.Components.AddRange(actualComponents.Count > 0
+                                    ? actualComponents
+                                    : group.Components.Select((component, index) =>
+                                        new ExistingLintelComponentV3
+                                        {
+                                            FamilyName = component.RevitFamilyName,
+                                            TypeName = component.Mark,
+                                            Order = index,
+                                            OffsetToNextMm = index < group.Components.Count - 1
+                                                ? component.WidthMm + component.GapAfterMm
+                                                : 0
+                                        }));
+
+                                using (var groupSubTransaction = new SubTransaction(document))
+                                {
+                                    groupSubTransaction.Start();
+                                    try
+                                    {
+                                        var placedLintels = new List<PlacedLintelDataV3>();
+                                        foreach (OpeningPlacementTargetV3 target in group.Targets)
+                                        {
+                                            placedLintels.Add(PlaceLintel(
+                                                document,
+                                                symbol,
+                                                group.WallTypeName,
+                                                target,
+                                                nonNegativeLevelElevations));
+                                        }
+
+                                        groupSubTransaction.Commit();
+                                        allPlacedLintels.AddRange(placedLintels);
+                                        groupResult.IsSuccess = true;
+                                        groupResult.FamilyName = symbol.FamilyName;
+                                        groupResult.CreatedLintelIds.AddRange(
+                                            placedLintels.Select(item => item.Instance.Id));
+                                    }
+                                    catch (Exception exception)
+                                    {
+                                        groupSubTransaction.RollBack();
+                                        groupResult.Error = "Проёмы группы «" + group.CompositeTypeName
+                                                            + "»: " + exception.Message;
+                                    }
+                                }
+                            }
+
+                            if (allPlacedLintels.Count > 0)
+                            {
+                                // Вложенные экземпляры становятся доступны после одной общей
+                                // регенерации вместо отдельной регенерации для каждой группы.
+                                document.Regenerate();
+                                foreach (PlacedLintelDataV3 placedLintel in allPlacedLintels)
+                                {
+                                    ApplyBaseWallType(
+                                        document,
+                                        placedLintel.Instance,
+                                        placedLintel.Wall,
+                                        placedLintel.WallTypeName);
+                                }
+                            }
+
+                            placementTransaction.Commit();
+                        }
+                        catch
+                        {
+                            placementTransaction.RollBack();
+                            throw;
+                        }
+                    }
+
+                    transactionGroup?.Assimilate();
+                }
+                catch (Exception exception)
+                {
+                    transactionGroup?.RollBack();
+                    result.Groups.Clear();
+                    result.FatalError = exception.Message;
+                }
+            }
+            return result;
+        }
+
+        private sealed class PlacedLintelDataV3
+        {
+            public FamilyInstance Instance { get; set; }
+            public Wall Wall { get; set; }
+            public string WallTypeName { get; set; }
+        }
+
+        private sealed class CompositeTypeResolutionV3
+        {
+            public FamilySymbol Symbol { get; set; }
+            public string ActualTypeName { get; set; }
+            public bool HasConflict { get; set; }
+            public bool WasCancelled { get; set; }
+            public string ActionText { get; set; }
+            public string Differences { get; set; }
+            public string Error { get; set; }
+        }
+
+        private static bool IsCompositeLintelSymbol(FamilySymbol symbol)
+        {
+            return symbol != null
+                   && string.Equals(
+                       symbol.get_Parameter(BuiltInParameter.ALL_MODEL_MODEL)?.AsString(),
+                       "Перемычки составные",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static FamilySymbol FindUnitSymbol(
+            IDictionary<string, List<FamilySymbol>> symbolsByName,
+            LintelPlacementComponentRequestV3 component)
+        {
+            if (symbolsByName == null
+                || component == null
+                || string.IsNullOrWhiteSpace(component.Mark)
+                || !symbolsByName.TryGetValue(component.Mark, out List<FamilySymbol> matches))
+                return null;
+            if (!string.IsNullOrWhiteSpace(component.RevitFamilyName))
+            {
+                FamilySymbol exact = matches.FirstOrDefault(symbol => string.Equals(
+                    symbol.FamilyName,
+                    component.RevitFamilyName,
+                    StringComparison.OrdinalIgnoreCase));
+                if (exact != null) return exact;
+            }
+            return matches.FirstOrDefault();
+        }
+
+        private static CompositeTypeResolutionV3 GetOrCreateCompositeSymbol(
+            Document document,
+            IList<FamilySymbol> compositeCandidates,
+            IDictionary<string, List<FamilySymbol>> compositeSymbolsByName,
+            LintelPlacementGroupRequestV3 group,
+            IList<FamilySymbol> componentSymbols,
+            CompositeTypeNameConflictActionV3 conflictAction)
+        {
+            List<FamilySymbol> exactNameMatches = compositeSymbolsByName.TryGetValue(
+                group.CompositeTypeName,
+                out List<FamilySymbol> matches)
+                ? matches
+                : new List<FamilySymbol>();
+            FamilySymbol existing = exactNameMatches
+                .OrderByDescending(CountAvailableSlots)
+                .ThenBy(symbol => symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            if (existing != null)
+            {
+                if (!group.HasExistingTypeDifference)
+                {
+                    return new CompositeTypeResolutionV3
+                    {
+                        Symbol = existing,
+                        ActualTypeName = existing.Name,
+                        ActionText = "Использован существующий тип с совпадающим именем."
+                    };
+                }
+
+                if (conflictAction == CompositeTypeNameConflictActionV3.ReplaceExisting)
+                {
+                    using (var replaceTransaction = new SubTransaction(document))
+                    {
+                        replaceTransaction.Start();
+                        try
+                        {
+                            ConfigureCompositeSymbol(existing, group.Components, componentSymbols);
+                            if (!IsCompositeSymbolConfigured(existing, group.Components, componentSymbols))
+                                throw new InvalidOperationException(
+                                    "После замены состав типа не соответствует выбранному варианту.");
+                            replaceTransaction.Commit();
+                        }
+                        catch
+                        {
+                            replaceTransaction.RollBack();
+                            throw;
+                        }
+                    }
+                    return new CompositeTypeResolutionV3
+                    {
+                        Symbol = existing,
+                        ActualTypeName = existing.Name,
+                        HasConflict = true,
+                        ActionText = "Состав существующего типа заменён на выбранный;"
+                                     + " изменение применилось ко всем его экземплярам.",
+                        Differences = group.ExistingTypeDifferenceText
+                    };
+                }
+
+                if (conflictAction == CompositeTypeNameConflictActionV3.AppendNumber)
+                {
+                    string numberedName = GetAvailableNumberedTypeName(
+                        group.CompositeTypeName,
+                        compositeSymbolsByName.Keys);
+                    FamilySymbol numberedCreated = CreateCompositeSymbol(
+                        document,
+                        compositeCandidates,
+                        compositeSymbolsByName,
+                        numberedName,
+                        group,
+                        componentSymbols);
+                    return new CompositeTypeResolutionV3
+                    {
+                        Symbol = numberedCreated,
+                        ActualTypeName = numberedCreated.Name,
+                        HasConflict = true,
+                        ActionText = "Создан новый тип с номером «" + numberedCreated.Name + "».",
+                        Differences = group.ExistingTypeDifferenceText
+                    };
+                }
+
+                return new CompositeTypeResolutionV3
+                {
+                    Symbol = existing,
+                    ActualTypeName = existing.Name,
+                    HasConflict = group.HasExistingTypeDifference,
+                    ActionText = "Использован текущий существующий тип без изменения.",
+                    Differences = group.ExistingTypeDifferenceText
+                };
+            }
+
+            FamilySymbol created = CreateCompositeSymbol(
+                document,
+                compositeCandidates,
+                compositeSymbolsByName,
+                group.CompositeTypeName,
+                group,
+                componentSymbols);
+            return new CompositeTypeResolutionV3
+            {
+                Symbol = created,
+                ActualTypeName = created.Name
+            };
+        }
+
+        private static FamilySymbol CreateCompositeSymbol(
+            Document document,
+            IList<FamilySymbol> compositeCandidates,
+            IDictionary<string, List<FamilySymbol>> compositeSymbolsByName,
+            string typeName,
+            LintelPlacementGroupRequestV3 group,
+            IList<FamilySymbol> componentSymbols)
+        {
+            var errors = new List<string>();
+            foreach (FamilySymbol candidate in compositeCandidates)
+            {
+                using (var subTransaction = new SubTransaction(document))
+                {
+                    subTransaction.Start();
+                    try
+                    {
+                        FamilySymbol created = candidate.Duplicate(typeName) as FamilySymbol;
+                        if (created == null)
+                            throw new InvalidOperationException("Не удалось дублировать базовый тип.");
+                        ConfigureCompositeSymbol(created, group.Components, componentSymbols);
+                        if (!string.Equals(created.Name, typeName, StringComparison.Ordinal))
+                            throw new InvalidOperationException(
+                                "Revit создал тип с именем «" + created.Name
+                                + "» вместо «" + typeName + "».");
+                        if (!IsCompositeSymbolConfigured(created, group.Components, componentSymbols))
+                            throw new InvalidOperationException(
+                                "После создания состав типа, видимость или отступы не совпали"
+                                + " с выбранным вариантом.");
+                        subTransaction.Commit();
+                        if (!compositeSymbolsByName.TryGetValue(
+                                typeName,
+                                out List<FamilySymbol> createdMatches))
+                        {
+                            createdMatches = new List<FamilySymbol>();
+                            compositeSymbolsByName[typeName] = createdMatches;
+                        }
+                        createdMatches.Add(created);
+                        return created;
+                    }
+                    catch (Exception exception)
+                    {
+                        errors.Add(candidate.FamilyName + ": " + exception.Message);
+                        subTransaction.RollBack();
+                    }
+                }
+            }
+
+            throw new InvalidOperationException(
+                "Ни одно составное семейство не поддерживает выбранный комплект. "
+                + string.Join(" ", errors.Distinct(StringComparer.OrdinalIgnoreCase)));
+        }
+
+        private static string GetAvailableNumberedTypeName(
+            string baseName,
+            IEnumerable<string> existingNames)
+        {
+            var names = new HashSet<string>(existingNames ?? Enumerable.Empty<string>(), StringComparer.Ordinal);
+            for (int number = 2; number < int.MaxValue; number++)
+            {
+                string candidate = baseName + "_" + number.ToString(CultureInfo.InvariantCulture);
+                if (!names.Contains(candidate)) return candidate;
+            }
+            throw new InvalidOperationException("Не удалось подобрать свободный номер имени типа.");
+        }
+
+        private static bool IsNumberedTypeName(string baseName, string candidate)
+        {
+            return GetTypeNameNumber(baseName, candidate) >= 2;
+        }
+
+        private static int GetTypeNameNumber(string baseName, string candidate)
+        {
+            string prefix = (baseName ?? string.Empty) + "_";
+            if (string.IsNullOrWhiteSpace(candidate)
+                || !candidate.StartsWith(prefix, StringComparison.Ordinal))
+                return -1;
+            return int.TryParse(
+                candidate.Substring(prefix.Length),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out int number)
+                ? number
+                : -1;
+        }
+
+        private static bool IsCompositeSymbolConfigured(
+            FamilySymbol symbol,
+            IList<LintelPlacementComponentRequestV3> components,
+            IList<FamilySymbol> componentSymbols)
+        {
+            if (symbol == null
+                || components == null
+                || componentSymbols == null
+                || components.Count != componentSymbols.Count)
+                return false;
+
+            for (int index = 0; index < components.Count; index++)
+            {
+                int slot = index + 1;
+                Parameter typeParameter = FindNestedTypeParameter(symbol, slot);
+                if (typeParameter?.StorageType != StorageType.ElementId
+                    || typeParameter.AsElementId()?.Value != componentSymbols[index].Id.Value)
+                    return false;
+
+                if (slot >= 2)
+                {
+                    Parameter visibility = FindParameterByNormalizedName(
+                        symbol,
+                        slot.ToString(CultureInfo.InvariantCulture) + "ПР.Видимость");
+                    if (!IsBooleanParameterEnabled(visibility)) return false;
+                }
+
+                if (index < components.Count - 1)
+                {
+                    Parameter offset = FindParameterByNormalizedName(
+                        symbol,
+                        "Отступ от " + slot.ToString(CultureInfo.InvariantCulture)
+                        + " до " + (slot + 1).ToString(CultureInfo.InvariantCulture));
+                    double expectedOffset = components[index].WidthMm + components[index].GapAfterMm;
+                    double actualOffset = GetLengthParameterMm(offset);
+                    if (double.IsNaN(actualOffset)
+                        || Math.Abs(actualOffset - expectedOffset) > 0.5)
+                        return false;
+                }
+            }
+
+            foreach (Parameter visibility in symbol.Parameters.Cast<Parameter>())
+            {
+                if (TryGetVisibilitySlot(visibility.Definition?.Name, out int slot)
+                    && slot > components.Count
+                    && IsBooleanParameterEnabled(visibility))
+                    return false;
+            }
+            return true;
+        }
+
+        private static List<string> GetCompositeConfigurationDifferences(
+            Document document,
+            FamilySymbol symbol,
+            IList<LintelPlacementComponentRequestV3> components,
+            IList<FamilySymbol> componentSymbols)
+        {
+            var differences = new List<string>();
+            if (symbol == null || components == null || componentSymbols == null)
+            {
+                differences.Add("Не удалось прочитать состав существующего типа");
+                return differences;
+            }
+
+            for (int index = 0; index < components.Count; index++)
+            {
+                int slot = index + 1;
+                Parameter typeParameter = FindNestedTypeParameter(symbol, slot);
+                FamilySymbol actualSymbol = typeParameter?.StorageType == StorageType.ElementId
+                    ? document.GetElement(typeParameter.AsElementId()) as FamilySymbol
+                    : null;
+                FamilySymbol expectedSymbol = componentSymbols[index];
+                if (actualSymbol?.Id.Value != expectedSymbol?.Id.Value)
+                {
+                    differences.Add(
+                        slot.ToString(CultureInfo.InvariantCulture) + "ПР: было «"
+                        + FormatFamilySymbol(actualSymbol) + "», требуется «"
+                        + FormatFamilySymbol(expectedSymbol) + "»");
+                }
+
+                if (slot >= 2)
+                {
+                    Parameter visibility = FindParameterByNormalizedName(
+                        symbol,
+                        slot.ToString(CultureInfo.InvariantCulture) + "ПР.Видимость");
+                    if (!IsBooleanParameterEnabled(visibility))
+                    {
+                        differences.Add(
+                            slot.ToString(CultureInfo.InvariantCulture)
+                            + "ПР: было скрыто, требуется показать");
+                    }
+                }
+
+                if (index < components.Count - 1)
+                {
+                    string offsetName = "Отступ от " + slot.ToString(CultureInfo.InvariantCulture)
+                                        + " до " + (slot + 1).ToString(CultureInfo.InvariantCulture);
+                    double actualOffset = GetLengthParameterMm(
+                        FindParameterByNormalizedName(symbol, offsetName));
+                    double expectedOffset = components[index].WidthMm + components[index].GapAfterMm;
+                    if (double.IsNaN(actualOffset) || Math.Abs(actualOffset - expectedOffset) > 0.5)
+                    {
+                        differences.Add(
+                            offsetName + ": было "
+                            + (double.IsNaN(actualOffset)
+                                ? "не задано"
+                                : Math.Round(actualOffset).ToString(CultureInfo.InvariantCulture) + " мм")
+                            + ", требуется " + Math.Round(expectedOffset).ToString(CultureInfo.InvariantCulture)
+                            + " мм");
+                    }
+                }
+            }
+
+            foreach (Parameter visibility in symbol.Parameters.Cast<Parameter>())
+            {
+                if (TryGetVisibilitySlot(visibility.Definition?.Name, out int slot)
+                    && slot > components.Count
+                    && IsBooleanParameterEnabled(visibility))
+                {
+                    differences.Add(
+                        slot.ToString(CultureInfo.InvariantCulture)
+                        + "ПР: было показано, требуется скрыть");
+                }
+            }
+
+            if (differences.Count == 0)
+                differences.Add("Параметры типа отличаются от выбранного варианта");
+            return differences;
+        }
+
+        private static string FormatFamilySymbol(FamilySymbol symbol)
+        {
+            return symbol == null
+                ? "не задано"
+                : (symbol.FamilyName ?? string.Empty) + " : " + (symbol.Name ?? string.Empty);
+        }
+
+        internal static List<ExistingLintelComponentV3> ReadCompositeSymbolComponents(
+            Document document,
+            FamilySymbol symbol)
+        {
+            var result = new List<ExistingLintelComponentV3>();
+            if (document == null || symbol == null) return result;
+
+            for (int slot = 1; slot <= 16; slot++)
+            {
+                Parameter typeParameter = FindNestedTypeParameter(symbol, slot);
+                FamilySymbol componentSymbol = typeParameter?.StorageType == StorageType.ElementId
+                    ? document.GetElement(typeParameter.AsElementId()) as FamilySymbol
+                    : null;
+                if (componentSymbol == null) continue;
+                if (slot >= 2)
+                {
+                    Parameter visibility = FindParameterByNormalizedName(
+                        symbol,
+                        slot.ToString(CultureInfo.InvariantCulture) + "ПР.Видимость");
+                    if (visibility != null && !IsBooleanParameterEnabled(visibility)) continue;
+                }
+
+                var component = new ExistingLintelComponentV3
+                {
+                    FamilyName = componentSymbol.FamilyName,
+                    TypeName = componentSymbol.Name,
+                    Order = result.Count
+                };
+                string offsetName = "Отступ от " + slot.ToString(CultureInfo.InvariantCulture)
+                                    + " до " + (slot + 1).ToString(CultureInfo.InvariantCulture);
+                double offset = GetLengthParameterMm(FindParameterByNormalizedName(symbol, offsetName));
+                component.OffsetToNextMm = double.IsNaN(offset) ? 0 : offset;
+                result.Add(component);
+            }
+
+            if (result.Count > 0)
+                result[result.Count - 1].OffsetToNextMm = 0;
+            return result;
+        }
+
+        private static bool IsBooleanParameterEnabled(Parameter parameter)
+        {
+            if (parameter == null) return false;
+            switch (parameter.StorageType)
+            {
+                case StorageType.Integer:
+                    return parameter.AsInteger() != 0;
+                case StorageType.Double:
+                    return Math.Abs(parameter.AsDouble()) > 1e-9;
+                case StorageType.String:
+                    string text = (parameter.AsString() ?? string.Empty).Trim();
+                    return string.Equals(text, "1", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(text, "Да", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(text, "True", StringComparison.OrdinalIgnoreCase);
+                default:
+                    return false;
+            }
+        }
+
+        private static double GetLengthParameterMm(Parameter parameter)
+        {
+            if (parameter == null) return double.NaN;
+            if (parameter.StorageType == StorageType.Double)
+                return parameter.AsDouble() * MillimetersPerFoot;
+            if (parameter.StorageType == StorageType.Integer)
+                return parameter.AsInteger();
+            string text = parameter.AsString() ?? parameter.AsValueString();
+            return double.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out double value)
+                   || double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value)
+                ? value
+                : double.NaN;
+        }
+
+        private static void ConfigureCompositeSymbol(
+            FamilySymbol symbol,
+            IList<LintelPlacementComponentRequestV3> components,
+            IList<FamilySymbol> componentSymbols)
+        {
+            for (int index = 0; index < components.Count; index++)
+            {
+                int slot = index + 1;
+                Parameter typeParameter = FindNestedTypeParameter(symbol, slot);
+                if (typeParameter == null || typeParameter.IsReadOnly)
+                    throw new InvalidOperationException(
+                        "Не найден доступный параметр типа для " + slot + "ПР.");
+                if (!typeParameter.Set(componentSymbols[index].Id))
+                    throw new InvalidOperationException(
+                        "Параметр «" + typeParameter.Definition?.Name
+                        + "» не принял тип «" + componentSymbols[index].Name + "».");
+
+                if (slot >= 2)
+                {
+                    Parameter visibility = FindParameterByNormalizedName(
+                        symbol,
+                        slot.ToString(CultureInfo.InvariantCulture) + "ПР.Видимость");
+                    if (visibility == null || visibility.IsReadOnly)
+                        throw new InvalidOperationException(
+                            "Не найден параметр «" + slot + "ПР.Видимость».");
+                    SetBooleanParameter(visibility, true);
+                }
+
+                if (index < components.Count - 1)
+                {
+                    string offsetName = "Отступ от "
+                                        + slot.ToString(CultureInfo.InvariantCulture)
+                                        + " до " + (slot + 1).ToString(CultureInfo.InvariantCulture);
+                    Parameter offset = FindParameterByNormalizedName(symbol, offsetName);
+                    if (offset == null || offset.IsReadOnly)
+                        throw new InvalidOperationException(
+                            "Не найден параметр «" + offsetName + "».");
+                    SetLengthParameter(
+                        offset,
+                        components[index].WidthMm + components[index].GapAfterMm);
+                }
+            }
+
+            foreach (Parameter visibility in symbol.Parameters.Cast<Parameter>()
+                         .Where(parameter => TryGetVisibilitySlot(parameter.Definition?.Name, out int slot)
+                                             && slot > components.Count))
+            {
+                if (!visibility.IsReadOnly)
+                    SetBooleanParameter(visibility, false);
+            }
+        }
+
+        private static Parameter FindNestedTypeParameter(FamilySymbol symbol, int slot)
+        {
+            string prefix = slot.ToString(CultureInfo.InvariantCulture) + "ПР";
+            string[] preferredNames =
+            {
+                prefix + ".Тип",
+                prefix + ".Типоразмер",
+                prefix + ".Семейство и типоразмер",
+                prefix
+            };
+            List<Parameter> candidates = symbol.Parameters.Cast<Parameter>()
+                .Where(parameter => parameter.StorageType == StorageType.ElementId)
+                .Where(parameter =>
+                {
+                    string name = (parameter.Definition?.Name ?? string.Empty)
+                        .Replace(" ", string.Empty);
+                    return name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                           || name.IndexOf("ПР", StringComparison.OrdinalIgnoreCase) >= 0
+                           && TryGetFirstInteger(name, out int number)
+                           && number == slot;
+                })
+                .Where(parameter => (parameter.Definition?.Name ?? string.Empty)
+                    .IndexOf("Видимость", StringComparison.OrdinalIgnoreCase) < 0)
+                .ToList();
+            if (candidates.Count > 0)
+            {
+                return candidates
+                    .OrderBy(parameter =>
+                    {
+                        string name = (parameter.Definition?.Name ?? string.Empty).Replace(" ", string.Empty);
+                        int preferredIndex = Array.FindIndex(preferredNames, preferred =>
+                            string.Equals(name, preferred.Replace(" ", string.Empty), StringComparison.OrdinalIgnoreCase));
+                        return preferredIndex < 0 ? preferredNames.Length : preferredIndex;
+                    })
+                    .ThenBy(parameter => parameter.Definition?.Name, StringComparer.OrdinalIgnoreCase)
+                    .First();
+            }
+
+            return symbol.Parameters.Cast<Parameter>()
+                .Where(parameter => parameter.StorageType == StorageType.ElementId)
+                .Where(parameter => !parameter.IsReadOnly)
+                .Where(parameter => IsNestedFamilyTypeParameter(symbol, parameter))
+                .Where(parameter => TryGetFirstInteger(parameter.Definition?.Name, out int number)
+                                    && number == slot)
+                .OrderBy(parameter => parameter.Definition?.Name, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        }
+
+        private static bool IsNestedFamilyTypeParameter(FamilySymbol owner, Parameter parameter)
+        {
+            ElementId valueId = parameter?.AsElementId();
+            if (valueId != null
+                && valueId != ElementId.InvalidElementId
+                && owner.Document.GetElement(valueId) is FamilySymbol)
+                return true;
+
+            string name = parameter?.Definition?.Name ?? string.Empty;
+            return name.IndexOf("перемыч", StringComparison.OrdinalIgnoreCase) >= 0
+                   || name.IndexOf("тип", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static Parameter FindParameterByNormalizedName(Element element, string parameterName)
+        {
+            Parameter exact = element?.LookupParameter(parameterName);
+            if (exact != null) return exact;
+            string normalized = NormalizeParameterName(parameterName);
+            return element?.Parameters.Cast<Parameter>().FirstOrDefault(parameter =>
+                string.Equals(
+                    NormalizeParameterName(parameter.Definition?.Name),
+                    normalized,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeParameterName(string name)
+        {
+            return new string((name ?? string.Empty)
+                .Where(character => !char.IsWhiteSpace(character))
+                .ToArray());
+        }
+
+        private static bool TryGetFirstInteger(string text, out int value)
+        {
+            value = 0;
+            string digits = new string((text ?? string.Empty)
+                .SkipWhile(character => !char.IsDigit(character))
+                .TakeWhile(char.IsDigit)
+                .ToArray());
+            return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static int CountAvailableSlots(FamilySymbol symbol)
+        {
+            int nestedSlots = Enumerable.Range(1, 16)
+                .Count(slot => FindNestedTypeParameter(symbol, slot) != null);
+            int visibilitySlots = symbol.Parameters.Cast<Parameter>()
+                .Count(parameter => TryGetVisibilitySlot(parameter.Definition?.Name, out int ignored));
+            return nestedSlots * 100 + visibilitySlots;
+        }
+
+        private static bool TryGetVisibilitySlot(string name, out int slot)
+        {
+            slot = 0;
+            const string suffix = "ПР.Видимость";
+            string normalized = (name ?? string.Empty).Replace(" ", string.Empty);
+            if (!normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return false;
+            string prefix = normalized.Substring(0, normalized.Length - suffix.Length);
+            return int.TryParse(prefix, NumberStyles.Integer, CultureInfo.InvariantCulture, out slot);
+        }
+
+        private static void SetBooleanParameter(Parameter parameter, bool value)
+        {
+            bool isSet;
+            switch (parameter.StorageType)
+            {
+                case StorageType.Integer:
+                    isSet = parameter.Set(value ? 1 : 0);
+                    break;
+                case StorageType.Double:
+                    isSet = parameter.Set(value ? 1.0 : 0.0);
+                    break;
+                case StorageType.String:
+                    isSet = parameter.Set(value ? "1" : "0");
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        "Параметр «" + parameter.Definition?.Name + "» имеет неподдерживаемый тип.");
+            }
+            if (!isSet)
+                throw new InvalidOperationException(
+                    "Не удалось записать параметр «" + parameter.Definition?.Name + "».");
+        }
+
+        private static void SetLengthParameter(Parameter parameter, double millimeters)
+        {
+            bool isSet;
+            switch (parameter.StorageType)
+            {
+                case StorageType.Double:
+                    isSet = parameter.Set(millimeters / MillimetersPerFoot);
+                    break;
+                case StorageType.Integer:
+                    isSet = parameter.Set((int)Math.Round(millimeters));
+                    break;
+                case StorageType.String:
+                    isSet = parameter.Set(millimeters.ToString(CultureInfo.InvariantCulture));
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        "Параметр «" + parameter.Definition?.Name + "» имеет неподдерживаемый тип.");
+            }
+            if (!isSet)
+                throw new InvalidOperationException(
+                    "Не удалось записать параметр «" + parameter.Definition?.Name + "».");
+        }
+
+        private static PlacedLintelDataV3 PlaceLintel(
+            Document document,
+            FamilySymbol symbol,
+            string wallTypeName,
+            OpeningPlacementTargetV3 target,
+            IList<double> nonNegativeLevelElevations)
+        {
+            Wall wall = document.GetElement(target.WallId) as Wall;
+            if (wall == null)
+                throw new InvalidOperationException("Не найдена стена-основа проёма.");
+
+            GetPlacementLevelAndOffset(document, target, wall, out Level level, out double topOffset);
+            XYZ point = new XYZ(target.Location.X, target.Location.Y, topOffset);
+            FamilyInstance lintel = document.Create.NewFamilyInstance(
+                point,
+                symbol,
+                level,
+                Autodesk.Revit.DB.Structure.StructuralType.NonStructural) as FamilyInstance;
+            if (lintel == null)
+                throw new InvalidOperationException("Revit не создал экземпляр перемычки.");
+
+            XYZ baseOrientation = target.SupportType == 1
+                ? NormalizeInPlan(target.SupportDirection)
+                : null;
+            baseOrientation = baseOrientation
+                              ?? NormalizeInPlan(target.WallOrientation)
+                              ?? NormalizeInPlan(wall.Orientation)
+                              ?? XYZ.BasisX;
+            XYZ facingOrientation = NormalizeInPlan(lintel.FacingOrientation) ?? XYZ.BasisX;
+            if (!baseOrientation.IsAlmostEqualTo(facingOrientation))
+            {
+                LocationPoint location = lintel.Location as LocationPoint;
+                if (location == null)
+                    throw new InvalidOperationException("У перемычки отсутствует точка вставки.");
+                Line axis = Line.CreateBound(location.Point, location.Point + XYZ.BasisZ);
+                double targetAngle = baseOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                double currentAngle = facingOrientation.AngleOnPlaneTo(XYZ.BasisX, XYZ.BasisZ);
+                ElementTransformUtils.RotateElement(
+                    document,
+                    lintel.Id,
+                    axis,
+                    currentAngle - targetAngle);
+            }
+
+            ElementTransformUtils.MoveElement(
+                document,
+                lintel.Id,
+                baseOrientation * (wall.Width / 2.0));
+            SetRequiredString(lintel.LookupParameter("ADSK_Группирование"), "ПР");
+
+            int floorNumber = level.Elevation >= 0
+                ? nonNegativeLevelElevations.IndexOf(level.Elevation) + 1
+                : -1;
+            SetValueStringIfWritable(
+                lintel.LookupParameter("ZH_Этаж_Числовой"),
+                floorNumber.ToString(CultureInfo.InvariantCulture));
+            SetValueStringIfWritable(lintel.LookupParameter("Видимость.Глубина"), "2000");
+
+            return new PlacedLintelDataV3
+            {
+                Instance = lintel,
+                Wall = wall,
+                WallTypeName = wallTypeName
+            };
+        }
+
+        private static void GetPlacementLevelAndOffset(
+            Document document,
+            OpeningPlacementTargetV3 target,
+            Wall wall,
+            out Level level,
+            out double topOffset)
+        {
+            level = null;
+            topOffset = double.MinValue;
+            double bestWorldTop = double.MinValue;
+            foreach (ElementId openingId in target.OpeningIds)
+            {
+                Element opening = document.GetElement(openingId);
+                Level openingLevel = document.GetElement(opening?.LevelId) as Level;
+                if (opening == null || openingLevel == null) continue;
+
+                double candidateOffset;
+                if (opening is Wall openingWall
+                    && openingWall.Location is LocationCurve wallLocation)
+                {
+                    double height = opening.LookupParameter("Неприсоединенная высота")?.AsDouble() ?? 0;
+                    double bottomOffset = opening.LookupParameter("Смещение снизу")?.AsDouble() ?? 0;
+                    candidateOffset = wallLocation.Curve.GetEndPoint(0).Z
+                                      - openingLevel.ProjectElevation
+                                      + height + bottomOffset;
+                }
+                else if (opening.Location is LocationPoint locationPoint)
+                {
+                    double height = opening.LookupParameter("ADSK_Размер_Высота")?.AsDouble() ?? 0;
+                    if (height <= 0)
+                    {
+                        BoundingBoxXYZ box = opening.get_BoundingBox(null);
+                        if (box != null)
+                            height = box.Max.Z - box.Min.Z;
+                    }
+                    candidateOffset = locationPoint.Point.Z
+                                      - openingLevel.ProjectElevation
+                                      + height;
+                }
+                else
+                {
+                    continue;
+                }
+
+                double worldTop = candidateOffset + openingLevel.ProjectElevation;
+                if (worldTop <= bestWorldTop) continue;
+                bestWorldTop = worldTop;
+                topOffset = candidateOffset;
+                level = openingLevel;
+            }
+
+            if (level != null) return;
+            level = document.GetElement(target.LevelId) as Level
+                    ?? document.GetElement(wall.LevelId) as Level;
+            if (level == null)
+                throw new InvalidOperationException("Не найден уровень проёма.");
+            topOffset = target.TopElevation - level.ProjectElevation;
+        }
+
+        private static void ApplyBaseWallType(
+            Document document,
+            FamilyInstance lintel,
+            Wall wall,
+            string wallTypeName)
+        {
+            string effectiveWallTypeName = string.IsNullOrWhiteSpace(wallTypeName)
+                ? wall.WallType?.Name ?? string.Empty
+                : wallTypeName;
+            string baseType = effectiveWallTypeName.IndexOf(
+                "_НСЩ_",
+                StringComparison.OrdinalIgnoreCase) >= 0
+                ? "Каркас"
+                : "Перегородка";
+            Parameter constructionMarkParameter = wall.LookupParameter("ZH_Марка КС");
+            string constructionMark = constructionMarkParameter?.StorageType == StorageType.String
+                ? constructionMarkParameter.AsString()
+                : constructionMarkParameter?.AsValueString();
+            string baseTypeValue = string.IsNullOrWhiteSpace(constructionMark)
+                ? baseType
+                : baseType + "_" + constructionMark.Trim().Trim('_');
+
+            foreach (ElementId componentId in lintel.GetSubComponentIds())
+            {
+                Parameter parameter = document.GetElement(componentId)
+                    ?.LookupParameter("ZH_Тип_Основы_Стена");
+                if (parameter != null
+                    && !parameter.IsReadOnly
+                    && parameter.StorageType == StorageType.String)
+                    parameter.Set(baseTypeValue);
+            }
+        }
+
+        private static void SetRequiredString(Parameter parameter, string value)
+        {
+            if (parameter == null || parameter.IsReadOnly || parameter.StorageType != StorageType.String)
+                throw new InvalidOperationException(
+                    "У составной перемычки отсутствует строковый параметр «ADSK_Группирование». ");
+            parameter.Set(value);
+        }
+
+        private static void SetValueStringIfWritable(Parameter parameter, string value)
+        {
+            if (parameter == null || parameter.IsReadOnly) return;
+            if (parameter.StorageType == StorageType.String)
+                parameter.Set(value);
+            else
+                parameter.SetValueString(value);
+        }
+
+        private static XYZ NormalizeInPlan(XYZ value)
+        {
+            if (value == null) return null;
+            var planar = new XYZ(value.X, value.Y, 0);
+            return planar.GetLength() < 1e-9 ? null : planar.Normalize();
+        }
+    }
+
+    internal static class LintelTypeReplacementEngineV3
+    {
+        private const double MillimetersPerFoot = 304.8;
+
+        public static LintelTypeReplacementResultV3 Execute(
+            Document document,
+            LintelTypeReplacementRequestV3 request)
+        {
+            var result = new LintelTypeReplacementResultV3
+            {
+                FamilyName = request?.FamilyName,
+                TypeName = request?.TypeName
+            };
+            if (document == null || request?.TypeId == null || request.LintelIds.Count == 0)
+            {
+                result.FatalError = "Не сформировано задание на замену типа перемычек.";
+                return result;
+            }
+
+            FamilySymbol targetSymbol = document.GetElement(request.TypeId) as FamilySymbol;
+            if (targetSymbol == null || !IsCompositeLintelSymbol(targetSymbol))
+            {
+                result.FatalError = "Выбранный тип перемычки не найден или не является составной перемычкой.";
+                return result;
+            }
+            result.FamilyName = targetSymbol.FamilyName;
+            result.TypeName = targetSymbol.Name;
+
+            using (var transaction = new Transaction(document, "Замена типа перемычек"))
+            {
+                transaction.Start();
+                try
+                {
+                    if (!targetSymbol.IsActive)
+                    {
+                        targetSymbol.Activate();
+                        document.Regenerate();
+                    }
+
+                    foreach (ElementId lintelId in request.LintelIds
+                                 .GroupBy(id => id.Value)
+                                 .Select(group => group.First()))
+                    {
+                        using (var subTransaction = new SubTransaction(document))
+                        {
+                            subTransaction.Start();
+                            try
+                            {
+                                FamilyInstance lintel = document.GetElement(lintelId) as FamilyInstance;
+                                if (lintel == null || lintel.SuperComponent != null)
+                                    throw new InvalidOperationException("Элемент не является экземпляром составной перемычки.");
+
+                                ElementId resultId = lintel.Id;
+                                if (lintel.Symbol?.Id.Value != targetSymbol.Id.Value)
+                                {
+                                    ElementId changedId = lintel.ChangeTypeId(targetSymbol.Id);
+                                    if (changedId != null && changedId != ElementId.InvalidElementId)
+                                        resultId = changedId;
+                                }
+
+                                subTransaction.Commit();
+                                result.ChangedItems.Add(new LintelTypeReplacementItemResultV3
+                                {
+                                    OriginalId = lintelId,
+                                    ResultId = resultId
+                                });
+                            }
+                            catch (Exception exception)
+                            {
+                                subTransaction.RollBack();
+                                result.Errors.Add("Перемычка ID " + lintelId.Value.ToString(CultureInfo.InvariantCulture)
+                                                  + ": " + exception.Message);
+                            }
+                        }
+                    }
+
+                    if (result.ChangedItems.Count > 0)
+                    {
+                        document.Regenerate();
+                        ElementId representativeId = result.ChangedItems.First().ResultId;
+                        FamilyInstance representative = document.GetElement(representativeId) as FamilyInstance;
+                        result.Components.AddRange(ReadComponents(document, representative));
+                    }
+                    transaction.Commit();
+                }
+                catch (Exception exception)
+                {
+                    transaction.RollBack();
+                    result.ChangedItems.Clear();
+                    result.Components.Clear();
+                    result.FatalError = exception.Message;
+                }
+            }
+            return result;
+        }
+
+        private static bool IsCompositeLintelSymbol(FamilySymbol symbol)
+        {
+            return symbol != null
+                   && string.Equals(
+                       symbol.get_Parameter(BuiltInParameter.ALL_MODEL_MODEL)?.AsString(),
+                       "Перемычки составные",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static List<ExistingLintelComponentV3> ReadComponents(
+            Document document,
+            FamilyInstance lintel)
+        {
+            var result = new List<ExistingLintelComponentV3>();
+            if (document == null || lintel?.Symbol == null) return result;
+
+            XYZ origin = (lintel.Location as LocationPoint)?.Point;
+            XYZ direction = NormalizeInPlan(lintel.FacingOrientation) ?? XYZ.BasisX;
+            int fallbackOrder = 0;
+            foreach (ElementId componentId in lintel.GetSubComponentIds())
+            {
+                FamilyInstance component = document.GetElement(componentId) as FamilyInstance;
+                if (component?.Symbol == null) continue;
+                XYZ point = (component.Location as LocationPoint)?.Point;
+                double order = origin != null && point != null
+                    ? (point - origin).DotProduct(direction)
+                    : fallbackOrder;
+                result.Add(new ExistingLintelComponentV3
+                {
+                    FamilyName = component.Symbol.FamilyName,
+                    TypeName = component.Symbol.Name,
+                    Order = order
+                });
+                fallbackOrder++;
+            }
+
+            result = result.OrderBy(component => component.Order).ToList();
+            int visibleCount = GetVisibleComponentCount(lintel.Symbol, result.Count);
+            result = result.Take(visibleCount).ToList();
+            for (int index = 0; index < result.Count; index++)
+            {
+                result[index].Order = index;
+                if (index < result.Count - 1)
+                {
+                    result[index].OffsetToNextMm = GetLengthParameterMm(
+                        lintel.Symbol.LookupParameter(
+                            "Отступ от " + (index + 1).ToString(CultureInfo.InvariantCulture)
+                            + " до " + (index + 2).ToString(CultureInfo.InvariantCulture)));
+                }
+            }
+            return result;
+        }
+
+        private static int GetVisibleComponentCount(FamilySymbol symbol, int availableCount)
+        {
+            if (symbol == null || availableCount <= 0) return 0;
+            int visibleCount = 1;
+            bool hasVisibilityParameters = false;
+            for (int slot = 2; slot <= Math.Max(availableCount, 16); slot++)
+            {
+                Parameter parameter = symbol.LookupParameter(
+                    slot.ToString(CultureInfo.InvariantCulture) + "ПР.Видимость");
+                if (parameter == null) continue;
+                hasVisibilityParameters = true;
+                if (IsEnabled(parameter)) visibleCount++;
+            }
+            return hasVisibilityParameters ? Math.Min(availableCount, visibleCount) : availableCount;
+        }
+
+        private static bool IsEnabled(Parameter parameter)
+        {
+            if (parameter == null) return false;
+            if (parameter.StorageType == StorageType.Integer) return parameter.AsInteger() != 0;
+            if (parameter.StorageType == StorageType.Double) return Math.Abs(parameter.AsDouble()) > 1e-9;
+            string value = (parameter.AsString() ?? string.Empty).Trim();
+            return value == "1"
+                   || string.Equals(value, "Да", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(value, "True", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static double GetLengthParameterMm(Parameter parameter)
+        {
+            if (parameter == null) return 0;
+            if (parameter.StorageType == StorageType.Double)
+                return parameter.AsDouble() * MillimetersPerFoot;
+            if (parameter.StorageType == StorageType.Integer)
+                return parameter.AsInteger();
+            string value = parameter.AsString() ?? parameter.AsValueString();
+            return double.TryParse(value, NumberStyles.Any, CultureInfo.CurrentCulture, out double parsed)
+                   || double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out parsed)
+                ? parsed
+                : 0;
+        }
+
+        private static XYZ NormalizeInPlan(XYZ value)
+        {
+            if (value == null) return null;
+            var planar = new XYZ(value.X, value.Y, 0);
+            return planar.GetLength() < 1e-9 ? null : planar.Normalize();
+        }
+    }
+
+    public sealed class LintelTypeReplacementHandlerV3 : IExternalEventHandler
+    {
+        private readonly object _sync = new object();
+        private readonly Document _document;
+        private readonly LintelOpeningWorkspaceV3 _workspace;
+        private LintelTypeReplacementRequestV3 _pendingRequest;
+
+        public LintelTypeReplacementHandlerV3(
+            Document document,
+            LintelOpeningWorkspaceV3 workspace)
+        {
+            _document = document;
+            _workspace = workspace;
+        }
+
+        internal void Request(LintelTypeReplacementRequestV3 request)
+        {
+            lock (_sync)
+                _pendingRequest = request;
+        }
+
+        public void Execute(UIApplication application)
+        {
+            LintelTypeReplacementRequestV3 request;
+            lock (_sync)
+            {
+                request = _pendingRequest;
+                _pendingRequest = null;
+            }
+            if (request == null) return;
+
+            LintelTypeReplacementResultV3 result;
+            try
+            {
+                result = LintelTypeReplacementEngineV3.Execute(_document, request);
+            }
+            catch (Exception exception)
+            {
+                result = new LintelTypeReplacementResultV3
+                {
+                    FamilyName = request.FamilyName,
+                    TypeName = request.TypeName,
+                    FatalError = exception.Message
+                };
+            }
+
+            try
+            {
+                _workspace.ApplyLintelTypeReplacementResult(result);
+            }
+            catch (Exception exception)
+            {
+                result.Errors.Add("Ошибка обновления окна: " + exception.Message);
+                _workspace.CancelLintelTypeReplacement("Типы изменены, но окно не удалось обновить: "
+                                                       + exception.Message);
+            }
+            string journalMessage = "Заменено типов перемычек: "
+                                    + result.ChangedItems.Count.ToString(CultureInfo.InvariantCulture)
+                                    + ". Ошибок: "
+                                    + (result.Errors.Count + (string.IsNullOrWhiteSpace(result.FatalError) ? 0 : 1))
+                                        .ToString(CultureInfo.InvariantCulture)
+                                    + ".";
+            application.Application.WriteJournalComment("[LintelCreator v3] " + journalMessage, false);
+            if (result.ChangedItems.Count == 0
+                || result.Errors.Count > 0
+                || !string.IsNullOrWhiteSpace(result.FatalError))
+            {
+                var messages = new List<string> { journalMessage };
+                if (!string.IsNullOrWhiteSpace(result.FatalError)) messages.Add(result.FatalError);
+                messages.AddRange(result.Errors);
+                TaskDialog.Show("Замена типа перемычек", string.Join(Environment.NewLine, messages));
+            }
+        }
+
+        public string GetName()
+        {
+            return "Замена типов существующих перемычек v3";
+        }
+    }
+
+    public sealed class LintelPlacementHandlerV3 : IExternalEventHandler
+    {
+        private readonly object _sync = new object();
+        private readonly Document _document;
+        private readonly LintelOpeningWorkspaceV3 _workspace;
+        private LintelPlacementRequestV3 _pendingRequest;
+
+        public LintelPlacementHandlerV3(
+            Document document,
+            LintelOpeningWorkspaceV3 workspace)
+        {
+            _document = document;
+            _workspace = workspace;
+        }
+
+        internal void Request(LintelPlacementRequestV3 request)
+        {
+            lock (_sync)
+                _pendingRequest = request;
+        }
+
+        public void Execute(UIApplication application)
+        {
+            LintelPlacementRequestV3 request;
+            lock (_sync)
+            {
+                request = _pendingRequest;
+                _pendingRequest = null;
+            }
+            if (request == null) return;
+
+            LintelPlacementResultV3 result;
+
+                try
+                {
+                    result = LintelPlacementEngineV3.Execute(_document, request);
+                }
+                catch (Exception exception)
+                {
+                    result = new LintelPlacementResultV3 { FatalError = exception.Message };
+                }
+
+            string resultMessage = BuildResultMessage(result);
+            application.Application.WriteJournalComment(
+                "[LintelCreator v3] " + resultMessage.Replace(Environment.NewLine, " | "),
+                false);
+            try
+            {
+                _workspace.ApplyLintelPlacementResult(result);
+            }
+            catch (Exception exception)
+            {
+                resultMessage += Environment.NewLine
+                                 + "Ошибка обновления окна: " + exception.Message;
+            }
+
+            try
+            {
+                LintelPlacementReportWindowV3.ShowReport(resultMessage);
+            }
+            catch (Exception exception)
+            {
+                TaskDialog.Show(
+                    "Отчёт о простановке перемычек",
+                    "Не удалось открыть окно отчёта: " + exception.Message
+                    + Environment.NewLine + "Краткий итог: "
+                    + (result?.Groups.Count(group => group.IsSuccess) ?? 0)
+                    + " групп обработано.");
+            }
+        }
+
+        private static string BuildResultMessage(LintelPlacementResultV3 result)
+        {
+            int successfulGroups = result?.Groups.Count(group => group.IsSuccess) ?? 0;
+            int createdInstances = result?.Groups
+                .Where(group => group.IsSuccess)
+                .Sum(group => group.CreatedLintelIds.Count) ?? 0;
+            var lines = new List<string>
+            {
+                "Успешно обработано групп: " + successfulGroups + ".",
+                "Создано перемычек: " + createdInstances + "."
+            };
+            if (!string.IsNullOrWhiteSpace(result?.FatalError))
+                lines.Add("Ошибка: " + result.FatalError);
+            lines.AddRange(result?.Groups
+                               .Where(group => !group.IsSuccess && !string.IsNullOrWhiteSpace(group.Error))
+                               .Select(group => "Ошибка: " + group.Error)
+                           ?? Enumerable.Empty<string>());
+
+            List<IGrouping<string, LintelPlacementGroupResultV3>> conflicts = result?.Groups
+                .Where(group => group.HasTypeNameConflict)
+                .GroupBy(group =>
+                    (group.RequestedTypeName ?? string.Empty) + "\u001f"
+                    + (group.TypeName ?? string.Empty) + "\u001f"
+                    + (group.TypeNameConflictAction ?? string.Empty) + "\u001f"
+                    + (group.TypeNameConflictDifferences ?? string.Empty),
+                    StringComparer.Ordinal)
+                .ToList() ?? new List<IGrouping<string, LintelPlacementGroupResultV3>>();
+            lines.Add(string.Empty);
+            lines.Add("Совпадения имён и различия состава:");
+            if (conflicts.Count == 0)
+            {
+                lines.Add("Не обнаружены.");
+            }
+            else
+            {
+                foreach (IGrouping<string, LintelPlacementGroupResultV3> conflict in conflicts)
+                {
+                    LintelPlacementGroupResultV3 item = conflict.First();
+                    string actualName = string.Equals(
+                        item.RequestedTypeName,
+                        item.TypeName,
+                        StringComparison.Ordinal)
+                        ? item.TypeName
+                        : item.RequestedTypeName + " → " + item.TypeName;
+                    lines.Add("• " + actualName
+                              + (conflict.Count() > 1 ? " · групп: " + conflict.Count() : string.Empty));
+                    lines.Add("  Отличия: " + item.TypeNameConflictDifferences + ".");
+                    lines.Add("  Действие: " + item.TypeNameConflictAction);
+                }
+            }
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        public string GetName()
+        {
+            return "Создание типов и размещение перемычек v3";
+        }
+    }
+
+    public sealed class OpeningReloadHandlerV3 : IExternalEventHandler
+    {
+        private readonly object _sync = new object();
+        private readonly LintelOpeningWorkspaceV3 _workspace;
+        private Action<int, int> _progress;
+        private Action<Exception> _completed;
+
+        public OpeningReloadHandlerV3(LintelOpeningWorkspaceV3 workspace)
+        {
+            _workspace = workspace;
+        }
+
+        internal void Request(Action<int, int> progress, Action<Exception> completed)
+        {
+            lock (_sync)
+            {
+                _progress = progress;
+                _completed = completed;
+            }
+        }
+
+        public void Execute(UIApplication application)
+        {
+            Action<int, int> progress;
+            Action<Exception> completed;
+            lock (_sync)
+            {
+                progress = _progress;
+                completed = _completed;
+                _progress = null;
+                _completed = null;
+            }
+
+            Exception error = null;
+            try
+            {
+                _workspace.Reload(progress);
+            }
+            catch (Exception exception)
+            {
+                error = exception;
+            }
+            completed?.Invoke(error);
+        }
+
+        public string GetName()
+        {
+            return "Повторный сбор проёмов v3";
         }
     }
 

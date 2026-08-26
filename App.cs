@@ -453,8 +453,8 @@ namespace FerrumAddinDev
         {
             if (!e.Document.IsFamilyDocument)
             {
-                e.Cancel();
-                MessageBox.Show("Запрет дублирования типов, загрузите тип через менеджер семейств", "Ошибка");
+                //e.Cancel();
+                //MessageBox.Show("Запрет дублирования типов, загрузите тип через менеджер семейств", "Ошибка");
             }
         }
 
@@ -964,8 +964,8 @@ namespace FerrumAddinDev
             }
             else
             {
-                e.Cancel();
-                MessageBox.Show("Загрузите семейство из менеджера семейств", "Запрет загрузки");
+                //e.Cancel();
+                //MessageBox.Show("Загрузите семейство из менеджера семейств", "Запрет загрузки");
             }
         }
 
