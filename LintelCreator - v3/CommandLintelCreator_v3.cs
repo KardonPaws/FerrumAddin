@@ -2555,8 +2555,8 @@ namespace FerrumAddinDev.LintelCreator_v3
 
             IEnumerable<LintelCatalogItemV3> items = _lintelCatalog
                 .Where(item => LintelSelectionEngineV3.IsSuitableCatalogItem(item, request, false)
-                               && item.WidthMm <= request.WallWidthMm
-                                                  + request.WallWidthToleranceMm + 0.5)
+                                 && item.WidthMm <= request.WallWidthMm
+                                                    + request.WallWidthToleranceMm + 0.5)
                 .OrderByDescending(item => item.Priority)
                 .ThenBy(item => item.DisplayName, _naturalComparer);
 

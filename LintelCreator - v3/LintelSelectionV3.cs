@@ -309,6 +309,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (item.MaximumOpeningWidthMm <= 0) return 1000000;
             return Math.Max(0, (int)Math.Round(item.MaximumOpeningWidthMm - request.OpeningWidthMm));
         }
+
     }
 
     internal sealed class LintelCombinationSearchV3
