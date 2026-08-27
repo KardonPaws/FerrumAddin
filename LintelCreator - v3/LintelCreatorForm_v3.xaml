@@ -542,28 +542,10 @@
                         <TabItem Header="{Binding ExistingLintelsTabHeader}">
                             <Grid Margin="8">
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0"
-                                            Orientation="Horizontal"
-                                            Margin="0,0,0,8">
-                                    <TextBlock Text="Группировка:"
-                                               Style="{StaticResource CaptionStyle}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,10,0"/>
-                                    <RadioButton Content="По проёму"
-                                                 GroupName="ExistingLintelGrouping"
-                                                 IsChecked="{Binding IsExistingGroupedByOpening, Mode=TwoWay}"
-                                                 VerticalAlignment="Center"
-                                                 Margin="0,0,12,0"/>
-                                    <RadioButton Content="По перемычке"
-                                                 GroupName="ExistingLintelGrouping"
-                                                 IsChecked="{Binding IsExistingGroupedByLintel, Mode=TwoWay}"
-                                                 VerticalAlignment="Center"/>
-                                </StackPanel>
                                 <ListBox x:Name="ExistingLintelGroupsListBox"
-                                         Grid.Row="1"
+                                         Grid.Row="0"
                                          ItemsSource="{Binding ExistingLintelGroups}"
                                          SelectedItem="{Binding SelectedExistingLintelGroup, Mode=TwoWay}"
                                          SelectionChanged="OpeningGroups_SelectionChanged"
@@ -591,7 +573,6 @@
                                                                    FontWeight="SemiBold"
                                                                    TextWrapping="Wrap"/>
                                                         <TextBlock Text="{Binding ExistingCardDescription}"
-                                                                   Foreground="{StaticResource SuccessBrush}"
                                                                    FontWeight="SemiBold"
                                                                    Margin="0,5,0,0"
                                                                    TextWrapping="Wrap"/>
@@ -609,6 +590,11 @@
                                                                Text="{Binding CountText}"
                                                                HorizontalAlignment="Right"
                                                                Foreground="#344054"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding StatusText}"
+                                                               Style="{StaticResource OpeningStatusTextStyle}"
+                                                               Margin="8,25,0,0"
+                                                               MaxWidth="120"/>
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
@@ -634,16 +620,6 @@
                                   IsEnabled="{Binding IsVariantsPanelEnabled}"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
-                        <ScrollViewer.Style>
-                            <Style TargetType="ScrollViewer">
-                                <Setter Property="Visibility" Value="Visible"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ScrollViewer.Style>
                         <StackPanel>
 
                     <Grid Grid.Row="0">
@@ -797,17 +773,9 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <GridSplitter Grid.Row="1" Panel.ZIndex="10">
-                        <GridSplitter.Style>
-                            <Style TargetType="GridSplitter" BasedOn="{StaticResource HorizontalSplitterStyle}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </GridSplitter.Style>
-                    </GridSplitter>
+                    <GridSplitter Grid.Row="1"
+                                  Panel.ZIndex="10"
+                                  Style="{StaticResource HorizontalSplitterStyle}"/>
 
                     <ListBox x:Name="VariantsListBox"
                              Grid.Row="2"
@@ -824,15 +792,6 @@
                              ScrollViewer.CanContentScroll="False"
                              VirtualizingPanel.IsVirtualizing="True"
                              VirtualizingPanel.VirtualizationMode="Recycling">
-                        <ListBox.Style>
-                            <Style TargetType="ListBox">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ListBox.Style>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Style="{StaticResource VariantCardStyle}"
@@ -881,7 +840,7 @@
                                                     FontWeight="SemiBold"
                                                     TextWrapping="Wrap"
                                                     Margin="0,7,0,0"/>
-                                        <TextBlock Text="Имя типа совпадает, состав отличается. Будет использован существующий тип."
+                                         <TextBlock Text="{Binding ExistingTypeDifferenceText}"
                                                    Foreground="{StaticResource WarningBrush}"
                                                    TextWrapping="Wrap"
                                                    Margin="0,5,0,0">
@@ -958,169 +917,6 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <Grid Grid.RowSpan="3">
-                        <Grid.Style>
-                            <Style TargetType="Grid">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Grid.Style>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*" MinHeight="160"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <StackPanel Grid.Row="0">
-                            <TextBlock Text="Выбор существующего типа"
-                                       Style="{StaticResource SectionTitleStyle}"/>
-                            <TextBlock Text="{Binding ExistingLintelCurrentTypeText}"
-                                       Style="{StaticResource CaptionStyle}"
-                                       Margin="0,3,0,0"
-                                       TextWrapping="Wrap"/>
-                        </StackPanel>
-
-                        <Border Grid.Row="1"
-                                Style="{StaticResource SubPanelStyle}"
-                                Margin="0,10,0,0">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <StackPanel Margin="0,0,0,8">
-                                    <TextBlock Text="Несущая сторона" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBlock Text="{Binding SelectedBearingSideText}" Style="{StaticResource FieldValueStyle}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2" Margin="0,0,0,8">
-                                    <TextBlock Text="Несущая зона" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBlock Text="{Binding SelectedBearingZoneText}" Style="{StaticResource FieldValueStyle}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Margin="0,0,0,8">
-                                    <TextBlock Text="Ширина проёма" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBlock Text="{Binding SelectedOpeningWidthText}" Style="{StaticResource FieldValueStyle}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,8">
-                                    <TextBlock Text="Толщина стены" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBlock Text="{Binding SelectedWallWidthText}" Style="{StaticResource FieldValueStyle}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="2" Grid.ColumnSpan="3">
-                                    <TextBlock Text="Тип стены" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBlock Text="{Binding SelectedWallTypeText}"
-                                               Style="{StaticResource FieldValueStyle}"
-                                               TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-
-                        <Border Grid.Row="2"
-                                Style="{StaticResource SubPanelStyle}"
-                                Margin="0,8,0,8">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Тип кладки" Style="{StaticResource FieldLabelStyle}"/>
-                                    <RadioButton Content="Кирпич 65 мм"
-                                                 GroupName="ExistingMasonryTypeV3"
-                                                 IsChecked="{Binding IsMasonry65, Mode=TwoWay}"/>
-                                    <RadioButton Content="Кирпич 88 мм"
-                                                 GroupName="ExistingMasonryTypeV3"
-                                                 IsChecked="{Binding IsMasonry88, Mode=TwoWay}"
-                                                 Margin="0,3,0,0"/>
-                                    <RadioButton Content="Перегородки"
-                                                 GroupName="ExistingMasonryTypeV3"
-                                                 IsChecked="{Binding IsPartition, Mode=TwoWay}"
-                                                 Margin="0,3,0,0"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Материал перемычки" Style="{StaticResource FieldLabelStyle}"/>
-                                    <RadioButton Content="Железобетонная"
-                                                 GroupName="ExistingLintelMaterialV3"
-                                                 IsChecked="{Binding IsReinforcedConcrete, Mode=TwoWay}"/>
-                                    <RadioButton Content="Металлическая"
-                                                 GroupName="ExistingLintelMaterialV3"
-                                                 IsChecked="{Binding IsMetal, Mode=TwoWay}"
-                                                 Margin="0,3,0,0"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-
-                        <Grid Grid.Row="3">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Доступные типы"
-                                           FontWeight="SemiBold"
-                                           Foreground="#344054"/>
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding ExistingLintelTypesSummaryText}"
-                                           Style="{StaticResource CaptionStyle}"/>
-                            </Grid>
-                            <ListBox Grid.Row="1"
-                                     Margin="0,7,0,0"
-                                     ItemsSource="{Binding ExistingLintelTypeOptions}"
-                                     SelectedItem="{Binding SelectedExistingLintelType, Mode=TwoWay}"
-                                     BorderThickness="0"
-                                     Background="Transparent"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     VirtualizingPanel.IsVirtualizing="True"
-                                     VirtualizingPanel.VirtualizationMode="Recycling">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Style="{StaticResource OpeningCardStyle}"
-                                                Margin="0,0,0,6">
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding TypeName}"
-                                                           FontWeight="SemiBold"
-                                                           TextWrapping="Wrap"/>
-                                                <TextBlock Text="{Binding FamilyName}"
-                                                           Style="{StaticResource CaptionStyle}"
-                                                           Margin="0,3,0,0"
-                                                           TextWrapping="Wrap"/>
-                                                <TextBlock Text="{Binding SupportDescription}"
-                                                           Style="{StaticResource CaptionStyle}"
-                                                           Margin="0,2,0,0"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </Grid>
-
-                        <Border Grid.Row="4"
-                                Background="{StaticResource PrimaryLightBrush}"
-                                CornerRadius="5"
-                                Padding="8,6"
-                                Margin="0,8,0,0">
-                            <TextBlock Text="{Binding ExistingLintelTypeSelectionText}"
-                                       Foreground="#344054"
-                                       FontSize="11"
-                                       TextWrapping="Wrap"/>
-                        </Border>
-                    </Grid>
                 </Grid>
             </Border>
 
@@ -1153,9 +949,18 @@
                                     IsEnabled="{Binding CanReverseEditor}"
                                     Click="ReverseEditorRows_Click"/>
                             <Button Content="Загрузить тип"
-                                    Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding CanLoadExistingEditorType}"
-                                    Click="LoadExistingEditorType_Click"/>
+                                    Click="LoadExistingEditorType_Click">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource CompactButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                             <Button Content="{Binding EditorRestoreButtonText}"
                                     Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding HasEditorVariant}"
@@ -1178,6 +983,7 @@
                                 <ColumnDefinition Width="155"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -1281,6 +1087,71 @@
                                            Margin="0,0,0,4"
                                            TextWrapping="Wrap"/>
                             </Grid>
+                            <StackPanel Grid.Row="3"
+                                        Grid.ColumnSpan="2"
+                                        Margin="0,10,0,0">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Доступные типы"
+                                               Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ExistingLintelTypesSummaryText}"
+                                               Style="{StaticResource CaptionStyle}"/>
+                                </Grid>
+                                <ListBox ItemsSource="{Binding ExistingLintelTypeOptions}"
+                                         SelectedItem="{Binding SelectedExistingLintelType, Mode=TwoWay}"
+                                         Margin="0,6,0,0"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource OpeningItemStyle}">
+                                            <Setter Property="Margin" Value="0,0,8,0"/>
+                                            <Setter Property="Width" Value="220"/>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource OpeningCardStyle}"
+                                                    Padding="8">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding TypeName}"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding TypeName}"/>
+                                                    <TextBlock Text="{Binding FamilyName}"
+                                                               Style="{StaticResource CaptionStyle}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding FamilyName}"
+                                                               Margin="0,3,0,0"/>
+                                                    <TextBlock Text="{Binding SupportDescription}"
+                                                               Style="{StaticResource CaptionStyle}"
+                                                               Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -1515,17 +1386,34 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <CheckBox Content="Разбивать перемычки выше и ниже отметки 0,000"
-                          VerticalAlignment="Center"
-                          IsEnabled="False"/>
+                           VerticalAlignment="Center"
+                           IsEnabled="{Binding CanInteract}"
+                           IsChecked="{Binding SplitLintelsByZeroElevation, Mode=TwoWay}"/>
                 <WrapPanel Grid.Column="2">
-                    <Button Content="Нумерация" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False"/>
-                    <Button Content="Нумерация влож. элементов" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False"/>
-                    <Button Content="Тип основы" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False"/>
-                    <Button Content="Разрезы" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False"/>
-                    <Button Content="Марки" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="False"/>
+                    <Button Content="Нумерация"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{Binding CanInteract}"
+                            Click="NumerateLintels_Click"/>
+                    <Button Content="Нумерация влож. элементов"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{Binding CanInteract}"
+                            Click="NumerateNestedElements_Click"/>
+                    <Button Content="Тип основы"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{Binding CanInteract}"
+                            Click="SetLintelBaseType_Click"/>
+                    <Button Content="Разрезы"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{Binding CanInteract}"
+                            Click="CreateLintelSections_Click"/>
+                    <Button Content="Марки"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{Binding CanInteract}"
+                            Click="TagLintels_Click"/>
                     <Button Content="Разрезы на листы"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            IsEnabled="False"
+                            IsEnabled="{Binding CanInteract}"
+                            Click="PlaceLintelSections_Click"
                             Margin="0"/>
                 </WrapPanel>
             </Grid>
@@ -1551,11 +1439,20 @@
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanSaveVariantChanges}"
                             Click="SaveVariantChanges_Click"/>
-                    <Button Content="{Binding CreateLintelsButtonText}"
-                            Style="{StaticResource PrimaryButtonStyle}"
+                    <Button Content="Создать типы и проставить"
                             IsEnabled="{Binding CanPlaceSelectedLintels}"
                             Click="CreateAndPlaceLintels_Click"
-                            Margin="0"/>
+                            Margin="0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

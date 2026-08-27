@@ -26,6 +26,12 @@ namespace FerrumAddinDev.LintelCreator_v3
         private readonly RevitExternalEvent _placementEvent;
         private readonly LintelTypeReplacementHandlerV3 _typeReplacementHandler;
         private readonly RevitExternalEvent _typeReplacementEvent;
+        private readonly RevitExternalEvent _lintelNumerateEvent;
+        private readonly RevitExternalEvent _nestedElementsNumberingEvent;
+        private readonly RevitExternalEvent _setLintelBaseTypeEvent;
+        private readonly RevitExternalEvent _createSectionsEvent;
+        private readonly RevitExternalEvent _tagLintelsEvent;
+        private readonly RevitExternalEvent _placeSectionsEvent;
         private bool _isClosing;
         private double _smoothScrollTarget = double.NaN;
         private DateTime _smoothScrollUntilUtc = DateTime.MinValue;
@@ -47,7 +53,13 @@ namespace FerrumAddinDev.LintelCreator_v3
             LintelPlacementHandlerV3 placementHandler,
             RevitExternalEvent placementEvent,
             LintelTypeReplacementHandlerV3 typeReplacementHandler,
-            RevitExternalEvent typeReplacementEvent)
+            RevitExternalEvent typeReplacementEvent,
+            RevitExternalEvent lintelNumerateEvent,
+            RevitExternalEvent nestedElementsNumberingEvent,
+            RevitExternalEvent setLintelBaseTypeEvent,
+            RevitExternalEvent createSectionsEvent,
+            RevitExternalEvent tagLintelsEvent,
+            RevitExternalEvent placeSectionsEvent)
         {
             InitializeComponent();
             Workspace = workspace;
@@ -59,6 +71,12 @@ namespace FerrumAddinDev.LintelCreator_v3
             _placementEvent = placementEvent;
             _typeReplacementHandler = typeReplacementHandler;
             _typeReplacementEvent = typeReplacementEvent;
+            _lintelNumerateEvent = lintelNumerateEvent;
+            _nestedElementsNumberingEvent = nestedElementsNumberingEvent;
+            _setLintelBaseTypeEvent = setLintelBaseTypeEvent;
+            _createSectionsEvent = createSectionsEvent;
+            _tagLintelsEvent = tagLintelsEvent;
+            _placeSectionsEvent = placeSectionsEvent;
             DataContext = Workspace;
             Closed += Form_Closed;
         }
@@ -258,7 +276,7 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private void RestoreEditor_Click(object sender, RoutedEventArgs e)
         {
-            Workspace?.RestoreEditorFromCalculation();
+            Workspace?.RestoreEditorDefault();
         }
 
         private void LoadExistingEditorType_Click(object sender, RoutedEventArgs e)
@@ -279,7 +297,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (request == null)
             {
                 Workspace.CancelLintelTypeReplacement(
-                    "Выберите существующую перемычку и тип для замены.");
+                    "Выберите существующую перемычку и состав для замены.");
                 return;
             }
 
@@ -398,6 +416,60 @@ namespace FerrumAddinDev.LintelCreator_v3
             return null;
         }
 
+        private void NumerateLintels_Click(object sender, RoutedEventArgs e)
+        {
+            RaiseServiceEvent(_lintelNumerateEvent, "Нумерация перемычек");
+        }
+
+        private void NumerateNestedElements_Click(object sender, RoutedEventArgs e)
+        {
+            RaiseServiceEvent(_nestedElementsNumberingEvent, "Нумерация вложенных элементов");
+        }
+
+        private void SetLintelBaseType_Click(object sender, RoutedEventArgs e)
+        {
+            RaiseServiceEvent(_setLintelBaseTypeEvent, "Определение типа основы");
+        }
+
+        private void CreateLintelSections_Click(object sender, RoutedEventArgs e)
+        {
+            RaiseServiceEvent(_createSectionsEvent, "Создание разрезов");
+        }
+
+        private void TagLintels_Click(object sender, RoutedEventArgs e)
+        {
+            RaiseServiceEvent(_tagLintelsEvent, "Маркировка перемычек");
+        }
+
+        private void PlaceLintelSections_Click(object sender, RoutedEventArgs e)
+        {
+            RaiseServiceEvent(_placeSectionsEvent, "Размещение разрезов на листах");
+        }
+
+        private void RaiseServiceEvent(RevitExternalEvent externalEvent, string operationName)
+        {
+            if (_isClosing || externalEvent == null) return;
+            try
+            {
+                if (externalEvent.Raise() == RevitExternalEventRequest.Accepted) return;
+                MessageBox.Show(
+                    this,
+                    "Revit не принял запрос на операцию «" + operationName + "».",
+                    operationName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(
+                    this,
+                    exception.Message,
+                    operationName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
         private void Close_Click(object sender, RoutedEventArgs e)
         {
             Close();
@@ -410,8 +482,15 @@ namespace FerrumAddinDev.LintelCreator_v3
             try
             {
                 _selectionEvent?.Dispose();
+                _reloadEvent?.Dispose();
                 _placementEvent?.Dispose();
                 _typeReplacementEvent?.Dispose();
+                _lintelNumerateEvent?.Dispose();
+                _nestedElementsNumberingEvent?.Dispose();
+                _setLintelBaseTypeEvent?.Dispose();
+                _createSectionsEvent?.Dispose();
+                _tagLintelsEvent?.Dispose();
+                _placeSectionsEvent?.Dispose();
             }
             catch
             {

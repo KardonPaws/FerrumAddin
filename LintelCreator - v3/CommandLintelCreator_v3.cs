@@ -34,6 +34,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                     uiDocument.Document,
                     workspace);
                 ExternalEvent typeReplacementEvent = ExternalEvent.Create(typeReplacementHandler);
+                ExternalEvent lintelNumerateEvent = ExternalEvent.Create(new LintelNumerateV3());
+                ExternalEvent nestedElementsNumberingEvent = ExternalEvent.Create(new NestedElementsNumberingV3());
+                ExternalEvent setLintelBaseTypeEvent = ExternalEvent.Create(new SetLintelBaseTypeV3());
+                ExternalEvent createSectionsEvent = ExternalEvent.Create(new CreateSectionsForLintelsV3());
+                ExternalEvent tagLintelsEvent = ExternalEvent.Create(new TagLintelsV3());
+                ExternalEvent placeSectionsEvent = ExternalEvent.Create(new PlaceSectionsV3());
                 form = new LintelCreatorForm_v3(
                     workspace,
                     selectionHandler,
@@ -43,7 +49,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                     placementHandler,
                     placementEvent,
                     typeReplacementHandler,
-                    typeReplacementEvent);
+                    typeReplacementEvent,
+                    lintelNumerateEvent,
+                    nestedElementsNumberingEvent,
+                    setLintelBaseTypeEvent,
+                    createSectionsEvent,
+                    tagLintelsEvent,
+                    placeSectionsEvent);
                 form.Show();
                 form.RefreshProgressDisplay(true);
                 workspace.Reload((processed, total) => form.RefreshProgressDisplay());
@@ -317,7 +329,6 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string SupportParameterError { get; set; }
         public int InstanceCount { get; set; }
         public bool HasExistingLintel { get; set; }
-        public bool IsExistingLintelAggregate { get; set; }
         public string ExistingLintelFamilyNames { get; set; }
         public string ExistingLintelTypeNames { get; set; }
         public List<ElementId> ElementIds { get; } = new List<ElementId>();
@@ -329,6 +340,9 @@ namespace FerrumAddinDev.LintelCreator_v3
         public bool IsCalculated { get; set; }
         public string CalculationMessage { get; set; }
         public string CalculationBaseMessage { get; set; }
+        public string ExistingLintelValidationError { get; set; }
+        public bool ExistingLintelDiffersFromFirstVariant { get; set; }
+        public string ExistingLintelComparisonWarning { get; set; }
 
         public bool IsChecked
         {
@@ -382,12 +396,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string ExistingLintelDescription => string.IsNullOrWhiteSpace(ExistingLintelTypeNames)
             ? "Существующая перемычка"
             : ExistingLintelTypeNames;
-        public string ExistingCardTitle => IsExistingLintelAggregate
-            ? string.IsNullOrWhiteSpace(ExistingLintelTypeNames) ? "Существующая перемычка" : ExistingLintelTypeNames
-            : OpeningDescription;
-        public string ExistingCardDescription => IsExistingLintelAggregate
-            ? Count + " проёмов · " + WallTypeName
-            : ExistingLintelDescription;
+        public string ExistingCardTitle => OpeningDescription;
+        public string ExistingCardDescription => ExistingLintelDescription;
         public string ExistingLintelSearchText => (ExistingLintelFamilyNames ?? string.Empty)
                                                   + " " + (ExistingLintelTypeNames ?? string.Empty)
                                                   + " " + ExistingLintelIdsText;
@@ -640,6 +650,11 @@ namespace FerrumAddinDev.LintelCreator_v3
         public ElementId TypeId { get; set; }
         public string FamilyName { get; set; }
         public string TypeName { get; set; }
+        public CompositeTypeNameConflictActionV3 NameConflictAction { get; set; }
+        public bool HasExistingTypeDifference { get; set; }
+        public string ExistingTypeDifferenceText { get; set; }
+        public List<LintelPlacementComponentRequestV3> Components { get; }
+            = new List<LintelPlacementComponentRequestV3>();
         public List<ElementId> LintelIds { get; } = new List<ElementId>();
     }
 
@@ -667,7 +682,6 @@ namespace FerrumAddinDev.LintelCreator_v3
         private readonly List<ElementId> _initialSelectionIds;
         private readonly AlphanumComparatorFastString _naturalComparer = new AlphanumComparatorFastString();
         private List<OpeningGroupCardV3> _allGroups = new List<OpeningGroupCardV3>();
-        private List<OpeningGroupCardV3> _existingLintelTypeGroups = new List<OpeningGroupCardV3>();
         private OpeningGroupCardV3 _selectedGroup;
         private string _searchText = string.Empty;
         private OpeningSearchOptionV3 _selectedSearchOption;
@@ -691,20 +705,23 @@ namespace FerrumAddinDev.LintelCreator_v3
         private bool _isCollectionInProgress = true;
         private int _processedCollectionOpeningCount;
         private int _collectionOpeningTotal;
-        private bool _isExistingGroupedByOpening = true;
         private bool _isExistingLintelsTabActive;
         private bool _isPlacementInProgress;
         private List<ExistingLintelTypeOptionV3> _allExistingLintelTypeOptions
             = new List<ExistingLintelTypeOptionV3>();
         private ExistingLintelTypeOptionV3 _selectedExistingLintelType;
+        private bool _isUpdatingExistingLintelTypeSelection;
+        private bool _isRestoringEditor;
         private CompositeTypeNameConflictOptionV3 _selectedTypeNameConflictOption;
         private bool _isUpdatingEditorDifferences;
         private int _editorExistingTypeDifferenceCount;
         private string _editorExistingTypeDifferencesText = string.Empty;
+        private bool _splitLintelsByZeroElevation;
 
         public LintelOpeningWorkspaceV3(Document document, Selection selection)
         {
             _document = document;
+            LintelServiceSettingsV3.SplitByZeroElevation = false;
             _initialSelectionIds = selection.GetElementIds()
                 .Where(id => OpeningCollectorV3.IsSupportedOpening(document, document.GetElement(id)))
                 .ToList();
@@ -869,17 +886,20 @@ namespace FerrumAddinDev.LintelCreator_v3
                 if (ReferenceEquals(_selectedVariant, value)) return;
                 _selectedVariant = value;
                 if (SelectedGroup != null
-                    && !SelectedGroup.HasExistingLintel
                     && value != null
                     && SelectedGroup.CalculatedVariants.Contains(value))
                 {
                     SelectedGroup.ActiveVariant = value;
-                    ApplyActiveVariantStatus(SelectedGroup);
+                    if (!SelectedGroup.HasExistingLintel)
+                        ApplyActiveVariantStatus(SelectedGroup);
                 }
+                if (value != null && SelectedGroup?.HasExistingLintel == true)
+                    SetSelectedExistingLintelTypeWithoutLoading(null);
                 RaisePropertyChanged(nameof(SelectedVariant));
                 RaisePropertyChanged(nameof(CanSaveVariantChanges));
                 RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
-                RestoreEditorFromCalculation();
+                if (!_isRestoringEditor)
+                    RestoreEditorFromCalculation();
             }
         }
 
@@ -929,6 +949,22 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RaisePropertyChanged(nameof(SelectedExistingLintelType));
                 RaisePropertyChanged(nameof(CanSaveVariantChanges));
                 RaisePropertyChanged(nameof(ExistingLintelTypeSelectionText));
+                if (!_isUpdatingExistingLintelTypeSelection
+                    && value != null
+                    && SelectedGroup?.HasExistingLintel == true)
+                {
+                    _isRestoringEditor = true;
+                    try
+                    {
+                        _selectedVariant = null;
+                        RaisePropertyChanged(nameof(SelectedVariant));
+                    }
+                    finally
+                    {
+                        _isRestoringEditor = false;
+                    }
+                    LoadEditorFromExistingTypeOption(value);
+                }
             }
         }
 
@@ -980,6 +1016,17 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
 
         public bool HasSelectedGroup => SelectedGroup != null;
+        public bool SplitLintelsByZeroElevation
+        {
+            get => _splitLintelsByZeroElevation;
+            set
+            {
+                if (_splitLintelsByZeroElevation == value) return;
+                _splitLintelsByZeroElevation = value;
+                LintelServiceSettingsV3.SplitByZeroElevation = value;
+                RaisePropertyChanged(nameof(SplitLintelsByZeroElevation));
+            }
+        }
         public bool CanInteract => !IsCollectionInProgress
                                    && !IsCalculationInProgress
                                    && !IsPlacementInProgress;
@@ -1009,21 +1056,22 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _isExistingLintelsTabActive = value;
                 RaisePropertyChanged(nameof(IsExistingLintelsTabActive));
                 RaisePropertyChanged(nameof(SaveVariantButtonText));
-                RaisePropertyChanged(nameof(CreateLintelsButtonText));
                 RaisePropertyChanged(nameof(CanSaveVariantChanges));
                 RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
+                RaisePropertyChanged(nameof(CanRecalculateAll));
+                if (_isExistingLintelsTabActive && SelectedGroup?.HasExistingLintel != true)
+                    SelectedGroup = ExistingLintelGroups.FirstOrDefault();
+                else if (!_isExistingLintelsTabActive && SelectedGroup?.HasExistingLintel == true)
+                    SelectedGroup = VisibleGroups.FirstOrDefault();
             }
         }
         public string SaveVariantButtonText => IsExistingLintelsTabActive
-            ? "Заменить тип"
+            ? "Заменить перемычки"
             : "Сохранить изменения варианта";
-        public string CreateLintelsButtonText => IsExistingLintelsTabActive
-            ? "Пересоздать перемычки"
-            : "Создать типы и проставить";
         public bool CanSaveVariantChanges => CanInteract
                                              && (IsExistingLintelsTabActive
                                                  ? SelectedGroup?.HasExistingLintel == true
-                                                   && SelectedExistingLintelType != null
+                                                   && EditorRows.Count > 0
                                                    && SelectedGroup.ExistingLintelIds.Count > 0
                                                  : SelectedGroup != null
                                                    && !SelectedGroup.HasExistingLintel
@@ -1039,38 +1087,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                    .All(group => group.ActiveVariant != null
                                                                  && group.PlacementTargets.Count > 0);
         public bool IsVariantsPanelEnabled => CanInteract
-                                              && SelectedGroup != null
-                                              && !SelectedGroup.HasExistingLintel;
-        public bool IsExistingGroupedByOpening
-        {
-            get => _isExistingGroupedByOpening;
-            set
-            {
-                if (!value || _isExistingGroupedByOpening) return;
-                _isExistingGroupedByOpening = true;
-                RaisePropertyChanged(nameof(IsExistingGroupedByOpening));
-                RaisePropertyChanged(nameof(IsExistingGroupedByLintel));
-                RefreshExistingGrouping();
-            }
-        }
-        public bool IsExistingGroupedByLintel
-        {
-            get => !_isExistingGroupedByOpening;
-            set
-            {
-                if (!value || !_isExistingGroupedByOpening) return;
-                _isExistingGroupedByOpening = false;
-                RaisePropertyChanged(nameof(IsExistingGroupedByOpening));
-                RaisePropertyChanged(nameof(IsExistingGroupedByLintel));
-                RefreshExistingGrouping();
-            }
-        }
+                                              && SelectedGroup != null;
         public bool CanRecalculate => CanInteract
                                       && SelectedGroup != null
-                                      && !SelectedGroup.HasExistingLintel
                                       && _lintelCatalog.Count > 0;
         public bool CanRecalculateAll => CanInteract
-                                         && _allGroups.Any(group => !group.HasExistingLintel)
+                                         && _allGroups.Any(group => group.HasExistingLintel == IsExistingLintelsTabActive)
                                          && _lintelCatalog.Count > 0;
         public bool IsCalculationInProgress
         {
@@ -1220,7 +1242,6 @@ namespace FerrumAddinDev.LintelCreator_v3
             : "Ошибка каталога";
         public string VariantsSummaryText => SelectedGroup == null
             ? "Выберите проём"
-            : SelectedGroup.HasExistingLintel ? "Перемычка уже существует"
             : Variants.Count == 0 ? "Варианты не найдены" : Variants.Count + " из 5 вариантов";
 
         public string SelectionMessage
@@ -1410,12 +1431,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RaiseVariantsProperties();
                 return;
             }
-            if (SelectedGroup.HasExistingLintel)
-            {
-                DisplayExistingLintel(SelectedGroup);
-                return;
-            }
-
             OpeningGroupCardV3 calculatedGroup = SelectedGroup;
             if (!string.IsNullOrWhiteSpace(_catalogLoadError))
             {
@@ -1427,10 +1442,13 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
 
             RefreshView();
-            if (VisibleGroups.Contains(calculatedGroup))
+            ObservableCollection<OpeningGroupCardV3> activeGroups = calculatedGroup.HasExistingLintel
+                ? ExistingLintelGroups
+                : VisibleGroups;
+            if (activeGroups.Contains(calculatedGroup))
                 DisplayStoredCalculation(calculatedGroup);
             else
-                SelectedGroup = VisibleGroups.FirstOrDefault();
+                SelectedGroup = activeGroups.FirstOrDefault();
             RaiseSummaryProperties();
         }
 
@@ -1438,8 +1456,9 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (IsCalculationInProgress) return;
 
+            bool calculateExisting = IsExistingLintelsTabActive;
             List<OpeningGroupCardV3> groupsToCalculate = _allGroups
-                .Where(group => !group.HasExistingLintel)
+                .Where(group => group.HasExistingLintel == calculateExisting)
                 .ToList();
             string selectedGroupKey = SelectedGroup?.Key;
             IsCalculationInProgress = true;
@@ -1472,9 +1491,11 @@ namespace FerrumAddinDev.LintelCreator_v3
 
                 CalculatedOpeningCount = CalculationOpeningTotal;
                 RefreshView();
+                ObservableCollection<OpeningGroupCardV3> activeGroups = calculateExisting
+                    ? ExistingLintelGroups
+                    : VisibleGroups;
                 OpeningGroupCardV3 selectedGroup = _allGroups.FirstOrDefault(group => group.Key == selectedGroupKey)
-                                                   ?? VisibleGroups.FirstOrDefault()
-                                                   ?? ExistingLintelGroups.FirstOrDefault();
+                                                   ?? activeGroups.FirstOrDefault();
                 SelectedGroup = selectedGroup;
                 SelectionMessage = selectedGroup?.CalculationMessage
                                    ?? "Расчёт вариантов завершён.";
@@ -1500,8 +1521,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(IsPartition));
             if (SelectedGroup?.HasExistingLintel == true)
                 RefreshExistingLintelTypeOptions(SelectedGroup);
-            else
-                RecalculateVariants();
+            RecalculateVariants();
         }
 
         private void SetLintelMaterial(LintelMaterialV3 value)
@@ -1512,8 +1532,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(IsMetal));
             if (SelectedGroup?.HasExistingLintel == true)
                 RefreshExistingLintelTypeOptions(SelectedGroup);
-            else
-                RecalculateVariants();
+            RecalculateVariants();
         }
 
         private void RaiseSelectedGroupProperties()
@@ -1525,7 +1544,6 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(CanSaveVariantChanges));
             RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
             RaisePropertyChanged(nameof(SaveVariantButtonText));
-            RaisePropertyChanged(nameof(CreateLintelsButtonText));
             RaisePropertyChanged(nameof(SelectedOpeningCaption));
             RaisePropertyChanged(nameof(SelectedOpeningWidthText));
             RaisePropertyChanged(nameof(SelectedWallWidthText));
@@ -1598,7 +1616,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             group.CalculationBaseMessage = result.Message;
             group.CalculationMessage = result.Message;
             group.IsCalculated = true;
-            ApplyCalculationStatus(group, result);
+            if (group.HasExistingLintel)
+                ApplyExistingLintelAssessment(group, result);
+            else
+                ApplyCalculationStatus(group, result);
         }
 
         private void DisplayStoredCalculation(OpeningGroupCardV3 group)
@@ -1616,17 +1637,207 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private void DisplayExistingLintel(OpeningGroupCardV3 group)
         {
-            Variants.Clear();
-            if (SelectedVariant != null)
-                SelectedVariant = null;
-            else
-                RestoreEditorFromCalculation();
-            SelectionMessage = group?.CalculationMessage
-                               ?? group?.ExistingLintelDescription
-                               ?? "Для проёма найдена существующая перемычка.";
             ApplyExistingTypeSettings(group);
             RefreshExistingLintelTypeOptions(group);
-            RaiseVariantsProperties();
+            if (!group.IsCalculated)
+            {
+                LintelSelectionResultV3 result = string.IsNullOrWhiteSpace(_catalogLoadError)
+                    ? CalculateGroup(group)
+                    : CreateCatalogErrorResult();
+                StoreCalculation(group, result);
+            }
+            DisplayStoredCalculation(group);
+            RaiseSummaryProperties();
+        }
+
+        private void ApplyExistingLintelAssessment(
+            OpeningGroupCardV3 group,
+            LintelSelectionResultV3 result)
+        {
+            if (group == null) return;
+
+            ExistingLintelTypeOptionV3 currentType = FindCurrentExistingTypeOption(group);
+            List<string> validationErrors = GetExistingLintelValidationErrors(group, currentType);
+            group.ExistingLintelValidationError = string.Join("; ", validationErrors);
+            group.ExistingLintelDiffersFromFirstVariant = false;
+            group.ExistingLintelComparisonWarning = string.Empty;
+
+            LintelSelectionVariantV3 firstVariant = group.CalculatedVariants.FirstOrDefault();
+            if (firstVariant != null)
+            {
+                List<LintelPlacementComponentRequestV3> selectedComponents =
+                    CreatePlacementComponents(firstVariant);
+                ExistingLintelTypeOptionV3 comparisonType = currentType
+                    ?? CreateExistingTypeOptionFromGroup(group);
+                List<string> differences = GetCachedCompositionDifferences(
+                    comparisonType,
+                    selectedComponents);
+                if (differences.Count > 0)
+                {
+                    group.ExistingLintelDiffersFromFirstVariant = true;
+                    group.ExistingLintelComparisonWarning =
+                        "Существующая перемычка отличается от варианта 1: "
+                        + string.Join("; ", differences) + ".";
+                    firstVariant.HasExistingTypeDifference = true;
+                    firstVariant.ExistingTypeDifferenceText = group.ExistingLintelComparisonWarning;
+                }
+            }
+
+            if (validationErrors.Count > 0)
+            {
+                group.Status = OpeningStatusV3.Error;
+                group.StatusText = "Существующая перемычка не подходит";
+                group.CalculationMessage = "Ошибка: " + group.ExistingLintelValidationError + ".";
+            }
+            else if (result?.Variants.Count == 0)
+            {
+                group.Status = OpeningStatusV3.Error;
+                group.StatusText = "Варианты не найдены";
+                group.CalculationMessage = result?.Message ?? "Варианты не найдены.";
+            }
+            else if (group.ExistingLintelDiffersFromFirstVariant)
+            {
+                group.Status = OpeningStatusV3.Warning;
+                group.StatusText = "Отличается от варианта 1";
+                group.CalculationMessage = (group.CalculationBaseMessage ?? string.Empty)
+                                           + (string.IsNullOrWhiteSpace(group.CalculationBaseMessage)
+                                               ? string.Empty
+                                               : " ")
+                                           + "Предупреждение: "
+                                           + group.ExistingLintelComparisonWarning;
+            }
+            else
+            {
+                group.Status = OpeningStatusV3.Success;
+                group.StatusText = "Соответствует варианту 1";
+                group.CalculationMessage = group.CalculationBaseMessage;
+            }
+        }
+
+        private ExistingLintelTypeOptionV3 FindCurrentExistingTypeOption(OpeningGroupCardV3 group)
+        {
+            if (group == null) return null;
+            return _allExistingLintelTypeOptions.FirstOrDefault(option =>
+                string.Equals(
+                    option.FamilyName,
+                    group.ExistingLintelFamilyNames,
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(
+                    option.TypeName,
+                    group.ExistingLintelTypeNames,
+                    StringComparison.Ordinal));
+        }
+
+        private static ExistingLintelTypeOptionV3 CreateExistingTypeOptionFromGroup(
+            OpeningGroupCardV3 group)
+        {
+            var option = new ExistingLintelTypeOptionV3
+            {
+                FamilyName = group?.ExistingLintelFamilyNames,
+                TypeName = group?.ExistingLintelTypeNames
+            };
+            if (group != null)
+                option.Components.AddRange(group.ExistingLintelComponents);
+            return option;
+        }
+
+        private List<string> GetExistingLintelValidationErrors(
+            OpeningGroupCardV3 group,
+            ExistingLintelTypeOptionV3 currentType)
+        {
+            var errors = new List<string>();
+            if (group == null) return errors;
+            if (currentType == null)
+            {
+                errors.Add("тип «" + (group.ExistingLintelTypeNames ?? "—")
+                           + "» не найден среди составных типов проекта");
+                return errors;
+            }
+
+            string[] parts = (currentType.TypeName ?? string.Empty).Split('_');
+            if (parts.Length < 4)
+            {
+                errors.Add("имя типа не содержит параметры толщины стены и максимального проёма");
+                return errors;
+            }
+
+            if (!TryParseTypeNumber(parts[1], out double typeWallWidth))
+            {
+                errors.Add("в имени типа не определена толщина стены");
+            }
+            else
+            {
+                int requiredWallWidth = NormalizeWallWidth((int)Math.Round(group.WallWidthMm));
+                if (Math.Abs(typeWallWidth - requiredWallWidth) > 0.5)
+                {
+                    errors.Add("толщина типа " + Math.Round(typeWallWidth)
+                               + " мм не соответствует стене " + requiredWallWidth + " мм");
+                }
+            }
+
+            if (!TryParseTypeNumber(parts[2], out double maximumOpeningWidth))
+            {
+                errors.Add("в имени типа не определён максимальный проём");
+            }
+            else if (maximumOpeningWidth + 0.5 < group.OpeningWidthMm)
+            {
+                errors.Add("максимальный проём типа " + Math.Round(maximumOpeningWidth)
+                           + " мм меньше проёма " + Math.Round(group.OpeningWidthMm) + " мм");
+            }
+
+            if (currentType.SupportCategory < group.SupportType)
+            {
+                errors.Add("тип рассчитан для опирания " + currentType.SupportCategory
+                           + ", требуется " + group.SupportType);
+            }
+
+            List<ExistingLintelComponentV3> orderedComponents = currentType.Components
+                .OrderBy(component => component.Order)
+                .ToList();
+            if (orderedComponents.Count == 0)
+            {
+                errors.Add("не удалось прочитать состав существующего типа");
+                return errors;
+            }
+
+            List<LintelCatalogItemV3> componentItems = orderedComponents
+                .Select(FindExistingComponentCatalogItem)
+                .ToList();
+            if (componentItems.All(item => item != null))
+            {
+                int packageWidth = 0;
+                for (int index = 0; index < componentItems.Count; index++)
+                {
+                    if (index < componentItems.Count - 1
+                        && orderedComponents[index].OffsetToNextMm > 0)
+                    {
+                        packageWidth += (int)Math.Round(orderedComponents[index].OffsetToNextMm);
+                    }
+                    else
+                    {
+                        packageWidth += componentItems[index].WidthMm;
+                    }
+                }
+                int wallWidth = (int)Math.Round(group.WallWidthMm);
+                if (Math.Abs(packageWidth - wallWidth) > WallWidthToleranceMm)
+                {
+                    errors.Add("ширина фактического комплекта " + packageWidth
+                               + " мм не соответствует стене " + wallWidth
+                               + " мм (допуск ±" + WallWidthToleranceMm + " мм)");
+                }
+
+                int limitingOpening = componentItems
+                    .Select(item => item.MaximumOpeningWidthMm)
+                    .Where(value => value > 0)
+                    .DefaultIfEmpty(0)
+                    .Min();
+                if (limitingOpening > 0 && limitingOpening + 0.5 < group.OpeningWidthMm)
+                {
+                    errors.Add("вложенные перемычки рассчитаны на проём до " + limitingOpening
+                               + " мм, фактический проём " + Math.Round(group.OpeningWidthMm) + " мм");
+                }
+            }
+            return errors;
         }
 
         private void ApplyExistingTypeSettings(OpeningGroupCardV3 group)
@@ -1662,7 +1873,6 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private void RefreshExistingLintelTypeOptions(OpeningGroupCardV3 selectedGroup)
         {
-            long previousTypeId = SelectedExistingLintelType?.TypeId?.Value ?? -1;
             List<OpeningGroupCardV3> sourceGroups = GetExistingSourceGroups(selectedGroup);
             IEnumerable<ExistingLintelTypeOptionV3> filtered = _allExistingLintelTypeOptions
                 .Where(option => IsExistingTypeGeometrySuitable(option, sourceGroups))
@@ -1693,12 +1903,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             foreach (ExistingLintelTypeOptionV3 option in options)
                 ExistingLintelTypeOptions.Add(option);
 
-            ExistingLintelTypeOptionV3 current = options.FirstOrDefault(option =>
-                string.Equals(option.FamilyName, selectedGroup?.ExistingLintelFamilyNames, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(option.TypeName, selectedGroup?.ExistingLintelTypeNames, StringComparison.Ordinal));
-            SelectedExistingLintelType = options.FirstOrDefault(option => option.TypeId.Value == previousTypeId)
-                                         ?? current
-                                         ?? options.FirstOrDefault();
+            SetSelectedExistingLintelTypeWithoutLoading(null);
             RaisePropertyChanged(nameof(ExistingLintelTypeOptions));
             RaisePropertyChanged(nameof(ExistingLintelTypesSummaryText));
             RaisePropertyChanged(nameof(ExistingLintelCurrentTypeText));
@@ -1710,14 +1915,20 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (selectedGroup?.HasExistingLintel != true)
                 return new List<OpeningGroupCardV3>();
-            var lintelIds = new HashSet<long>(selectedGroup.ExistingLintelIds.Select(id => id.Value));
-            List<OpeningGroupCardV3> result = _allGroups
-                .Where(group => group.HasExistingLintel
-                                && group.ExistingLintelIds.Any(id => lintelIds.Contains(id.Value)))
-                .ToList();
-            if (result.Count == 0 && !selectedGroup.IsExistingLintelAggregate)
-                result.Add(selectedGroup);
-            return result;
+            return new List<OpeningGroupCardV3> { selectedGroup };
+        }
+
+        private void SetSelectedExistingLintelTypeWithoutLoading(ExistingLintelTypeOptionV3 option)
+        {
+            _isUpdatingExistingLintelTypeSelection = true;
+            try
+            {
+                SelectedExistingLintelType = option;
+            }
+            finally
+            {
+                _isUpdatingExistingLintelTypeSelection = false;
+            }
         }
 
         private bool IsExistingTypeGeometrySuitable(
@@ -1799,15 +2010,45 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (!IsExistingLintelsTabActive
                 || SelectedGroup?.HasExistingLintel != true
-                || SelectedExistingLintelType == null)
+                || EditorRows.Count == 0)
                 return null;
+
+            LintelSelectionVariantV3 editorVariant = CreateVariantFromEditor(
+                SelectedGroup,
+                SelectedVariant?.Rank ?? 1);
+            if (editorVariant == null)
+                return null;
+            List<LintelPlacementComponentRequestV3> components =
+                CreatePlacementComponents(editorVariant);
+            if (components.Count == 0)
+                return null;
+
+            ExistingLintelTypeOptionV3 selectedReadyType = SelectedExistingLintelType;
+            bool useSelectedReadyType = selectedReadyType != null
+                                        && GetCachedCompositionDifferences(
+                                            selectedReadyType,
+                                            components).Count == 0;
+            string requestedTypeName = useSelectedReadyType
+                ? selectedReadyType.TypeName
+                : BuildPlacementTypeName(SelectedGroup, components);
+            ExistingLintelTypeOptionV3 sameNameType = FindExistingTypeOption(requestedTypeName);
+            List<string> sameNameDifferences = sameNameType == null
+                ? new List<string>()
+                : GetCachedCompositionDifferences(sameNameType, components);
 
             var request = new LintelTypeReplacementRequestV3
             {
-                TypeId = SelectedExistingLintelType.TypeId,
-                FamilyName = SelectedExistingLintelType.FamilyName,
-                TypeName = SelectedExistingLintelType.TypeName
+                TypeId = useSelectedReadyType ? selectedReadyType.TypeId : null,
+                FamilyName = useSelectedReadyType ? selectedReadyType.FamilyName : null,
+                TypeName = requestedTypeName,
+                NameConflictAction = SelectedTypeNameConflictOption?.Action
+                                     ?? CompositeTypeNameConflictActionV3.UseExisting,
+                HasExistingTypeDifference = sameNameDifferences.Count > 0,
+                ExistingTypeDifferenceText = sameNameDifferences.Count == 0
+                    ? string.Empty
+                    : string.Join("; ", sameNameDifferences)
             };
+            request.Components.AddRange(components);
             request.LintelIds.AddRange(SelectedGroup.ExistingLintelIds
                 .GroupBy(id => id.Value)
                 .Select(group => group.First()));
@@ -1817,7 +2058,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         internal void BeginLintelTypeReplacement(int lintelCount)
         {
             IsPlacementInProgress = true;
-            SelectionMessage = "Замена типа перемычек: 0/"
+            SelectionMessage = "Замена перемычек: 0/"
                                + lintelCount.ToString(CultureInfo.InvariantCulture) + ".";
         }
 
@@ -1864,29 +2105,24 @@ namespace FerrumAddinDev.LintelCreator_v3
                                 Order = component.Order,
                                 OffsetToNextMm = component.OffsetToNextMm
                             }));
-                        group.Status = OpeningStatusV3.Success;
-                        group.StatusText = group.ExistingLintelDescription;
-                        group.CalculationMessage = group.ExistingLintelDescription
-                                                   + ". " + group.ExistingLintelIdsText + ".";
+                        group.IsCalculated = false;
                     }
 
                     RefreshExistingCompositeTypeCache(_document);
-                    _existingLintelTypeGroups = BuildExistingLintelTypeGroups(
-                        _allGroups.Where(group => group.HasExistingLintel));
+                    var resultIds = new HashSet<long>(changedIds.Values.Select(id => id.Value));
+                    foreach (OpeningGroupCardV3 group in _allGroups.Where(group =>
+                                 group.HasExistingLintel
+                                 && group.ExistingLintelIds.Any(id => resultIds.Contains(id.Value))))
+                    {
+                        LintelSelectionResultV3 calculation = string.IsNullOrWhiteSpace(_catalogLoadError)
+                            ? CalculateGroup(group)
+                            : CreateCatalogErrorResult();
+                        StoreCalculation(group, calculation);
+                    }
                     SelectedGroup = null;
                     RefreshView();
-                    if (IsExistingGroupedByOpening)
-                    {
-                        var resultIds = new HashSet<long>(changedIds.Values.Select(id => id.Value));
-                        SelectedGroup = ExistingLintelGroups.FirstOrDefault(group =>
-                            group.ExistingLintelIds.Any(id => resultIds.Contains(id.Value)));
-                    }
-                    else
-                    {
-                        SelectedGroup = ExistingLintelGroups.FirstOrDefault(group =>
-                            string.Equals(group.ExistingLintelFamilyNames, result.FamilyName, StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(group.ExistingLintelTypeNames, result.TypeName, StringComparison.Ordinal));
-                    }
+                    SelectedGroup = ExistingLintelGroups.FirstOrDefault(group =>
+                        group.ExistingLintelIds.Any(id => resultIds.Contains(id.Value)));
                 }
 
                 var errors = new List<string>();
@@ -1895,8 +2131,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 errors.AddRange(result?.Errors.Where(error => !string.IsNullOrWhiteSpace(error))
                                 ?? Enumerable.Empty<string>());
                 SelectionMessage = changedIds.Count > 0
-                    ? "Тип заменён у " + changedIds.Count.ToString(CultureInfo.InvariantCulture)
-                      + " перемычек на «" + result.TypeName + "»."
+                    ? "Заменено перемычек: " + changedIds.Count.ToString(CultureInfo.InvariantCulture)
+                      + ". Новый тип: «" + result.TypeName + "»."
                       + (errors.Count > 0 ? " Ошибок: " + errors.Count + "." : string.Empty)
                     : errors.FirstOrDefault() ?? "Тип перемычек не изменён.";
                 RaiseSummaryProperties();
@@ -2033,8 +2269,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                 if (selectedGroupWasPlaced)
                     SelectedGroup = null;
 
-                _existingLintelTypeGroups = BuildExistingLintelTypeGroups(
-                    _allGroups.Where(group => group.HasExistingLintel));
                 RefreshView();
                 if (selectedGroupWasPlaced)
                     SelectedGroup = VisibleGroups.FirstOrDefault();
@@ -2365,11 +2599,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             EditorRows.Clear();
             RefreshEditorCatalogItems();
 
-            if (SelectedGroup?.HasExistingLintel == true)
-            {
-                RestoreExistingLintelRows(SelectedGroup);
-            }
-            else if (SelectedVariant != null)
+            if (SelectedVariant != null)
             {
                 int leadingGap = 0;
                 LintelEditorRowV3 previousRow = null;
@@ -2400,15 +2630,50 @@ namespace FerrumAddinDev.LintelCreator_v3
                     previousRow = row;
                 }
             }
+            else if (SelectedGroup?.HasExistingLintel == true)
+            {
+                RestoreExistingLintelRows(SelectedGroup);
+            }
 
             UpdateEditorRowIndexes();
             RaiseEditorProperties();
+        }
+
+        public void RestoreEditorDefault()
+        {
+            if (SelectedGroup?.HasExistingLintel != true)
+            {
+                RestoreEditorFromCalculation();
+                return;
+            }
+
+            SetSelectedExistingLintelTypeWithoutLoading(null);
+            _isRestoringEditor = true;
+            try
+            {
+                _selectedVariant = null;
+                RaisePropertyChanged(nameof(SelectedVariant));
+            }
+            finally
+            {
+                _isRestoringEditor = false;
+            }
+            RestoreEditorFromCalculation();
+            SelectionMessage = "В редактор возвращён исходный тип «"
+                               + (SelectedGroup.ExistingLintelTypeNames ?? "—") + "».";
         }
 
         public bool LoadEditorFromExistingType()
         {
             ExistingLintelTypeOptionV3 option = FindExistingEditorTypeOption(EditorTypeName);
             if (!CanLoadExistingEditorType || option == null) return false;
+
+            return LoadEditorFromExistingTypeOption(option);
+        }
+
+        private bool LoadEditorFromExistingTypeOption(ExistingLintelTypeOptionV3 option)
+        {
+            if (option == null) return false;
 
             foreach (LintelEditorRowV3 row in EditorRows)
                 row.PropertyChanged -= EditorRow_PropertyChanged;
@@ -2807,8 +3072,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _editorExistingTypeDifferenceCount = 0;
                 _editorExistingTypeDifferencesText = string.Empty;
 
-                ExistingLintelTypeOptionV3 existingType = FindExistingEditorTypeOption(EditorTypeName);
-                if (!EditorTypeExists || existingType == null) return;
+                ExistingLintelTypeOptionV3 existingType = SelectedGroup?.HasExistingLintel == true
+                    ? FindCurrentExistingTypeOption(SelectedGroup)
+                      ?? CreateExistingTypeOptionFromGroup(SelectedGroup)
+                    : FindExistingEditorTypeOption(EditorTypeName);
+                if (existingType == null
+                    || (SelectedGroup?.HasExistingLintel != true && !EditorTypeExists))
+                    return;
 
                 List<ExistingLintelComponentV3> existingComponents = existingType.Components
                     .OrderBy(component => component.Order)
@@ -3233,7 +3503,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                         progress?.Invoke(processed, total);
                     });
                 _allGroups = BuildGroups(collected.Openings);
-                _existingLintelTypeGroups = BuildExistingLintelTypeGroups(_allGroups.Where(group => group.HasExistingLintel));
 
                 foreach (OpeningGroupCardV3 group in _allGroups)
                 {
@@ -3242,9 +3511,23 @@ namespace FerrumAddinDev.LintelCreator_v3
                     if (group.HasExistingLintel)
                     {
                         group.IsCalculated = false;
-                        group.Status = OpeningStatusV3.Success;
-                        group.StatusText = group.ExistingLintelDescription;
-                        group.CalculationMessage = group.ExistingLintelDescription + ". " + group.ExistingLintelIdsText + ".";
+                        ExistingLintelTypeOptionV3 currentType = FindCurrentExistingTypeOption(group);
+                        List<string> validationErrors = GetExistingLintelValidationErrors(group, currentType);
+                        group.ExistingLintelValidationError = string.Join("; ", validationErrors);
+                        if (validationErrors.Count > 0)
+                        {
+                            group.Status = OpeningStatusV3.Error;
+                            group.StatusText = "Существующая перемычка не подходит";
+                            group.CalculationMessage = "Ошибка: "
+                                                       + group.ExistingLintelValidationError + ".";
+                        }
+                        else
+                        {
+                            group.Status = OpeningStatusV3.Success;
+                            group.StatusText = group.ExistingLintelDescription;
+                            group.CalculationMessage = group.ExistingLintelDescription
+                                                       + ". " + group.ExistingLintelIdsText + ".";
+                        }
                     }
                     else
                     {
@@ -3328,9 +3611,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             List<OpeningGroupCardV3> withoutLintels = ApplyViewFilters(
                 _allGroups.Where(group => !group.HasExistingLintel));
-            IEnumerable<OpeningGroupCardV3> existingSource = IsExistingGroupedByOpening
-                ? _allGroups.Where(group => group.HasExistingLintel)
-                : _existingLintelTypeGroups;
+            IEnumerable<OpeningGroupCardV3> existingSource =
+                _allGroups.Where(group => group.HasExistingLintel);
             List<OpeningGroupCardV3> existingLintels = ApplyViewFilters(existingSource);
 
             VisibleGroups.Clear();
@@ -3360,21 +3642,6 @@ namespace FerrumAddinDev.LintelCreator_v3
             List<OpeningGroupCardV3> result = query.ToList();
             result.Sort(CompareGroups);
             return result;
-        }
-
-        private void RefreshExistingGrouping()
-        {
-            OpeningGroupCardV3 previousSelection = SelectedGroup;
-            string lintelTypes = previousSelection?.ExistingLintelTypeNames;
-            RefreshView();
-            if (previousSelection?.HasExistingLintel != true) return;
-
-            OpeningGroupCardV3 target = ExistingLintelGroups.FirstOrDefault(group =>
-                string.Equals(
-                    group.ExistingLintelTypeNames,
-                    lintelTypes,
-                    StringComparison.Ordinal));
-            SelectedGroup = target ?? ExistingLintelGroups.FirstOrDefault();
         }
 
         public void NotifySelectionChanged()
@@ -3622,62 +3889,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                 groups.Add(card);
             }
             return groups;
-        }
-
-        private static List<OpeningGroupCardV3> BuildExistingLintelTypeGroups(
-            IEnumerable<OpeningGroupCardV3> openingGroups)
-        {
-            var result = new List<OpeningGroupCardV3>();
-            IEnumerable<IGrouping<string, OpeningGroupCardV3>> typeGroups = openingGroups.GroupBy(group =>
-                (group.ExistingLintelFamilyNames ?? string.Empty)
-                + "\u001f" + (group.ExistingLintelTypeNames ?? string.Empty));
-            foreach (IGrouping<string, OpeningGroupCardV3> sourceGroup in typeGroups)
-            {
-                OpeningGroupCardV3 first = sourceGroup.First();
-                var card = new OpeningGroupCardV3
-                {
-                    Key = "lintel\u001f" + sourceGroup.Key,
-                    FamilyName = JoinDistinctGroupValues(sourceGroup.Select(group => group.FamilyName)),
-                    TypeName = JoinDistinctGroupValues(sourceGroup.Select(group => group.TypeName)),
-                    OpeningKind = "Проёмы",
-                    CategoryName = JoinDistinctGroupValues(sourceGroup.Select(group => group.CategoryName)),
-                    WallTypeName = JoinDistinctGroupValues(sourceGroup.Select(group => group.WallTypeName)),
-                    LevelName = JoinDistinctGroupValues(sourceGroup.Select(group => group.LevelName)),
-                    OpeningWidthMm = first.OpeningWidthMm,
-                    OpeningHeightMm = first.OpeningHeightMm,
-                    WallWidthMm = first.WallWidthMm,
-                    SupportType = first.SupportType,
-                    RequiredSupportWidthMm = first.RequiredSupportWidthMm,
-                    RequiredSupportWidth1Mm = first.RequiredSupportWidth1Mm,
-                    RequiredSupportWidth2Mm = first.RequiredSupportWidth2Mm,
-                    InstanceCount = sourceGroup.Sum(group => group.Count),
-                    HasExistingLintel = true,
-                    IsExistingLintelAggregate = true,
-                    ExistingLintelFamilyNames = first.ExistingLintelFamilyNames,
-                    ExistingLintelTypeNames = first.ExistingLintelTypeNames,
-                    Status = OpeningStatusV3.Success,
-                    StatusText = first.ExistingLintelDescription,
-                    CalculationMessage = first.ExistingLintelDescription
-                };
-                card.ElementIds.AddRange(sourceGroup
-                    .SelectMany(group => group.ElementIds)
-                    .GroupBy(id => id.Value)
-                    .Select(group => group.First()));
-                card.ExistingLintelIds.AddRange(sourceGroup
-                    .SelectMany(group => group.ExistingLintelIds)
-                    .GroupBy(id => id.Value)
-                    .Select(group => group.First()));
-                card.ExistingLintelComponents.AddRange(first.ExistingLintelComponents
-                    .Select(component => new ExistingLintelComponentV3
-                    {
-                        FamilyName = component.FamilyName,
-                        TypeName = component.TypeName,
-                        Order = component.Order,
-                        OffsetToNextMm = component.OffsetToNextMm
-                    }));
-                result.Add(card);
-            }
-            return result;
         }
 
         private static string JoinDistinctGroupValues(IEnumerable<string> values)
@@ -5046,6 +5257,78 @@ namespace FerrumAddinDev.LintelCreator_v3
             return result;
         }
 
+        internal static FamilySymbol ResolveCompositeSymbolForReplacement(
+            Document document,
+            string typeName,
+            IList<LintelPlacementComponentRequestV3> components,
+            bool hasExistingTypeDifference,
+            string existingTypeDifferenceText,
+            CompositeTypeNameConflictActionV3 conflictAction)
+        {
+            if (document == null || string.IsNullOrWhiteSpace(typeName)
+                || components == null || components.Count == 0)
+                throw new InvalidOperationException("Не задан состав нового типа перемычки.");
+
+            List<FamilySymbol> compositeCandidates = new FilteredElementCollector(document)
+                .OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .Where(IsCompositeLintelSymbol)
+                .OrderByDescending(CountAvailableSlots)
+                .ThenBy(symbol => symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(symbol => symbol.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (compositeCandidates.Count == 0)
+                throw new InvalidOperationException(
+                    "В проекте не найдено семейство с моделью типа «Перемычки составные».");
+
+            Dictionary<string, List<FamilySymbol>> compositeSymbolsByName = compositeCandidates
+                .Where(symbol => !string.IsNullOrWhiteSpace(symbol.Name))
+                .GroupBy(symbol => symbol.Name, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+            Dictionary<string, List<FamilySymbol>> unitSymbolsByName =
+                new FilteredElementCollector(document)
+                    .OfClass(typeof(FamilySymbol))
+                    .Cast<FamilySymbol>()
+                    .Where(symbol => !string.IsNullOrWhiteSpace(symbol.Name))
+                    .GroupBy(symbol => symbol.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => group.ToList(),
+                        StringComparer.OrdinalIgnoreCase);
+            List<FamilySymbol> componentSymbols = components
+                .Select(component => FindUnitSymbol(unitSymbolsByName, component))
+                .ToList();
+            if (componentSymbols.Any(symbol => symbol == null))
+            {
+                LintelPlacementComponentRequestV3 missing = components
+                    .Zip(componentSymbols, (component, symbol) => new { component, symbol })
+                    .First(item => item.symbol == null)
+                    .component;
+                throw new InvalidOperationException(
+                    "Не найден тип вложенной перемычки «" + missing.Mark + "». ");
+            }
+
+            var groupRequest = new LintelPlacementGroupRequestV3
+            {
+                GroupKey = "replacement",
+                CompositeTypeName = typeName,
+                HasExistingTypeDifference = hasExistingTypeDifference,
+                ExistingTypeDifferenceText = existingTypeDifferenceText
+            };
+            groupRequest.Components.AddRange(components);
+            CompositeTypeResolutionV3 resolution = GetOrCreateCompositeSymbol(
+                document,
+                compositeCandidates,
+                compositeSymbolsByName,
+                groupRequest,
+                componentSymbols,
+                conflictAction);
+            if (resolution.Symbol == null)
+                throw new InvalidOperationException(
+                    resolution.Error ?? "Создание типа перемычки отменено.");
+            return resolution.Symbol;
+        }
+
         private sealed class PlacedLintelDataV3
         {
             public FamilyInstance Instance { get; set; }
@@ -5896,26 +6179,52 @@ namespace FerrumAddinDev.LintelCreator_v3
                 FamilyName = request?.FamilyName,
                 TypeName = request?.TypeName
             };
-            if (document == null || request?.TypeId == null || request.LintelIds.Count == 0)
+            if (document == null || request == null || request.LintelIds.Count == 0
+                || (request.TypeId == null && request.Components.Count == 0))
             {
                 result.FatalError = "Не сформировано задание на замену типа перемычек.";
                 return result;
             }
 
-            FamilySymbol targetSymbol = document.GetElement(request.TypeId) as FamilySymbol;
-            if (targetSymbol == null || !IsCompositeLintelSymbol(targetSymbol))
+            FamilySymbol targetSymbol = request.TypeId == null
+                ? null
+                : document.GetElement(request.TypeId) as FamilySymbol;
+            if (request.TypeId != null && (targetSymbol == null || !IsCompositeLintelSymbol(targetSymbol)))
             {
                 result.FatalError = "Выбранный тип перемычки не найден или не является составной перемычкой.";
                 return result;
             }
-            result.FamilyName = targetSymbol.FamilyName;
-            result.TypeName = targetSymbol.Name;
+            if (request.TypeId != null)
+            {
+                result.FamilyName = targetSymbol.FamilyName;
+                result.TypeName = targetSymbol.Name;
+            }
 
-            using (var transaction = new Transaction(document, "Замена типа перемычек"))
+            using (var transaction = new Transaction(document, "Замена перемычек"))
             {
                 transaction.Start();
                 try
                 {
+                    if (targetSymbol == null)
+                    {
+                        if (request.HasExistingTypeDifference
+                            && request.NameConflictAction == CompositeTypeNameConflictActionV3.Cancel)
+                        {
+                            throw new InvalidOperationException(
+                                "Имя «" + request.TypeName
+                                + "» уже занято отличающимся типом. Замена отменена согласно настройке.");
+                        }
+                        targetSymbol = LintelPlacementEngineV3.ResolveCompositeSymbolForReplacement(
+                            document,
+                            request.TypeName,
+                            request.Components,
+                            request.HasExistingTypeDifference,
+                            request.ExistingTypeDifferenceText,
+                            request.NameConflictAction);
+                        result.FamilyName = targetSymbol.FamilyName;
+                        result.TypeName = targetSymbol.Name;
+                    }
+
                     if (!targetSymbol.IsActive)
                     {
                         targetSymbol.Activate();
@@ -6151,13 +6460,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                 var messages = new List<string> { journalMessage };
                 if (!string.IsNullOrWhiteSpace(result.FatalError)) messages.Add(result.FatalError);
                 messages.AddRange(result.Errors);
-                TaskDialog.Show("Замена типа перемычек", string.Join(Environment.NewLine, messages));
+                TaskDialog.Show("Замена перемычек", string.Join(Environment.NewLine, messages));
             }
         }
 
         public string GetName()
         {
-            return "Замена типов существующих перемычек v3";
+            return "Замена существующих перемычек v3";
         }
     }
 
