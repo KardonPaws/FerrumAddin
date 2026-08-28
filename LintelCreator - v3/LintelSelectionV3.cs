@@ -109,6 +109,10 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int WallWidthToleranceMm { get; set; }
         public bool HasExistingTypeDifference { get; set; }
         public string ExistingTypeDifferenceText { get; set; }
+        public string LeftSupportPadTypeName { get; set; }
+        public string RightSupportPadTypeName { get; set; }
+        public bool SupportPadsInitialized { get; set; }
+        public string SupportPadSourceTypeName { get; set; }
         public List<LintelLayoutSegmentV3> LayoutSegments { get; set; } = new List<LintelLayoutSegmentV3>();
 
         public bool IsExact => WidthDeltaMm == 0;

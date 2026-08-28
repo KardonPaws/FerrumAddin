@@ -1346,28 +1346,74 @@
                     </Border>
 
                     <Expander Grid.Row="5"
-                              Header="Дополнительные параметры типа (опорные подушки, уголки, планка)"
                               Foreground="#344054"
+                              IsExpanded="{Binding IsSupportPadSettingsExpanded, Mode=TwoWay}"
                               IsEnabled="{Binding HasEditorVariant}">
-                        <Grid Margin="0,9,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="ОП_левая" Style="{StaticResource FieldLabelStyle}"/>
-                                <ComboBox ItemsSource="{Binding SupportPadOptions}"
-                                          SelectedItem="{Binding SelectedLeftSupportPad, Mode=TwoWay}"
-                                          Style="{StaticResource ComboStyle}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="ОП_правая" Style="{StaticResource FieldLabelStyle}"/>
-                                <ComboBox ItemsSource="{Binding SupportPadOptions}"
-                                          SelectedItem="{Binding SelectedRightSupportPad, Mode=TwoWay}"
-                                          Style="{StaticResource ComboStyle}"/>
-                            </StackPanel>
-                        </Grid>
+                        <Expander.Header>
+                            <TextBlock Text="{Binding SupportPadSettingsHeader}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#344054"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SupportPadsHaveExistingTypeDifferences}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Expander.Header>
+                        <StackPanel Margin="0,9,0,0">
+                            <Border CornerRadius="4" Padding="8" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SupportPadsHaveExistingTypeDifferences}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{StaticResource WarningBrush}"/>
+                                                <Setter Property="Background" Value="{StaticResource WarningLightBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="ОП_левая" Style="{StaticResource FieldLabelStyle}"/>
+                                        <ComboBox ItemsSource="{Binding SupportPadOptions}"
+                                                  SelectedItem="{Binding SelectedLeftSupportPad, Mode=TwoWay}"
+                                                  Style="{StaticResource ComboStyle}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="ОП_правая" Style="{StaticResource FieldLabelStyle}"/>
+                                        <ComboBox ItemsSource="{Binding SupportPadOptions}"
+                                                  SelectedItem="{Binding SelectedRightSupportPad, Mode=TwoWay}"
+                                                  Style="{StaticResource ComboStyle}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="{Binding SupportPadDifferencesText}"
+                                       Foreground="{StaticResource WarningBrush}"
+                                       Margin="0,5,0,0"
+                                       TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SupportPadsHaveExistingTypeDifferences}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
                     </Expander>
                 </Grid>
             </Border>
