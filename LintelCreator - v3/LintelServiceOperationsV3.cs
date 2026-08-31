@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using View = Autodesk.Revit.DB.View;
@@ -48,6 +49,35 @@ namespace FerrumAddinDev.LintelCreator_v3
 
     public class PlaceSectionsV3 : IExternalEventHandler
     {
+        private const string ScheduleAboveName = "Ведомость_Пр_выше 0,00";
+        private const string ScheduleBelowName = "Ведомость_Пр_ниже 0,00";
+
+        private sealed class PlacementReport
+        {
+            public string GroupName { get; set; }
+            public string ExpectedScheduleName { get; set; }
+            public string FoundScheduleName { get; set; }
+            public int ScheduleInstanceCount { get; set; }
+            public int TotalSections { get; set; }
+            public List<string> Placed { get; } = new List<string>();
+            public List<string> AlreadyOnCurrentSheet { get; } = new List<string>();
+            public List<string> OnOtherSheets { get; } = new List<string>();
+            public List<string> SkippedWithoutSchedule { get; } = new List<string>();
+            public List<string> CannotBePlaced { get; } = new List<string>();
+            public List<string> Errors { get; } = new List<string>();
+            public List<string> Warnings { get; } = new List<string>();
+            public List<string> RolledBack { get; } = new List<string>();
+
+            public bool ScheduleFound => !string.IsNullOrEmpty(FoundScheduleName);
+
+            public int SkippedCount => AlreadyOnCurrentSheet.Count
+                                       + OnOtherSheets.Count
+                                       + SkippedWithoutSchedule.Count
+                                       + CannotBePlaced.Count
+                                       + Errors.Count
+                                       + RolledBack.Count;
+        }
+
         public void Execute(UIApplication uiApp)
         {
             Document doc = uiApp.ActiveUIDocument.Document;
@@ -55,86 +85,337 @@ namespace FerrumAddinDev.LintelCreator_v3
             ViewSheet activeSheet = doc.ActiveView as ViewSheet;
             if (activeSheet == null)
             {
-                MessageBox.Show("Активный вид не является листом.", "Ошибка");
+                TaskDialog.Show(
+                    "Размещение разрезов",
+                    "Размещение не выполнено.\n\nОткройте лист, на котором должны быть размещены разрезы, и повторите команду.");
                 return;
             }
 
-            using (Transaction trans = new Transaction(doc, "Размещение разрезов"))
+            // Получение всех ScheduleSheetInstance на активном листе.
+            List<ScheduleSheetInstance> scheduleInstances = new FilteredElementCollector(doc, activeSheet.Id)
+                .OfClass(typeof(ScheduleSheetInstance))
+                .Cast<ScheduleSheetInstance>()
+                .ToList();
+
+            // Группировка ScheduleSheetInstance по имени ведомости. Некорректные экземпляры
+            // без связанной спецификации не должны прерывать выполнение всей команды.
+            Dictionary<string, List<ScheduleSheetInstance>> scheduleGroups = scheduleInstances
+                .Select(s => new { Instance = s, Schedule = doc.GetElement(s.ScheduleId) })
+                .Where(x => x.Schedule != null && !string.IsNullOrWhiteSpace(x.Schedule.Name))
+                .GroupBy(x => x.Schedule.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => x.Instance).OrderBy(s => s.SegmentIndex).ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            // Получение всех разрезов из документа.
+            List<ViewSection> sections = new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewSection))
+                .Cast<ViewSection>()
+                .ToList();
+
+            // 12.02.26 - марки под углом + нумерация + разрезы.
+            int ExtractNumber(string name)
             {
-                trans.Start();
-
-                // Получение всех ScheduleSheetInstance на активном листе
-                var scheduleInstances = new FilteredElementCollector(doc, activeSheet.Id)
-                    .OfClass(typeof(ScheduleSheetInstance))
-                    .Cast<ScheduleSheetInstance>()
-                    .ToList();
-
-                // Группировка ScheduleSheetInstance по имени ведомости
-                var scheduleGroups = scheduleInstances
-                    .GroupBy(s => doc.GetElement(s.ScheduleId).Name)
-                    .ToDictionary(g => g.Key, g => g.OrderBy(s => s.SegmentIndex).ToList());
-
-                // Получение всех разрезов из документа
-                var sections = new FilteredElementCollector(doc)
-                    .OfClass(typeof(ViewSection))
-                    .Cast<ViewSection>()
-                    .ToList();
-
-                // Фильтрация разрезов по именам ("выше 0" или "ниже 0")
-                //12.02.26 - марки под углом + нумерация + разрезы
-                int ExtractNumber(string name)
-                {
-                    var match = Regex.Match(name, @"Пр-(\d+)");
-                    return match.Success ? int.Parse(match.Groups[1].Value) : int.MaxValue;
-                }
-
-                var sectionsAbove = sections
-                    .Where(s => s.Name.Contains("выше 0"))
-                    .OrderBy(s => ExtractNumber(s.Name))
-                    .ToList();
-
-                var sectionsBelow = sections
-                    .Where(s => s.Name.Contains("ниже 0"))
-                    .OrderBy(s => ExtractNumber(s.Name))
-                    .ToList();
-
-                // Размещение разрезов на листе
-                placeSections(doc, sectionsAbove, scheduleGroups, "Ведомость_Пр_выше 0,00");
-                placeSections(doc, sectionsBelow, scheduleGroups, "Ведомость_Пр_ниже 0,00");
-
-                trans.Commit();
+                Match match = Regex.Match(name ?? string.Empty, @"Пр-(\d+)");
+                return match.Success ? int.Parse(match.Groups[1].Value) : int.MaxValue;
             }
+
+            List<ViewSection> sectionsAbove = sections
+                .Where(s => s.Name.IndexOf("выше 0", StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(s => ExtractNumber(s.Name))
+                .ThenBy(s => s.Name)
+                .ToList();
+
+            List<ViewSection> sectionsBelow = sections
+                .Where(s => s.Name.IndexOf("ниже 0", StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(s => ExtractNumber(s.Name))
+                .ThenBy(s => s.Name)
+                .ToList();
+
+            Dictionary<ElementId, List<Viewport>> viewportsByViewId = new FilteredElementCollector(doc)
+                .OfClass(typeof(Viewport))
+                .Cast<Viewport>()
+                .GroupBy(v => v.ViewId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            ElementType viewportType = new FilteredElementCollector(doc)
+                .OfClass(typeof(ElementType))
+                .Cast<ElementType>()
+                .FirstOrDefault(x => string.Equals(x.FamilyName, "Видовой экран", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals(x.Name, "Без названия", StringComparison.OrdinalIgnoreCase));
+
+            List<PlacementReport> reports = new List<PlacementReport>();
+            string fatalError = null;
+
+            try
+            {
+                using (Transaction trans = new Transaction(doc, "Размещение разрезов"))
+                {
+                    trans.Start();
+
+                    reports.Add(PlaceSections(
+                        doc,
+                        activeSheet,
+                        sectionsAbove,
+                        scheduleGroups,
+                        ScheduleAboveName,
+                        "Разрезы выше 0",
+                        viewportType?.Id,
+                        viewportsByViewId));
+
+                    reports.Add(PlaceSections(
+                        doc,
+                        activeSheet,
+                        sectionsBelow,
+                        scheduleGroups,
+                        ScheduleBelowName,
+                        "Разрезы ниже 0",
+                        viewportType?.Id,
+                        viewportsByViewId));
+
+                    if (trans.Commit() != TransactionStatus.Committed)
+                        throw new InvalidOperationException("Revit не зафиксировал транзакцию размещения.");
+                }
+            }
+            catch (Exception ex)
+            {
+                fatalError = ex.Message;
+                foreach (PlacementReport report in reports)
+                {
+                    report.RolledBack.AddRange(report.Placed);
+                    report.Placed.Clear();
+                }
+            }
+
+            ShowPlacementReport(activeSheet, reports, fatalError);
         }
 
-        private void placeSections(Document doc, List<ViewSection> sections,
-        Dictionary<string, List<ScheduleSheetInstance>> scheduleGroups, string scheduleName)
+        private PlacementReport PlaceSections(
+            Document doc,
+            ViewSheet activeSheet,
+            List<ViewSection> sections,
+            Dictionary<string, List<ScheduleSheetInstance>> scheduleGroups,
+            string scheduleName,
+            string groupName,
+            ElementId viewportTypeId,
+            Dictionary<ElementId, List<Viewport>> viewportsByViewId)
         {
-            //18.02.26 - изменения в перемычках
-            if (!scheduleGroups.Keys.Any(x => x.Contains(scheduleName))) return;
-            ElementId elId = new FilteredElementCollector(doc)
-                .OfClass(typeof(ElementType))
-                .Where(x => (x as ElementType).FamilyName == "Видовой экран")
-                .Where(x => x.Name == "Без названия")
-                .First().Id;
-
-            var scheduleInstances = scheduleGroups[scheduleGroups.Keys.Where(x => x.Contains(scheduleName)).FirstOrDefault()];
-            int sectionIndex = 0;
-
-            // Использовать только первую ScheduleSheetInstance для размещения
-            if (scheduleInstances.Count > 0)
+            PlacementReport report = new PlacementReport
             {
-                var scheduleInstance = scheduleInstances.First();
-                XYZ basePoint = scheduleInstance.Point;
-                double yOffset = 0;
+                GroupName = groupName,
+                ExpectedScheduleName = scheduleName,
+                TotalSections = sections.Count
+            };
 
-                foreach (var section in sections)
+            List<KeyValuePair<string, List<ScheduleSheetInstance>>> matchingScheduleGroups = scheduleGroups
+                .Where(x => x.Key.IndexOf(scheduleName, StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(x => x.Key)
+                .ToList();
+
+            List<ScheduleSheetInstance> matchingScheduleInstances = null;
+            if (matchingScheduleGroups.Count > 0)
+            {
+                KeyValuePair<string, List<ScheduleSheetInstance>> selectedGroup = matchingScheduleGroups.First();
+                report.FoundScheduleName = selectedGroup.Key;
+                report.ScheduleInstanceCount = selectedGroup.Value.Count;
+                matchingScheduleInstances = selectedGroup.Value;
+
+                if (matchingScheduleGroups.Count > 1)
                 {
-                    // Разместить разрез на листе
-                    Viewport view = Viewport.Create(doc, doc.ActiveView.Id, section.Id, new XYZ(basePoint.X + 0.16, basePoint.Y - 0.15 - yOffset, basePoint.Z));
-                    view.ChangeTypeId(elId);
-                    yOffset += 0.166; // Смещение для следующего разреза
+                    report.Warnings.Add(
+                        "Найдено несколько подходящих спецификаций: "
+                        + string.Join(", ", matchingScheduleGroups.Select(x => "«" + x.Key + "»"))
+                        + ". Для привязки использована «" + selectedGroup.Key + "». ");
                 }
             }
+
+            XYZ basePoint = matchingScheduleInstances?.FirstOrDefault()?.Point;
+
+            for (int sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
+            {
+                ViewSection section = sections[sectionIndex];
+                List<Viewport> existingViewports;
+
+                if (viewportsByViewId.TryGetValue(section.Id, out existingViewports)
+                    && existingViewports.Count > 0)
+                {
+                    if (existingViewports.Any(v => v.SheetId.Equals(activeSheet.Id)))
+                    {
+                        report.AlreadyOnCurrentSheet.Add(section.Name);
+                    }
+                    else
+                    {
+                        List<string> sheetNames = existingViewports
+                            .Select(v => GetSheetName(doc, v.SheetId))
+                            .Distinct()
+                            .OrderBy(x => x)
+                            .ToList();
+                        report.OnOtherSheets.Add(section.Name + " → " + string.Join(", ", sheetNames));
+                    }
+
+                    continue;
+                }
+
+                if (!report.ScheduleFound || basePoint == null)
+                {
+                    report.SkippedWithoutSchedule.Add(section.Name);
+                    continue;
+                }
+
+                if (viewportTypeId == null || viewportTypeId.Equals(ElementId.InvalidElementId))
+                {
+                    report.CannotBePlaced.Add(section.Name + " — не найден тип видового экрана «Без названия».");
+                    continue;
+                }
+
+                bool canAddToSheet;
+                try
+                {
+                    canAddToSheet = Viewport.CanAddViewToSheet(doc, activeSheet.Id, section.Id);
+                }
+                catch (Exception ex)
+                {
+                    report.Errors.Add(section.Name + " — не удалось проверить возможность размещения: " + ex.Message);
+                    continue;
+                }
+
+                if (!canAddToSheet)
+                {
+                    report.CannotBePlaced.Add(
+                        section.Name + " — Revit не разрешает разместить этот вид на листе (проверьте шаблон вида и существующие размещения). ");
+                    continue;
+                }
+
+                // Индекс учитывается даже для пропущенных видов: оставшиеся разрезы сохраняют
+                // соответствие строкам спецификации и не сдвигаются на их место.
+                double yOffset = sectionIndex * 0.166;
+                XYZ placementPoint = new XYZ(basePoint.X + 0.16, basePoint.Y - 0.15 - yOffset, basePoint.Z);
+
+                using (SubTransaction subTransaction = new SubTransaction(doc))
+                {
+                    try
+                    {
+                        subTransaction.Start();
+                        Viewport viewport = Viewport.Create(doc, activeSheet.Id, section.Id, placementPoint);
+                        viewport.ChangeTypeId(viewportTypeId);
+                        if (subTransaction.Commit() == TransactionStatus.Committed)
+                            report.Placed.Add(section.Name);
+                        else
+                            report.Errors.Add(section.Name + " — Revit отменил размещение вида.");
+                    }
+                    catch (Exception ex)
+                    {
+                        if (subTransaction.GetStatus() == TransactionStatus.Started)
+                            subTransaction.RollBack();
+
+                        report.Errors.Add(section.Name + " — ошибка размещения: " + ex.Message);
+                    }
+                }
+            }
+
+            return report;
+        }
+
+        private static string GetSheetName(Document doc, ElementId sheetId)
+        {
+            ViewSheet sheet = doc.GetElement(sheetId) as ViewSheet;
+            if (sheet == null)
+                return "лист с Id " + sheetId.Value;
+
+            return "лист «" + sheet.SheetNumber + " — " + sheet.Name + "»";
+        }
+
+        private static void ShowPlacementReport(
+            ViewSheet activeSheet,
+            List<PlacementReport> reports,
+            string fatalError)
+        {
+            int totalSections = reports.Sum(x => x.TotalSections);
+            int placedCount = reports.Sum(x => x.Placed.Count);
+            int skippedCount = reports.Sum(x => x.SkippedCount);
+            int errorCount = reports.Sum(x => x.Errors.Count) + (fatalError == null ? 0 : 1);
+            int missingScheduleCount = reports.Count(x => !x.ScheduleFound);
+
+            StringBuilder mainContent = new StringBuilder();
+            mainContent.AppendLine("Лист: " + activeSheet.SheetNumber + " — " + activeSheet.Name);
+            mainContent.AppendLine("Найдено разрезов: " + totalSections);
+            mainContent.AppendLine("Размещено: " + placedCount);
+            mainContent.AppendLine("Пропущено: " + skippedCount);
+            mainContent.AppendLine("Ошибок: " + errorCount);
+
+            if (missingScheduleCount > 0)
+            {
+                mainContent.AppendLine();
+                mainContent.AppendLine(
+                    "Нет спецификаций для размещения: "
+                    + string.Join(", ", reports.Where(x => !x.ScheduleFound).Select(x => "«" + x.ExpectedScheduleName + "»"))
+                    + ".");
+            }
+
+            if (totalSections == 0 && fatalError == null)
+            {
+                mainContent.AppendLine();
+                mainContent.AppendLine("В проекте не найдены разрезы с «выше 0» или «ниже 0» в имени.");
+            }
+
+            StringBuilder details = new StringBuilder();
+            foreach (PlacementReport report in reports)
+            {
+                details.AppendLine(report.GroupName);
+                details.AppendLine("Разрезов найдено: " + report.TotalSections);
+                details.AppendLine(report.ScheduleFound
+                    ? "Спецификация: «" + report.FoundScheduleName + "» (экземпляров/сегментов на листе: " + report.ScheduleInstanceCount + ")."
+                    : "Спецификация: НЕ НАЙДЕНА. Ожидалась «" + report.ExpectedScheduleName + "».");
+
+                AppendItems(details, "Размещено", report.Placed);
+                AppendItems(details, "Уже было на текущем листе — пропущено", report.AlreadyOnCurrentSheet);
+                AppendItems(details, "На других листах — пропущено", report.OnOtherSheets);
+                AppendItems(details, "Без нужной спецификации — пропущено", report.SkippedWithoutSchedule);
+                AppendItems(details, "Невозможно разместить — пропущено", report.CannotBePlaced);
+                AppendItems(details, "Ошибки", report.Errors);
+                AppendItems(details, "Предупреждения", report.Warnings);
+                AppendItems(details, "Размещение отменено из-за общей ошибки", report.RolledBack);
+                details.AppendLine();
+            }
+
+            if (!string.IsNullOrWhiteSpace(fatalError))
+            {
+                details.AppendLine("Общая ошибка транзакции");
+                details.AppendLine("• " + fatalError);
+            }
+
+            bool hasWarnings = skippedCount > 0
+                               || missingScheduleCount > 0
+                               || errorCount > 0
+                               || reports.Any(x => x.Warnings.Count > 0)
+                               || (totalSections == 0 && fatalError == null);
+
+            TaskDialog dialog = new TaskDialog("Размещение разрезов")
+            {
+                MainInstruction = fatalError != null
+                    ? "Размещение не завершено: изменения отменены."
+                    : hasWarnings
+                        ? "Размещение завершено с уведомлениями."
+                        : "Все разрезы успешно размещены.",
+                MainContent = mainContent.ToString().TrimEnd(),
+                ExpandedContent = details.ToString().TrimEnd(),
+                MainIcon = hasWarnings
+                    ? TaskDialogIcon.TaskDialogIconWarning
+                    : TaskDialogIcon.TaskDialogIconInformation,
+                CommonButtons = TaskDialogCommonButtons.Close
+            };
+            dialog.Show();
+        }
+
+        private static void AppendItems(StringBuilder builder, string title, List<string> items)
+        {
+            if (items.Count == 0)
+                return;
+
+            builder.AppendLine(title + " (" + items.Count + "):");
+            foreach (string item in items)
+                builder.AppendLine("• " + item);
         }
 
         public string GetName()
