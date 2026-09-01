@@ -367,8 +367,8 @@ namespace FerrumAddinDev
                     }
                     else
                     {
-                        a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
-                        a.ControlledApplication.ElementTypeDuplicating += ControlledApplication_ElementTypeDuplicating;
+                        //a.ControlledApplication.FamilyLoadingIntoDocument += ControlledApplication_FamilyLoadingIntoDocument;
+                        //a.ControlledApplication.ElementTypeDuplicating += ControlledApplication_ElementTypeDuplicating;
                     }
 
                     a.ControlledApplication.DocumentOpening += ControlledApplication_DocumentOpening;
@@ -422,8 +422,8 @@ namespace FerrumAddinDev
         {
             try
             {
-                a.ControlledApplication.FamilyLoadingIntoDocument -= ControlledApplication_FamilyLoadingIntoDocument;
-                a.ControlledApplication.ElementTypeDuplicating -= ControlledApplication_ElementTypeDuplicating;
+               // a.ControlledApplication.FamilyLoadingIntoDocument -= ControlledApplication_FamilyLoadingIntoDocument;
+               // a.ControlledApplication.ElementTypeDuplicating -= ControlledApplication_ElementTypeDuplicating;
             }
             catch
             {
