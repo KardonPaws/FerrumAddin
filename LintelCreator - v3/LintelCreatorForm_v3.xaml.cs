@@ -20,6 +20,8 @@ namespace FerrumAddinDev.LintelCreator_v3
     {
         private readonly OpeningSelectionHandlerV3 _selectionHandler;
         private readonly RevitExternalEvent _selectionEvent;
+        private readonly OpeningNavigationHandlerV3 _navigationHandler;
+        private readonly RevitExternalEvent _navigationEvent;
         private readonly OpeningReloadHandlerV3 _reloadHandler;
         private readonly RevitExternalEvent _reloadEvent;
         private readonly LintelPlacementHandlerV3 _placementHandler;
@@ -43,11 +45,15 @@ namespace FerrumAddinDev.LintelCreator_v3
         private bool _initialCalculationStarted;
         private DateTime _lastProgressRenderUtc = DateTime.MinValue;
         private bool _reloadPending;
+        private bool _navigationPending;
+        private bool _suppressModelSelectionSync;
 
         public LintelCreatorForm_v3(
             LintelOpeningWorkspaceV3 workspace,
             OpeningSelectionHandlerV3 selectionHandler,
             RevitExternalEvent selectionEvent,
+            OpeningNavigationHandlerV3 navigationHandler,
+            RevitExternalEvent navigationEvent,
             OpeningReloadHandlerV3 reloadHandler,
             RevitExternalEvent reloadEvent,
             LintelPlacementHandlerV3 placementHandler,
@@ -65,6 +71,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             Workspace = workspace;
             _selectionHandler = selectionHandler;
             _selectionEvent = selectionEvent;
+            _navigationHandler = navigationHandler;
+            _navigationEvent = navigationEvent;
             _reloadHandler = reloadHandler;
             _reloadEvent = reloadEvent;
             _placementHandler = placementHandler;
@@ -221,15 +229,114 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private void OpeningGroups_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (Workspace?.SelectedGroup == null || _isClosing) return;
+            if (Workspace?.SelectedGroup == null || _isClosing || _suppressModelSelectionSync) return;
             _selectionHandler.Request(Workspace.SelectedGroup.ElementIds);
             _selectionEvent.Raise();
+        }
+
+        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+        private void LocateOpening_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isClosing || _navigationPending || Workspace == null) return;
+
+            _navigationHandler.Request(
+                Workspace.IsExistingLintelsTabActive,
+                Workspace.SelectedGroup,
+                NavigationCompleted);
+            _navigationPending = true;
+            try
+            {
+                if (_navigationEvent.Raise() == RevitExternalEventRequest.Accepted) return;
+                _navigationPending = false;
+                MessageBox.Show(
+                    this,
+                    "Revit не принял запрос на переход между моделью и списком.",
+                    "Поиск проёма",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            catch (Exception exception)
+            {
+                _navigationPending = false;
+                MessageBox.Show(
+                    this,
+                    exception.Message,
+                    "Поиск проёма",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void NavigationCompleted(OpeningNavigationResultV3 result)
+        {
+            _navigationPending = false;
+            if (_isClosing || result == null) return;
+            if (!string.IsNullOrWhiteSpace(result.Message))
+            {
+                MessageBox.Show(
+                    this,
+                    result.Message,
+                    "Поиск проёма",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+            if (result.GroupToFocus == null) return;
+
+            OpeningGroupCardV3 group = result.GroupToFocus;
+            ListBox targetList = group.HasExistingLintel
+                ? ExistingLintelGroupsListBox
+                : OpeningGroupsListBox;
+
+            _suppressModelSelectionSync = true;
+            try
+            {
+                int targetTabIndex = group.HasExistingLintel ? 1 : 0;
+                if (OpeningTabs.SelectedIndex != targetTabIndex)
+                    OpeningTabs.SelectedIndex = targetTabIndex;
+
+                bool isVisible = group.HasExistingLintel
+                    ? Workspace.ExistingLintelGroups.Contains(group)
+                    : Workspace.VisibleGroups.Contains(group);
+                if (!isVisible)
+                {
+                    Workspace.SearchText = string.Empty;
+                    Workspace.StatusFilter = null;
+                    StatusFilterComboBox.SelectedIndex = 0;
+                    Workspace.RefreshView();
+                }
+
+                Workspace.SelectedGroup = group;
+                targetList.SelectedItem = group;
+                targetList.ScrollIntoView(group);
+            }
+            finally
+            {
+                _suppressModelSelectionSync = false;
+            }
+
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (_isClosing) return;
+                targetList.UpdateLayout();
+                targetList.ScrollIntoView(group);
+                var item = targetList.ItemContainerGenerator.ContainerFromItem(group) as ListBoxItem;
+                item?.Focus();
+            }));
         }
 
         private void OpeningTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (!ReferenceEquals(e.OriginalSource, sender) || Workspace == null) return;
-            Workspace.IsExistingLintelsTabActive = (sender as TabControl)?.SelectedIndex == 1;
+            _suppressModelSelectionSync = true;
+            try
+            {
+                Workspace.IsExistingLintelsTabActive = (sender as TabControl)?.SelectedIndex == 1;
+            }
+            finally
+            {
+                _suppressModelSelectionSync = false;
+            }
         }
 
         private void ExistingLintelGroups_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -238,9 +345,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             DependencyObject source = e.OriginalSource as DependencyObject;
             var item = ItemsControl.ContainerFromElement(ExistingLintelGroupsListBox, source) as ListBoxItem;
             var group = item?.DataContext as OpeningGroupCardV3;
-            if (group == null || ReferenceEquals(Workspace.SelectedGroup, group)) return;
+            if (group == null) return;
 
-            Workspace.SelectedGroup = group;
+            if (!ReferenceEquals(Workspace.SelectedGroup, group))
+                Workspace.SelectedGroup = group;
             _selectionHandler.Request(group.ElementIds);
             _selectionEvent.Raise();
             e.Handled = true;
@@ -482,6 +590,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             try
             {
                 _selectionEvent?.Dispose();
+                _navigationEvent?.Dispose();
                 _reloadEvent?.Dispose();
                 _placementEvent?.Dispose();
                 _typeReplacementEvent?.Dispose();

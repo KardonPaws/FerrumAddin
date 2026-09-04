@@ -385,7 +385,8 @@
                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                  ToolTip="{Binding SearchHint}"
                                  Style="{StaticResource InputStyle}"/>
-                        <ComboBox Grid.Column="4"
+                        <ComboBox x:Name="StatusFilterComboBox"
+                                  Grid.Column="4"
                                   Style="{StaticResource ComboStyle}"
                                   SelectedIndex="0"
                                   SelectionChanged="StatusFilter_SelectionChanged">
@@ -407,12 +408,25 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <CheckBox Content="Выбрать все"
                                   VerticalAlignment="Center"
                                   Checked="SelectAll_Checked"
                                   Unchecked="SelectAll_Unchecked"/>
-                        <TextBlock Grid.Column="1"
+                        <Button Grid.Column="1"
+                                Width="32"
+                                Height="28"
+                                Padding="0"
+                                Content="🔍"
+                                FontFamily="Segoe UI Emoji"
+                                FontSize="14"
+                                Style="{StaticResource CompactButtonStyle}"
+                                IsEnabled="{Binding CanInteract}"
+                                Click="LocateOpening_Click"
+                                ToolTip="Найти выбранный в модели проём или перемычку. На вкладке существующих перемычек повторное нажатие выделяет только перемычки активной записи."/>
+                        <TextBlock Grid.Column="3"
                                    Text="{Binding SelectedCountText}"
                                    Style="{StaticResource CaptionStyle}"
                                    VerticalAlignment="Center"/>
@@ -1061,9 +1075,13 @@
                                     <Style TargetType="Grid">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding EditorHasExistingTypeDifferences}" Value="True">
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding EditorHasExistingTypeDifferences}" Value="True"/>
+                                                    <Condition Binding="{Binding IsExistingLintelsTabActive}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
+                                            </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Grid.Style>

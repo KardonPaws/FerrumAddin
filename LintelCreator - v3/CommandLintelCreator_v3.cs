@@ -26,6 +26,11 @@ namespace FerrumAddinDev.LintelCreator_v3
                 var workspace = new LintelOpeningWorkspaceV3(uiDocument.Document, uiDocument.Selection);
                 var selectionHandler = new OpeningSelectionHandlerV3();
                 ExternalEvent selectionEvent = ExternalEvent.Create(selectionHandler);
+                // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+                var navigationHandler = new OpeningNavigationHandlerV3(
+                    uiDocument.Document,
+                    workspace);
+                ExternalEvent navigationEvent = ExternalEvent.Create(navigationHandler);
                 var reloadHandler = new OpeningReloadHandlerV3(workspace);
                 ExternalEvent reloadEvent = ExternalEvent.Create(reloadHandler);
                 var placementHandler = new LintelPlacementHandlerV3(uiDocument.Document, workspace);
@@ -44,6 +49,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                     workspace,
                     selectionHandler,
                     selectionEvent,
+                    navigationHandler,
+                    navigationEvent,
                     reloadHandler,
                     reloadEvent,
                     placementHandler,
@@ -637,6 +644,7 @@ namespace FerrumAddinDev.LintelCreator_v3
     {
         public string Mark { get; set; }
         public string RevitFamilyName { get; set; }
+        public int LengthMm { get; set; }
         public int WidthMm { get; set; }
         public int GapAfterMm { get; set; }
         public bool IsBearing { get; set; }
@@ -762,34 +770,23 @@ namespace FerrumAddinDev.LintelCreator_v3
             RefreshExistingCompositeTypeCache(document);
 
             EditorPurposeOptions = new ObservableCollection<string> { "Несущая", "Ненесущая" };
+            // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
             TypeNameConflictOptions = new ObservableCollection<CompositeTypeNameConflictOptionV3>
             {
                 new CompositeTypeNameConflictOptionV3
                 {
-                    Action = CompositeTypeNameConflictActionV3.UseExisting,
-                    Name = "1. Использовать текущее",
-                    Description = "Разместить существующий тип без изменения его состава."
-                },
-                new CompositeTypeNameConflictOptionV3
-                {
                     Action = CompositeTypeNameConflictActionV3.ReplaceExisting,
-                    Name = "2. Заменить на новое",
+                    Name = "1. Заменить на новое",
                     Description = "Изменить состав существующего типа на выбранный вариант."
                 },
                 new CompositeTypeNameConflictOptionV3
                 {
                     Action = CompositeTypeNameConflictActionV3.AppendNumber,
-                    Name = "3. Добавить номер к имени",
+                    Name = "2. Добавить номер к имени",
                     Description = "Создать новый тип с суффиксом _2, _3 и далее."
-                },
-                new CompositeTypeNameConflictOptionV3
-                {
-                    Action = CompositeTypeNameConflictActionV3.Cancel,
-                    Name = "4. Отменить",
-                    Description = "Не размещать группы с конфликтующим именем."
                 }
             };
-            _selectedTypeNameConflictOption = TypeNameConflictOptions.Last();
+            _selectedTypeNameConflictOption = TypeNameConflictOptions.First();
             SupportPadOptions = CollectSupportPadOptions(document);
             _selectedLeftSupportPad = SupportPadOptions.FirstOrDefault();
             _selectedRightSupportPad = SupportPadOptions.FirstOrDefault();
@@ -866,6 +863,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             set
             {
                 if (ReferenceEquals(_selectedGroup, value)) return;
+                PersistSelectedVariantSupportPads();
                 _selectedGroup = value;
                 RaisePropertyChanged(nameof(SelectedGroup));
                 RaisePropertyChanged(nameof(SelectedOpeningGroup));
@@ -1725,6 +1723,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaiseSummaryProperties();
         }
 
+        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
         private void ApplyExistingLintelAssessment(
             OpeningGroupCardV3 group,
             LintelSelectionResultV3 result)
@@ -1736,27 +1735,6 @@ namespace FerrumAddinDev.LintelCreator_v3
             group.ExistingLintelValidationError = string.Join("; ", validationErrors);
             group.ExistingLintelDiffersFromFirstVariant = false;
             group.ExistingLintelComparisonWarning = string.Empty;
-
-            LintelSelectionVariantV3 firstVariant = group.CalculatedVariants.FirstOrDefault();
-            if (firstVariant != null)
-            {
-                List<LintelPlacementComponentRequestV3> selectedComponents =
-                    CreatePlacementComponents(firstVariant);
-                ExistingLintelTypeOptionV3 comparisonType = currentType
-                    ?? CreateExistingTypeOptionFromGroup(group);
-                List<string> differences = GetCachedCompositionDifferences(
-                    comparisonType,
-                    selectedComponents);
-                if (differences.Count > 0)
-                {
-                    group.ExistingLintelDiffersFromFirstVariant = true;
-                    group.ExistingLintelComparisonWarning =
-                        "Существующая перемычка отличается от варианта 1: "
-                        + string.Join("; ", differences) + ".";
-                    firstVariant.HasExistingTypeDifference = true;
-                    firstVariant.ExistingTypeDifferenceText = group.ExistingLintelComparisonWarning;
-                }
-            }
 
             if (validationErrors.Count > 0)
             {
@@ -1770,21 +1748,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 group.StatusText = "Варианты не найдены";
                 group.CalculationMessage = result?.Message ?? "Варианты не найдены.";
             }
-            else if (group.ExistingLintelDiffersFromFirstVariant)
-            {
-                group.Status = OpeningStatusV3.Warning;
-                group.StatusText = "Отличается от варианта 1";
-                group.CalculationMessage = (group.CalculationBaseMessage ?? string.Empty)
-                                           + (string.IsNullOrWhiteSpace(group.CalculationBaseMessage)
-                                               ? string.Empty
-                                               : " ")
-                                           + "Предупреждение: "
-                                           + group.ExistingLintelComparisonWarning;
-            }
             else
             {
                 group.Status = OpeningStatusV3.Success;
-                group.StatusText = "Соответствует варианту 1";
+                group.StatusText = "Доступна замена типа";
                 group.CalculationMessage = group.CalculationBaseMessage;
             }
         }
@@ -2089,10 +2056,24 @@ namespace FerrumAddinDev.LintelCreator_v3
             int visibleIndex = Variants.IndexOf(previousVariant);
             if (storedIndex < 0 || visibleIndex < 0) return false;
 
-            group.CalculatedVariants[storedIndex] = savedVariant;
-            group.ActiveVariant = savedVariant;
-            Variants[visibleIndex] = savedVariant;
-            SelectedVariant = savedVariant;
+            // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+            _isRestoringEditor = true;
+            try
+            {
+                group.CalculatedVariants[storedIndex] = savedVariant;
+                group.ActiveVariant = savedVariant;
+                Variants[visibleIndex] = savedVariant;
+                SelectedVariant = savedVariant;
+            }
+            finally
+            {
+                _isRestoringEditor = false;
+            }
+
+            ApplySupportPadSelections(
+                savedVariant.LeftSupportPadTypeName,
+                savedVariant.RightSupportPadTypeName);
+            RaiseEditorProperties();
             SelectionMessage = "Изменения варианта " + savedVariant.Rank + " сохранены для выбранного проёма.";
             RaiseVariantsProperties();
             return true;
@@ -2144,7 +2125,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 FamilyName = useSelectedReadyType ? selectedReadyType.FamilyName : null,
                 TypeName = requestedTypeName,
                 NameConflictAction = SelectedTypeNameConflictOption?.Action
-                                     ?? CompositeTypeNameConflictActionV3.UseExisting,
+                                     ?? CompositeTypeNameConflictActionV3.ReplaceExisting,
                 HasExistingTypeDifference = sameNameDifferences.Count > 0,
                 ExistingTypeDifferenceText = sameNameDifferences.Count == 0
                     ? string.Empty
@@ -2254,7 +2235,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             var request = new LintelPlacementRequestV3
             {
                 NameConflictAction = SelectedTypeNameConflictOption?.Action
-                                     ?? CompositeTypeNameConflictActionV3.Cancel
+                                     ?? CompositeTypeNameConflictActionV3.ReplaceExisting
             };
             foreach (OpeningGroupCardV3 group in _allGroups
                          .Where(item => item.IsChecked && !item.HasExistingLintel))
@@ -2450,6 +2431,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 {
                     Mark = item.Mark,
                     RevitFamilyName = item.RevitFamilyName,
+                    LengthMm = item.LengthMm,
                     WidthMm = segment.WidthMm,
                     IsBearing = segment.IsBearing,
                     MaximumOpeningWidthMm = item.MaximumOpeningWidthMm,
@@ -2465,12 +2447,11 @@ namespace FerrumAddinDev.LintelCreator_v3
             string compositeTypeName)
         {
             if (variant == null) return;
-            if (variant.SupportPadsInitialized
-                && string.Equals(
-                    variant.SupportPadSourceTypeName,
-                    compositeTypeName,
-                    StringComparison.Ordinal))
+            if (variant.SupportPadsInitialized)
+            {
+                variant.SupportPadSourceTypeName = compositeTypeName;
                 return;
+            }
 
             ExistingLintelTypeOptionV3 existingType = FindExistingTypeOption(compositeTypeName);
             variant.LeftSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(
@@ -2495,11 +2476,17 @@ namespace FerrumAddinDev.LintelCreator_v3
                 return;
 
             string typeName = BuildPlacementTypeName(group, components);
+            EnsureVariantSupportPads(variant, typeName);
             ExistingLintelTypeOptionV3 existingType = FindExistingTypeOption(typeName);
             if (existingType == null)
                 return;
 
-            List<string> differences = GetCachedCompositionDifferences(existingType, components);
+            List<string> differences = GetCachedCompositionDifferences(
+                existingType,
+                components,
+                variant.LeftSupportPadTypeName,
+                variant.RightSupportPadTypeName,
+                true);
             if (differences.Count == 0)
                 return;
 
@@ -2507,7 +2494,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             variant.ExistingTypeDifferenceText = "Имя типа «" + typeName
                                                  + "» уже существует, но состав отличается: "
                                                  + string.Join("; ", differences) + "."
-                                                 + " При размещении будет использован существующий тип.";
+                                                 + " При размещении существующий тип будет обновлён.";
         }
 
         private List<string> GetCachedCompositionDifferences(
@@ -3260,11 +3247,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             string sourceKey = GetSupportPadSourceKey(existingType, editorTypeName);
             if (SelectedVariant != null)
             {
-                bool sourceChanged = !string.Equals(
-                    SelectedVariant.SupportPadSourceTypeName,
-                    editorTypeName,
-                    StringComparison.Ordinal);
-                if (force || !SelectedVariant.SupportPadsInitialized || sourceChanged)
+                if (force || !SelectedVariant.SupportPadsInitialized)
                 {
                     left = existingType?.LeftSupportPadTypeName;
                     right = existingType?.RightSupportPadTypeName;
@@ -3275,6 +3258,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 }
                 left = SelectedVariant.LeftSupportPadTypeName;
                 right = SelectedVariant.RightSupportPadTypeName;
+                SelectedVariant.SupportPadSourceTypeName = editorTypeName;
                 _supportPadSelectionSourceKey = sourceKey;
                 _supportPadSelectionEdited = true;
             }
@@ -3299,6 +3283,18 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
 
             ApplySupportPadSelections(left, right);
+        }
+        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+        private void PersistSelectedVariantSupportPads()
+        {
+            if (_selectedVariant == null) return;
+
+            _selectedVariant.LeftSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(
+                _selectedLeftSupportPad);
+            _selectedVariant.RightSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(
+                _selectedRightSupportPad);
+            _selectedVariant.SupportPadsInitialized = true;
+            _selectedVariant.SupportPadSourceTypeName = EditorTypeName;
         }
 
         private static string GetSupportPadSourceKey(
@@ -3368,6 +3364,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(IsSupportPadSettingsExpanded));
         }
 
+        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
         private void UpdateEditorExistingTypeDifferences()
         {
             if (_isUpdatingEditorDifferences) return;
@@ -3386,12 +3383,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _rightSupportPadHasExistingTypeDifference = false;
                 _supportPadDifferencesText = string.Empty;
 
-                ExistingLintelTypeOptionV3 existingType = SelectedGroup?.HasExistingLintel == true
-                    ? FindCurrentExistingTypeOption(SelectedGroup)
-                      ?? CreateExistingTypeOptionFromGroup(SelectedGroup)
-                    : FindExistingEditorTypeOption(EditorTypeName);
-                if (existingType == null
-                    || (SelectedGroup?.HasExistingLintel != true && !EditorTypeExists))
+                ExistingLintelTypeOptionV3 existingType = FindExistingEditorTypeOption(EditorTypeName);
+                if (existingType == null || !EditorTypeExists)
                     return;
 
                 List<ExistingLintelComponentV3> existingComponents = existingType.Components
@@ -3976,6 +3969,25 @@ namespace FerrumAddinDev.LintelCreator_v3
 
             RaisePropertyChanged(nameof(VisibleGroups));
             RaisePropertyChanged(nameof(ExistingLintelGroups));
+        }
+        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+        internal List<OpeningGroupCardV3> FindGroupsForModelSelection(
+            IEnumerable<ElementId> selectedIds,
+            bool existingLintelsTab)
+        {
+            var selectedValues = new HashSet<long>(
+                (selectedIds ?? Enumerable.Empty<ElementId>())
+                .Where(id => id != null && id != ElementId.InvalidElementId)
+                .Select(id => id.Value));
+            if (selectedValues.Count == 0)
+                return new List<OpeningGroupCardV3>();
+
+            return _allGroups
+                .Where(group => group.HasExistingLintel == existingLintelsTab)
+                .Where(group => group.ElementIds.Any(id => selectedValues.Contains(id.Value))
+                                || existingLintelsTab
+                                && group.ExistingLintelIds.Any(id => selectedValues.Contains(id.Value)))
+                .ToList();
         }
 
         private List<OpeningGroupCardV3> ApplyViewFilters(IEnumerable<OpeningGroupCardV3> source)
@@ -5273,6 +5285,7 @@ namespace FerrumAddinDev.LintelCreator_v3
     internal static class LintelPlacementEngineV3
     {
         private const double MillimetersPerFoot = 304.8;
+        private const string MainLintelLengthParameterName = "Длина главной(первой) перемычки";
 
         public static LintelPlacementResultV3 Execute(
             Document document,
@@ -5303,68 +5316,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             var symbolsByGroup = new Dictionary<string, FamilySymbol>(StringComparer.Ordinal);
             var typeResolutionsByGroup = new Dictionary<string, CompositeTypeResolutionV3>(StringComparer.Ordinal);
             var typeErrors = new Dictionary<string, string>(StringComparer.Ordinal);
-            var groupsRequiringTypeChanges = new List<LintelPlacementGroupRequestV3>();
-            var preferredExistingSymbolsByName = new Dictionary<string, FamilySymbol>(StringComparer.Ordinal);
-            foreach (LintelPlacementGroupRequestV3 group in request.Groups)
-            {
-                if (!preferredExistingSymbolsByName.TryGetValue(
-                        group.CompositeTypeName,
-                        out FamilySymbol existing))
-                {
-                    existing = compositeSymbolsByName.TryGetValue(
-                            group.CompositeTypeName,
-                            out List<FamilySymbol> exactNameMatches)
-                        ? exactNameMatches
-                            .OrderByDescending(CountAvailableSlots)
-                            .ThenBy(symbol => symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
-                            .FirstOrDefault()
-                        : null;
-                    preferredExistingSymbolsByName[group.CompositeTypeName] = existing;
-                }
-                if (existing == null)
-                {
-                    groupsRequiringTypeChanges.Add(group);
-                    continue;
-                }
-
-                if (!group.HasExistingTypeDifference
-                    || request.NameConflictAction == CompositeTypeNameConflictActionV3.UseExisting)
-                {
-                    symbolsByGroup[group.GroupKey] = existing;
-                    typeResolutionsByGroup[group.GroupKey] = new CompositeTypeResolutionV3
-                    {
-                        Symbol = existing,
-                        ActualTypeName = existing.Name,
-                        HasConflict = group.HasExistingTypeDifference,
-                        ActionText = group.HasExistingTypeDifference
-                            ? "Использован текущий существующий тип без изменения."
-                            : "Использован существующий тип с совпадающим именем.",
-                        Differences = group.HasExistingTypeDifference
-                            ? group.ExistingTypeDifferenceText
-                            : string.Empty
-                    };
-                    continue;
-                }
-
-                if (request.NameConflictAction == CompositeTypeNameConflictActionV3.Cancel)
-                {
-                    string differences = group.ExistingTypeDifferenceText ?? string.Empty;
-                    typeResolutionsByGroup[group.GroupKey] = new CompositeTypeResolutionV3
-                    {
-                        ActualTypeName = group.CompositeTypeName,
-                        HasConflict = true,
-                        WasCancelled = true,
-                        ActionText = "Размещение конфликтующей группы отменено.",
-                        Differences = differences,
-                        Error = "Имя «" + group.CompositeTypeName
-                                + "» уже занято отличающимся типом. Размещение отменено согласно настройке."
-                    };
-                    typeErrors[group.GroupKey] = typeResolutionsByGroup[group.GroupKey].Error;
-                    continue;
-                }
-
-                groupsRequiringTypeChanges.Add(group);
-            }
+            // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+            List<LintelPlacementGroupRequestV3> groupsRequiringTypeChanges = request.Groups.ToList();
 
             TransactionGroup transactionGroup = groupsRequiringTypeChanges.Count > 0
                 ? new TransactionGroup(document, "Создание и размещение перемычек v3")
@@ -5418,8 +5371,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                                         compositeSymbolsByName,
                                         group,
                                         componentSymbols,
-                                        request.NameConflictAction,
-                                        unitSymbolsByName);
+                                        CompositeTypeNameConflictActionV3.ReplaceExisting,
+                                        unitSymbolsByName,
+                                        true);
                                     typeResolutionsByGroup[group.GroupKey] = resolution;
                                     if (resolution.Symbol == null)
                                     {
@@ -5745,7 +5699,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
             return matches.FirstOrDefault();
         }
-
+        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
         private static CompositeTypeResolutionV3 GetOrCreateCompositeSymbol(
             Document document,
             IList<FamilySymbol> compositeCandidates,
@@ -5753,7 +5707,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             LintelPlacementGroupRequestV3 group,
             IList<FamilySymbol> componentSymbols,
             CompositeTypeNameConflictActionV3 conflictAction,
-            IDictionary<string, List<FamilySymbol>> symbolsByName)
+            IDictionary<string, List<FamilySymbol>> symbolsByName,
+            bool overwriteExisting = false)
         {
             List<FamilySymbol> exactNameMatches = compositeSymbolsByName.TryGetValue(
                 group.CompositeTypeName,
@@ -5766,17 +5721,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .FirstOrDefault();
             if (existing != null)
             {
-                if (!group.HasExistingTypeDifference)
-                {
-                    return new CompositeTypeResolutionV3
-                    {
-                        Symbol = existing,
-                        ActualTypeName = existing.Name,
-                        ActionText = "Использован существующий тип с совпадающим именем."
-                    };
-                }
-
-                if (conflictAction == CompositeTypeNameConflictActionV3.ReplaceExisting)
+                if (overwriteExisting
+                    || group.HasExistingTypeDifference
+                       && conflictAction == CompositeTypeNameConflictActionV3.ReplaceExisting)
                 {
                     using (var replaceTransaction = new SubTransaction(document))
                     {
@@ -5810,11 +5757,23 @@ namespace FerrumAddinDev.LintelCreator_v3
                     {
                         Symbol = existing,
                         ActualTypeName = existing.Name,
-                        HasConflict = true,
+                        HasConflict = group.HasExistingTypeDifference,
                         TypeCacheChanged = true,
-                        ActionText = "Состав существующего типа заменён на выбранный;"
-                                     + " изменение применилось ко всем его экземплярам.",
+                        ActionText = group.HasExistingTypeDifference
+                            ? "Состав существующего типа заменён на выбранный;"
+                              + " изменение применилось ко всем его экземплярам."
+                            : "Параметры существующего типа синхронизированы с выбранным вариантом.",
                         Differences = group.ExistingTypeDifferenceText
+                    };
+                }
+
+                if (!group.HasExistingTypeDifference)
+                {
+                    return new CompositeTypeResolutionV3
+                    {
+                        Symbol = existing,
+                        ActualTypeName = existing.Name,
+                        ActionText = "Использован существующий тип с совпадающим именем."
                     };
                 }
 
@@ -6019,6 +5978,16 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (!IsSupportPadConfigured(symbol, true, leftSupportPadTypeName)
                 || !IsSupportPadConfigured(symbol, false, rightSupportPadTypeName))
                 return false;
+
+            double expectedMainLength = GetLongestNestedLintelLengthMm(
+                components,
+                componentSymbols);
+            double actualMainLength = GetLengthParameterMm(
+                FindParameterByNormalizedName(symbol, MainLintelLengthParameterName));
+            if (expectedMainLength <= 0
+                || double.IsNaN(actualMainLength)
+                || Math.Abs(actualMainLength - expectedMainLength) > 0.5)
+                return false;
             return true;
         }
 
@@ -6094,6 +6063,24 @@ namespace FerrumAddinDev.LintelCreator_v3
                         slot.ToString(CultureInfo.InvariantCulture)
                         + "ПР: было показано, требуется скрыть");
                 }
+            }
+
+            double expectedMainLength = GetLongestNestedLintelLengthMm(
+                components,
+                componentSymbols);
+            double actualMainLength = GetLengthParameterMm(
+                FindParameterByNormalizedName(symbol, MainLintelLengthParameterName));
+            if (expectedMainLength > 0
+                && (double.IsNaN(actualMainLength)
+                    || Math.Abs(actualMainLength - expectedMainLength) > 0.5))
+            {
+                differences.Add(
+                    MainLintelLengthParameterName + ": было "
+                    + (double.IsNaN(actualMainLength)
+                        ? "не задано"
+                        : Math.Round(actualMainLength).ToString(CultureInfo.InvariantCulture) + " мм")
+                    + ", требуется "
+                    + Math.Round(expectedMainLength).ToString(CultureInfo.InvariantCulture) + " мм");
             }
 
             if (differences.Count == 0)
@@ -6339,8 +6326,54 @@ namespace FerrumAddinDev.LintelCreator_v3
                     SetBooleanParameter(visibility, false);
             }
 
+            Parameter mainLintelLength = FindParameterByNormalizedName(
+                symbol,
+                MainLintelLengthParameterName);
+            if (mainLintelLength == null || mainLintelLength.IsReadOnly)
+                throw new InvalidOperationException(
+                    "Не найден доступный параметр типа «"
+                    + MainLintelLengthParameterName + "».");
+
+            double longestNestedLintelLength = GetLongestNestedLintelLengthMm(
+                components,
+                componentSymbols);
+            if (longestNestedLintelLength <= 0)
+                throw new InvalidOperationException(
+                    "Не удалось определить длину вложенных перемычек для параметра «"
+                    + MainLintelLengthParameterName + "».");
+            SetLengthParameter(mainLintelLength, longestNestedLintelLength);
+
             ConfigureSupportPad(symbol, true, leftSupportPadTypeName, symbolsByName);
             ConfigureSupportPad(symbol, false, rightSupportPadTypeName, symbolsByName);
+        }
+        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+        private static double GetLongestNestedLintelLengthMm(
+            IList<LintelPlacementComponentRequestV3> components,
+            IList<FamilySymbol> componentSymbols)
+        {
+            if (components == null || components.Count == 0)
+                return 0;
+
+            double longest = 0;
+            for (int index = 0; index < components.Count; index++)
+            {
+                FamilySymbol componentSymbol = componentSymbols != null
+                                               && index < componentSymbols.Count
+                    ? componentSymbols[index]
+                    : null;
+                Parameter actualLengthParameter = FindParameterByNormalizedName(
+                                                      componentSymbol,
+                                                      "ADSK_Размер_Длина")
+                                                  ?? FindParameterByNormalizedName(
+                                                      componentSymbol,
+                                                      "Длина");
+                double actualLength = GetLengthParameterMm(actualLengthParameter);
+                double length = !double.IsNaN(actualLength) && actualLength > 0
+                    ? actualLength
+                    : components[index]?.LengthMm ?? 0;
+                longest = Math.Max(longest, length);
+            }
+            return longest;
         }
 
         private static Parameter FindNestedTypeParameter(FamilySymbol symbol, int slot)
@@ -7154,6 +7187,153 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string GetName()
         {
             return "Выбор группы проёмов v3";
+        }
+    }
+    // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+    internal sealed class OpeningNavigationResultV3
+    {
+        public OpeningGroupCardV3 GroupToFocus { get; set; }
+        public bool LintelsSelectedInModel { get; set; }
+        public string Message { get; set; }
+    }
+
+    public sealed class OpeningNavigationHandlerV3 : IExternalEventHandler
+    {
+        private readonly object _sync = new object();
+        private readonly Document _document;
+        private readonly LintelOpeningWorkspaceV3 _workspace;
+        private bool _existingLintelsTab;
+        private OpeningGroupCardV3 _currentGroup;
+        private Action<OpeningNavigationResultV3> _completed;
+
+        public OpeningNavigationHandlerV3(
+            Document document,
+            LintelOpeningWorkspaceV3 workspace)
+        {
+            _document = document;
+            _workspace = workspace;
+        }
+
+        internal void Request(
+            bool existingLintelsTab,
+            OpeningGroupCardV3 currentGroup,
+            Action<OpeningNavigationResultV3> completed)
+        {
+            lock (_sync)
+            {
+                _existingLintelsTab = existingLintelsTab;
+                _currentGroup = currentGroup;
+                _completed = completed;
+            }
+        }
+
+        public void Execute(UIApplication application)
+        {
+            bool existingLintelsTab;
+            OpeningGroupCardV3 currentGroup;
+            Action<OpeningNavigationResultV3> completed;
+            lock (_sync)
+            {
+                existingLintelsTab = _existingLintelsTab;
+                currentGroup = _currentGroup;
+                completed = _completed;
+                _currentGroup = null;
+                _completed = null;
+            }
+
+            var result = new OpeningNavigationResultV3();
+            try
+            {
+                UIDocument uiDocument = application.ActiveUIDocument;
+
+                ICollection<ElementId> selectedIds = uiDocument.Selection.GetElementIds();
+                List<OpeningGroupCardV3> matches = _workspace.FindGroupsForModelSelection(
+                    selectedIds,
+                    existingLintelsTab);
+
+                if (!existingLintelsTab)
+                {
+                    ResolveOpeningToWindow(selectedIds, matches, result);
+                }
+                else if (matches.Count > 1)
+                {
+                    result.Message = "Выбранные элементы относятся к нескольким записям. Оставьте выбранным один проём или одну перемычку.";
+                }
+                else if (matches.Count == 1
+                         && (currentGroup == null
+                             || !string.Equals(
+                                 currentGroup.Key,
+                                 matches[0].Key,
+                                 StringComparison.Ordinal)))
+                {
+                    result.GroupToFocus = matches[0];
+                }
+                else
+                {
+                    OpeningGroupCardV3 groupToSelect = matches.FirstOrDefault()
+                                                       ?? (currentGroup?.HasExistingLintel == true
+                                                           ? currentGroup
+                                                           : null);
+                    if (groupToSelect == null)
+                    {
+                        result.Message = selectedIds.Count == 0
+                            ? "В модели ничего не выбрано и в списке нет активной записи."
+                            : "Выбранный элемент не относится к существующим перемычкам из текущей выборки, а в списке нет активной записи.";
+                    }
+                    else
+                    {
+                        List<ElementId> lintelIds = groupToSelect.ExistingLintelIds
+                            .Where(id => uiDocument.Document.GetElement(id) != null)
+                            .GroupBy(id => id.Value)
+                            .Select(group => group.First())
+                            .ToList();
+                        if (lintelIds.Count == 0)
+                        {
+                            result.Message = "У активной записи не найдена перемычка в модели. Обновите список проёмов.";
+                        }
+                        else
+                        {
+                            uiDocument.Selection.SetElementIds(lintelIds);
+                            result.LintelsSelectedInModel = true;
+                        }
+                    }
+                }
+
+            }
+            catch (Exception exception)
+            {
+                result.Message = "Не удалось выполнить переход: " + exception.Message;
+            }
+
+            completed?.Invoke(result);
+        }
+
+        private static void ResolveOpeningToWindow(
+            ICollection<ElementId> selectedIds,
+            List<OpeningGroupCardV3> matches,
+            OpeningNavigationResultV3 result)
+        {
+            if (selectedIds == null || selectedIds.Count == 0)
+            {
+                result.Message = "В модели ничего не выбрано. Выберите проём и повторите команду.";
+            }
+            else if (matches.Count == 0)
+            {
+                result.Message = "Среди выбранных элементов нет проёма из вкладки «Проёмы без перемычек».";
+            }
+            else if (matches.Count > 1)
+            {
+                result.Message = "Выбранные проёмы относятся к нескольким записям. Оставьте выбранным один проём.";
+            }
+            else
+            {
+                result.GroupToFocus = matches[0];
+            }
+        }
+
+        public string GetName()
+        {
+            return "Переход между моделью и списком проёмов v3";
         }
     }
 }
