@@ -3,10 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:FerrumAddinDev.LintelCreator_v3"
         Title="Автоматическая раскладка перемычек — v3"
-        Width="1500"
-        Height="900"
-        MinWidth="1280"
-        MinHeight="720"
+        Width="1600"
+        Height="960"
+        MinWidth="1360"
+        MinHeight="780"
         WindowStartupLocation="CenterScreen"
         Background="#F4F6F8"
         FontFamily="Segoe UI"
@@ -730,37 +730,22 @@
                                            Style="{StaticResource CaptionStyle}"/>
                             </Grid>
 
-                            <Grid Grid.Row="1" Margin="0,9,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Тип кладки" Style="{StaticResource FieldLabelStyle}"/>
+                            <StackPanel Grid.Row="1" Margin="0,9,0,0">
+                                <TextBlock Text="Тип кладки" Style="{StaticResource FieldLabelStyle}"/>
+                                <WrapPanel>
                                     <RadioButton Content="Кирпич 65 мм"
                                                  GroupName="MasonryTypeV3"
-                                                 IsChecked="{Binding IsMasonry65, Mode=TwoWay}"/>
+                                                 IsChecked="{Binding IsMasonry65, Mode=TwoWay}"
+                                                 Margin="0,0,14,0"/>
                                     <RadioButton Content="Кирпич 88 мм"
                                                  GroupName="MasonryTypeV3"
                                                  IsChecked="{Binding IsMasonry88, Mode=TwoWay}"
-                                                 Margin="0,3,0,0"/>
+                                                 Margin="0,0,14,0"/>
                                     <RadioButton Content="Перегородки"
                                                  GroupName="MasonryTypeV3"
-                                                 IsChecked="{Binding IsPartition, Mode=TwoWay}"
-                                                 Margin="0,3,0,0"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Материал перемычки" Style="{StaticResource FieldLabelStyle}"/>
-                                    <RadioButton Content="Железобетонная"
-                                                 GroupName="LintelMaterialV3"
-                                                 IsChecked="{Binding IsReinforcedConcrete, Mode=TwoWay}"/>
-                                    <RadioButton Content="Металлическая"
-                                                 GroupName="LintelMaterialV3"
-                                                 IsChecked="{Binding IsMetal, Mode=TwoWay}"
-                                                 Margin="0,3,0,0"/>
-                                </StackPanel>
-                            </Grid>
+                                                 IsChecked="{Binding IsPartition, Mode=TwoWay}"/>
+                                </WrapPanel>
+                            </StackPanel>
 
                             <Grid Grid.Row="2" Margin="0,10,0,0">
                                 <StackPanel>
@@ -1001,6 +986,7 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Имя типа" Style="{StaticResource FieldLabelStyle}"/>
@@ -1108,16 +1094,21 @@
                             <StackPanel Grid.Row="3"
                                         Grid.ColumnSpan="2"
                                         Margin="0,10,0,0">
-                                <StackPanel.Style>
-                                    <Style TargetType="StackPanel">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsExistingLintelsTabActive}" Value="True">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </StackPanel.Style>
+                                <TextBlock Text="Материал готового типа"
+                                           Style="{StaticResource FieldLabelStyle}"/>
+                                <WrapPanel>
+                                    <RadioButton Content="Железобетон"
+                                                 GroupName="ExistingLintelMaterialV3"
+                                                 IsChecked="{Binding IsReinforcedConcrete, Mode=TwoWay}"
+                                                 Margin="0,0,16,0"/>
+                                    <RadioButton Content="Металл"
+                                                 GroupName="ExistingLintelMaterialV3"
+                                                 IsChecked="{Binding IsMetal, Mode=TwoWay}"/>
+                                </WrapPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Row="4"
+                                        Grid.ColumnSpan="2"
+                                        Margin="0,10,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -1129,8 +1120,10 @@
                                                Text="{Binding ExistingLintelTypesSummaryText}"
                                                Style="{StaticResource CaptionStyle}"/>
                                 </Grid>
-                                <ListBox ItemsSource="{Binding ExistingLintelTypeOptions}"
+                                <ListBox x:Name="ExistingLintelTypesListBox"
+                                         ItemsSource="{Binding ExistingLintelTypeOptions}"
                                          SelectedItem="{Binding SelectedExistingLintelType, Mode=TwoWay}"
+                                         PreviewMouseWheel="ExistingLintelTypes_PreviewMouseWheel"
                                          Margin="0,6,0,0"
                                          BorderThickness="0"
                                          Background="Transparent"
@@ -1176,22 +1169,24 @@
                     <Grid Grid.Row="2" Margin="0,0,0,6" IsEnabled="{Binding HasEditorVariant}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="34"/>
+                            <ColumnDefinition Width="95"/>
+                            <ColumnDefinition Width="90"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="65"/>
                             <ColumnDefinition Width="60"/>
-                            <ColumnDefinition Width="60"/>
-                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="56"/>
+                            <ColumnDefinition Width="56"/>
+                            <ColumnDefinition Width="55"/>
                             <ColumnDefinition Width="94"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="№" Style="{StaticResource FieldLabelStyle}"/>
-                        <TextBlock Grid.Column="1" Text="Тип вложенной перемычки" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="1" Text="Материал" Style="{StaticResource FieldLabelStyle}"/>
                         <TextBlock Grid.Column="2" Text="Назначение" Style="{StaticResource FieldLabelStyle}"/>
-                        <TextBlock Grid.Column="3" Text="Длина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="4" Text="Высота" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="5" Text="Ширина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="6" Text="Зазор" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="7" Text="Действия" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="3" Text="Тип вложенной перемычки" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBlock Grid.Column="4" Text="Длина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="5" Text="Высота" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="6" Text="Ширина" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="7" Text="Зазор" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="8" Text="Действия" Style="{StaticResource FieldLabelStyle}" HorizontalAlignment="Center"/>
                     </Grid>
 
                     <ScrollViewer Grid.Row="3"
@@ -1223,12 +1218,13 @@
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="27"/>
+                                                    <ColumnDefinition Width="95"/>
+                                                    <ColumnDefinition Width="90"/>
                                                     <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="100"/>
-                                                    <ColumnDefinition Width="65"/>
                                                     <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="56"/>
+                                                    <ColumnDefinition Width="56"/>
+                                                    <ColumnDefinition Width="55"/>
                                                     <ColumnDefinition Width="94"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel VerticalAlignment="Center">
@@ -1253,9 +1249,10 @@
                                                     </TextBlock>
                                                 </StackPanel>
                                                 <ComboBox Grid.Column="1"
-                                                          ItemsSource="{Binding AvailableCatalogItems}"
-                                                          SelectedItem="{Binding SelectedCatalogItem, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                          DisplayMemberPath="DisplayName"
+                                                          ItemsSource="{Binding DataContext.EditorMaterialOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          SelectedValuePath="Value"
+                                                          SelectedValue="{Binding Material, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          DisplayMemberPath="Name"
                                                           Style="{StaticResource ComboStyle}"
                                                           Margin="0,0,6,0"/>
                                                 <ComboBox Grid.Column="2"
@@ -1263,29 +1260,35 @@
                                                           SelectedItem="{Binding Purpose, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                           Style="{StaticResource ComboStyle}"
                                                           Margin="0,0,6,0"/>
-                                                <TextBox Grid.Column="3"
+                                                <ComboBox Grid.Column="3"
+                                                          ItemsSource="{Binding AvailableCatalogItems}"
+                                                          SelectedItem="{Binding SelectedCatalogItem, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          DisplayMemberPath="DisplayName"
+                                                          Style="{StaticResource ComboStyle}"
+                                                          Margin="0,0,6,0"/>
+                                                <TextBox Grid.Column="4"
                                                          Text="{Binding LengthMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                          Style="{StaticResource InputStyle}"
                                                          Margin="0,0,6,0"
                                                          TextAlignment="Right"/>
-                                                 <TextBox Grid.Column="4"
+                                                 <TextBox Grid.Column="5"
                                                           Text="{Binding HeightMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                           Style="{StaticResource InputStyle}"
                                                           Margin="0,0,6,0"
                                                           TextAlignment="Right"/>
-                                                 <TextBox Grid.Column="5"
+                                                 <TextBox Grid.Column="6"
                                                           Text="{Binding WidthMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                          Style="{StaticResource InputStyle}"
                                                          Margin="0,0,6,0"
                                                          TextAlignment="Right"/>
-                                                 <TextBox Grid.Column="6"
+                                                 <TextBox Grid.Column="7"
                                                          Text="{Binding GapMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                          Style="{StaticResource InputStyle}"
                                                          IsReadOnly="True"
                                                          ToolTip="Фиксированный зазор между соседними перемычками — 10 мм"
                                                          Margin="0,0,6,0"
                                                          TextAlignment="Right"/>
-                                                 <StackPanel Grid.Column="7" Orientation="Horizontal">
+                                                 <StackPanel Grid.Column="8" Orientation="Horizontal">
                                                     <Button Content="↑"
                                                             Style="{StaticResource CompactButtonStyle}"
                                                             IsEnabled="{Binding CanMoveUp}"
@@ -1329,6 +1332,10 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="Стена" Style="{StaticResource FieldLabelStyle}"/>
                                 <TextBlock Text="{Binding EditorWallWidthText}" FontWeight="SemiBold"/>
@@ -1360,6 +1367,36 @@
                                          HorizontalAlignment="Left"
                                          ToolTip="Допуск по ширине комплекта, мм"/>
                             </StackPanel>
+                            <StackPanel Grid.Row="1"
+                                        Grid.ColumnSpan="4"
+                                        Orientation="Horizontal"
+                                        Margin="0,10,0,0">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditorHasMetal}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <StackPanel>
+                                    <TextBlock Text="Смещение всего комплекта относительно стены, мм"
+                                               Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBox Text="{Binding EditorPackageWallOffsetMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                             Style="{StaticResource InputStyle}"
+                                             Width="90"
+                                             HorizontalAlignment="Left"
+                                             TextAlignment="Right"
+                                             ToolTip="Знак задаёт направление вдоль ориентации перемычки; позволяет выпустить металлический комплект за грань стены."/>
+                                </StackPanel>
+                                <TextBlock Text="Положительное значение — по направлению перемычки, отрицательное — в обратную сторону."
+                                           Style="{StaticResource CaptionStyle}"
+                                           VerticalAlignment="Bottom"
+                                           TextWrapping="Wrap"
+                                           Margin="12,0,0,4"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -1383,6 +1420,45 @@
                             </TextBlock>
                         </Expander.Header>
                         <StackPanel Margin="0,9,0,0">
+                            <Border CornerRadius="4"
+                                    Padding="8"
+                                    Margin="0,0,0,8"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1"
+                                    Background="#F8FAFC">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EditorHasMetal}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Планка" Style="{StaticResource FieldLabelStyle}"/>
+                                        <ComboBox ItemsSource="{Binding StripTypeOptions}"
+                                                  SelectedItem="{Binding SelectedStripType, Mode=TwoWay}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  Style="{StaticResource ComboStyle}"
+                                                  ToolTip="Параметр типа «Планка»"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Раскладка планок, мм" Style="{StaticResource FieldLabelStyle}"/>
+                                        <TextBox Text="{Binding EditorStripLayoutMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 Style="{StaticResource InputStyle}"
+                                                 TextAlignment="Right"
+                                                 ToolTip="Параметр типа «Раскладка пл.» — расстояние между планками"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                             <Border CornerRadius="4" Padding="8" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">

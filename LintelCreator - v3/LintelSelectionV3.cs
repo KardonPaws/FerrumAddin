@@ -14,6 +14,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         Partition = 0
     }
 
+    //11.09.26 - металлические перемычки + подбор
     public enum LintelMaterialV3
     {
         ReinforcedConcrete,
@@ -48,6 +49,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int Issue { get; set; }
         public int MasonryCourseHeightMm { get; set; }
         public double MassKg { get; set; }
+        //11.09.26 - металлические перемычки + подбор
         public string RevitFamilyName { get; set; }
 
         public string DisplayName => (string.IsNullOrWhiteSpace(RevitFamilyName)
@@ -65,6 +67,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         public double RequiredBearingWidth2Mm { get; set; }
         public string ValidationError { get; set; }
         public int MasonryCourseHeightMm { get; set; }
+        //11.09.26 - металлические перемычки + подбор
         public LintelMaterialV3 Material { get; set; }
         public int WallWidthToleranceMm { get; set; }
         public int MaximumVariants { get; set; } = 5;
@@ -73,6 +76,11 @@ namespace FerrumAddinDev.LintelCreator_v3
     public sealed class LintelLayoutSegmentV3
     {
         public string Mark { get; set; }
+        //11.09.26 - металлические перемычки + подбор
+        public string RevitFamilyName { get; set; }
+        public LintelMaterialV3 Material { get; set; }
+        public int LengthMm { get; set; }
+        public int HeightMm { get; set; }
         public int WidthMm { get; set; }
         public double DisplayWidth { get; set; }
         public bool IsBearing { get; set; }
@@ -113,6 +121,15 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string RightSupportPadTypeName { get; set; }
         public bool SupportPadsInitialized { get; set; }
         public string SupportPadSourceTypeName { get; set; }
+        //11.09.26 - металлические перемычки + подбор
+        public int PackageWallOffsetMm { get; set; }
+        public string ReadyCompositeFamilyName { get; set; }
+        public string ReadyCompositeTypeName { get; set; }
+        public long ReadyCompositeTypeIdValue { get; set; } = -1;
+        public long StripTypeIdValue { get; set; } = -1;
+        public int StripLayoutMm { get; set; }
+        public int MainLintelHeightMm { get; set; }
+        public int SecondLintelHeightMm { get; set; }
         public List<LintelLayoutSegmentV3> LayoutSegments { get; set; } = new List<LintelLayoutSegmentV3>();
 
         public bool IsExact => WidthDeltaMm == 0;
@@ -282,6 +299,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return request.OpeningWidthMm + 2.0 * Math.Max(0, item.MinimumBearingMm);
         }
 
+        //11.09.26 - металлические перемычки + подбор
         internal static bool IsSuitableCatalogItem(
             LintelCatalogItemV3 item,
             LintelSelectionRequestV3 request,
@@ -292,7 +310,9 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (requireAutoSelection && !item.AutoSelectionAllowed)
                 return false;
 
-            string materialCode = request.Material == LintelMaterialV3.Metal
+            string materialCode = requireAutoSelection
+                ? "reinforcedConcrete"
+                : request.Material == LintelMaterialV3.Metal
                 ? "metal"
                 : "reinforcedConcrete";
             return string.Equals(item.Material, materialCode, StringComparison.OrdinalIgnoreCase)
@@ -504,6 +524,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return true;
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static List<LintelLayoutSegmentV3> CreateLayoutSegments(
             IEnumerable<LintelCatalogItemV3> ordered,
             int totalWidth)
@@ -519,6 +540,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 result.Add(new LintelLayoutSegmentV3
                 {
                     Mark = item.Mark,
+                    RevitFamilyName = item.RevitFamilyName,
                     WidthMm = item.WidthMm,
                     DisplayWidth = Math.Max(1, item.WidthMm * scale),
                     IsBearing = item.IsBearing

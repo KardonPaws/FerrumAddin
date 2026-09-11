@@ -128,6 +128,47 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             return string.Equals(Normalize(value), None, StringComparison.Ordinal);
         }
+
+        //11.09.26 - металлические перемычки + подбор
+        public static bool IsSupportedAngleSymbol(FamilySymbol symbol)
+        {
+            if (symbol == null) return false;
+
+            string familyName = NormalizeProfileText(symbol.FamilyName);
+            string typeName = NormalizeProfileText(symbol.Name);
+            string combined = familyName + typeName;
+            if (combined.IndexOf("перовниз", StringComparison.Ordinal) < 0)
+                return false;
+
+            bool is125 = combined.IndexOf("125x125x10", StringComparison.Ordinal) >= 0
+                         || combined.IndexOf("125x10", StringComparison.Ordinal) >= 0;
+            bool is160 = combined.IndexOf("160x160x10", StringComparison.Ordinal) >= 0
+                         || combined.IndexOf("160x10", StringComparison.Ordinal) >= 0;
+
+            return is125 && ContainsProfileLength(typeName, combined, 120)
+                   || is160 && (ContainsProfileLength(typeName, combined, 190)
+                                || ContainsProfileLength(typeName, combined, 200));
+        }
+
+        private static string NormalizeProfileText(string value)
+        {
+            return (value ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant()
+                .Replace('х', 'x')
+                .Replace('×', 'x')
+                .Replace(" ", string.Empty);
+        }
+
+        private static bool ContainsProfileLength(string typeName, string combined, int lengthMm)
+        {
+            string length = lengthMm.ToString(CultureInfo.InvariantCulture);
+            return string.Equals(typeName, length, StringComparison.Ordinal)
+                   || typeName.IndexOf("l=" + length, StringComparison.Ordinal) >= 0
+                   || typeName.IndexOf("l" + length, StringComparison.Ordinal) >= 0
+                   || combined.IndexOf("l=" + length + "мм", StringComparison.Ordinal) >= 0
+                   || combined.IndexOf("длина" + length + "мм", StringComparison.Ordinal) >= 0;
+        }
     }
 
     public sealed class CompositeTypeNameConflictOptionV3
@@ -282,6 +323,10 @@ namespace FerrumAddinDev.LintelCreator_v3
         public double RequiredSupportWidthMm { get; set; }
         public double RequiredSupportWidth1Mm { get; set; }
         public double RequiredSupportWidth2Mm { get; set; }
+        //11.09.26 - металлические перемычки + подбор
+        public double ClearHeightToSupportMm { get; set; }
+        public double ClearHeightToSupport1Mm { get; set; }
+        public double ClearHeightToSupport2Mm { get; set; }
         public string SupportParameterError { get; set; }
         public XYZ BoundingMinimum { get; set; }
         public XYZ BoundingMaximum { get; set; }
@@ -294,14 +339,24 @@ namespace FerrumAddinDev.LintelCreator_v3
         public List<ExistingLintelComponentV3> ExistingLintelComponents { get; } = new List<ExistingLintelComponentV3>();
     }
 
+    //11.09.26 - металлические перемычки + подбор
     public sealed class ExistingLintelComponentV3
     {
         public string FamilyName { get; set; }
         public string TypeName { get; set; }
         public double Order { get; set; }
         public double OffsetToNextMm { get; set; }
+        public LintelMaterialV3 Material { get; set; }
     }
 
+    //11.09.26 - металлические перемычки + подбор
+    public sealed class LintelMaterialOptionV3
+    {
+        public LintelMaterialV3 Value { get; set; }
+        public string Name { get; set; }
+    }
+
+    //11.09.26 - металлические перемычки + подбор
     public sealed class ExistingLintelTypeOptionV3
     {
         public ElementId TypeId { get; set; }
@@ -310,6 +365,12 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int SupportCategory { get; set; }
         public string LeftSupportPadTypeName { get; set; }
         public string RightSupportPadTypeName { get; set; }
+        public ElementId StripTypeId { get; set; }
+        public string StripFamilyName { get; set; }
+        public string StripTypeName { get; set; }
+        public int StripLayoutMm { get; set; }
+        public int MainLintelHeightMm { get; set; }
+        public int SecondLintelHeightMm { get; set; }
         public List<ExistingLintelComponentV3> Components { get; }
             = new List<ExistingLintelComponentV3>();
 
@@ -319,6 +380,17 @@ namespace FerrumAddinDev.LintelCreator_v3
             : SupportCategory == 1
                 ? "Опирание с одной стороны"
                 : "Без опирания";
+    }
+
+    public sealed class LintelStripTypeOptionV3
+    {
+        public ElementId TypeId { get; set; }
+        public string FamilyName { get; set; }
+        public string TypeName { get; set; }
+        public bool IsNone => TypeId == null || TypeId == ElementId.InvalidElementId;
+        public string DisplayName => IsNone
+            ? "Не назначена"
+            : (FamilyName ?? string.Empty) + " : " + (TypeName ?? string.Empty);
     }
 
     public sealed class OpeningPlacementTargetV3
@@ -353,6 +425,10 @@ namespace FerrumAddinDev.LintelCreator_v3
         public double RequiredSupportWidthMm { get; set; }
         public double RequiredSupportWidth1Mm { get; set; }
         public double RequiredSupportWidth2Mm { get; set; }
+        //11.09.26 - металлические перемычки + подбор
+        public double ClearHeightToSupportMm { get; set; }
+        public double ClearHeightToSupport1Mm { get; set; }
+        public double ClearHeightToSupport2Mm { get; set; }
         public string SupportParameterError { get; set; }
         public int InstanceCount { get; set; }
         public bool HasExistingLintel { get; set; }
@@ -434,10 +510,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                                          : string.Empty);
     }
 
+    //11.09.26 - металлические перемычки + подбор
     public sealed class LintelEditorRowV3 : NotifyObjectV3
     {
         private int _index;
         private LintelCatalogItemV3 _selectedCatalogItem;
+        private LintelMaterialV3 _material;
         private string _purpose;
         private int _lengthMm;
         private int _heightMm;
@@ -449,10 +527,13 @@ namespace FerrumAddinDev.LintelCreator_v3
         private bool _hasExistingTypeDifference;
         private string _existingTypeDifferenceText = string.Empty;
 
-        public LintelEditorRowV3(LintelCatalogItemV3 item)
+        public LintelEditorRowV3(LintelCatalogItemV3 item, int defaultMetalLengthMm = 0)
         {
+            DefaultMetalLengthMm = Math.Max(0, defaultMetalLengthMm);
             ApplyCatalogItem(item);
         }
+
+        internal int DefaultMetalLengthMm { get; set; }
 
         public ObservableCollection<LintelCatalogItemV3> AvailableCatalogItems { get; }
             = new ObservableCollection<LintelCatalogItemV3>();
@@ -477,6 +558,20 @@ namespace FerrumAddinDev.LintelCreator_v3
                 ApplyCatalogItem(value);
             }
         }
+
+        public LintelMaterialV3 Material
+        {
+            get => _material;
+            set
+            {
+                if (_material == value) return;
+                _material = value;
+                RaisePropertyChanged(nameof(Material));
+                RaisePropertyChanged(nameof(IsMetal));
+            }
+        }
+
+        public bool IsMetal => Material == LintelMaterialV3.Metal;
 
         public string Purpose
         {
@@ -609,7 +704,12 @@ namespace FerrumAddinDev.LintelCreator_v3
             {
                 _selectedCatalogItem = item;
                 RaisePropertyChanged(nameof(SelectedCatalogItem));
-                LengthMm = item.LengthMm;
+                Material = string.Equals(item.Material, "metal", StringComparison.OrdinalIgnoreCase)
+                    ? LintelMaterialV3.Metal
+                    : LintelMaterialV3.ReinforcedConcrete;
+                LengthMm = Material == LintelMaterialV3.Metal && item.LengthMm <= 0
+                    ? DefaultMetalLengthMm
+                    : item.LengthMm;
                 HeightMm = item.HeightMm;
                 WidthMm = item.WidthMm;
                 Purpose = item.IsBearing ? "Несущая" : "Ненесущая";
@@ -627,15 +727,23 @@ namespace FerrumAddinDev.LintelCreator_v3
         public List<LintelPlacementGroupRequestV3> Groups { get; } = new List<LintelPlacementGroupRequestV3>();
     }
 
+    //11.09.26 - металлические перемычки + подбор
     internal sealed class LintelPlacementGroupRequestV3
     {
         public string GroupKey { get; set; }
+        public string CompositeFamilyName { get; set; }
         public string CompositeTypeName { get; set; }
         public string WallTypeName { get; set; }
         public bool HasExistingTypeDifference { get; set; }
         public string ExistingTypeDifferenceText { get; set; }
         public string LeftSupportPadTypeName { get; set; }
         public string RightSupportPadTypeName { get; set; }
+        public int PackageWallOffsetMm { get; set; }
+        public ElementId ExistingCompositeTypeId { get; set; }
+        public ElementId StripTypeId { get; set; }
+        public int StripLayoutMm { get; set; }
+        public int MainLintelHeightMm { get; set; }
+        public int SecondLintelHeightMm { get; set; }
         public List<OpeningPlacementTargetV3> Targets { get; } = new List<OpeningPlacementTargetV3>();
         public List<LintelPlacementComponentRequestV3> Components { get; } = new List<LintelPlacementComponentRequestV3>();
     }
@@ -644,6 +752,8 @@ namespace FerrumAddinDev.LintelCreator_v3
     {
         public string Mark { get; set; }
         public string RevitFamilyName { get; set; }
+        public string RevitTypeName { get; set; }
+        public LintelMaterialV3 Material { get; set; }
         public int LengthMm { get; set; }
         public int WidthMm { get; set; }
         public int GapAfterMm { get; set; }
@@ -676,6 +786,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         public List<ExistingLintelComponentV3> Components { get; } = new List<ExistingLintelComponentV3>();
     }
 
+    //11.09.26 - металлические перемычки + подбор
     internal sealed class LintelTypeReplacementRequestV3
     {
         public ElementId TypeId { get; set; }
@@ -686,9 +797,26 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string ExistingTypeDifferenceText { get; set; }
         public string LeftSupportPadTypeName { get; set; }
         public string RightSupportPadTypeName { get; set; }
+        public int PackageWallOffsetMm { get; set; }
+        public ElementId StripTypeId { get; set; }
+        public int StripLayoutMm { get; set; }
+        public int MainLintelHeightMm { get; set; }
+        public int SecondLintelHeightMm { get; set; }
         public List<LintelPlacementComponentRequestV3> Components { get; }
             = new List<LintelPlacementComponentRequestV3>();
         public List<ElementId> LintelIds { get; } = new List<ElementId>();
+        public List<LintelReplacementPositionV3> Positions { get; }
+            = new List<LintelReplacementPositionV3>();
+    }
+
+    internal sealed class LintelReplacementPositionV3
+    {
+        public ElementId LintelId { get; set; }
+        public ElementId WallId { get; set; }
+        public XYZ OpeningLocation { get; set; }
+        public XYZ WallOrientation { get; set; }
+        public XYZ SupportDirection { get; set; }
+        public int SupportType { get; set; }
     }
 
     internal sealed class LintelTypeReplacementItemResultV3
@@ -758,6 +886,12 @@ namespace FerrumAddinDev.LintelCreator_v3
         private string _supportPadSelectionSourceKey;
         private bool _supportPadSelectionEdited;
         private bool _splitLintelsByZeroElevation;
+        //11.09.26 - металлические перемычки + подбор
+        private int _editorPackageWallOffsetMm;
+        private LintelStripTypeOptionV3 _selectedStripType;
+        private int _editorStripLayoutMm;
+        private int _mainLintelHeightMm;
+        private int _secondLintelHeightMm;
 
         public LintelOpeningWorkspaceV3(Document document, Selection selection)
         {
@@ -770,6 +904,20 @@ namespace FerrumAddinDev.LintelCreator_v3
             RefreshExistingCompositeTypeCache(document);
 
             EditorPurposeOptions = new ObservableCollection<string> { "Несущая", "Ненесущая" };
+            //11.09.26 - металлические перемычки + подбор
+            EditorMaterialOptions = new ObservableCollection<LintelMaterialOptionV3>
+            {
+                new LintelMaterialOptionV3
+                {
+                    Value = LintelMaterialV3.ReinforcedConcrete,
+                    Name = "Железобетон"
+                },
+                new LintelMaterialOptionV3
+                {
+                    Value = LintelMaterialV3.Metal,
+                    Name = "Металл"
+                }
+            };
             // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
             TypeNameConflictOptions = new ObservableCollection<CompositeTypeNameConflictOptionV3>
             {
@@ -790,6 +938,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             SupportPadOptions = CollectSupportPadOptions(document);
             _selectedLeftSupportPad = SupportPadOptions.FirstOrDefault();
             _selectedRightSupportPad = SupportPadOptions.FirstOrDefault();
+            StripTypeOptions = CollectStripTypeOptions(document);
+            _selectedStripType = StripTypeOptions.FirstOrDefault();
 
             try
             {
@@ -855,7 +1005,9 @@ namespace FerrumAddinDev.LintelCreator_v3
             = new ObservableCollection<ExistingLintelTypeOptionV3>();
         public ObservableCollection<CompositeTypeNameConflictOptionV3> TypeNameConflictOptions { get; }
         public ObservableCollection<string> EditorPurposeOptions { get; }
+        public ObservableCollection<LintelMaterialOptionV3> EditorMaterialOptions { get; }
         public ObservableCollection<string> SupportPadOptions { get; }
+        public ObservableCollection<LintelStripTypeOptionV3> StripTypeOptions { get; }
 
         public OpeningGroupCardV3 SelectedGroup
         {
@@ -863,7 +1015,6 @@ namespace FerrumAddinDev.LintelCreator_v3
             set
             {
                 if (ReferenceEquals(_selectedGroup, value)) return;
-                PersistSelectedVariantSupportPads();
                 _selectedGroup = value;
                 RaisePropertyChanged(nameof(SelectedGroup));
                 RaisePropertyChanged(nameof(SelectedOpeningGroup));
@@ -871,16 +1022,20 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RaiseSelectedGroupProperties();
                 if (SelectedGroup?.HasExistingLintel == true)
                     DisplayExistingLintel(SelectedGroup);
-                else if (SelectedGroup?.IsCalculated == true)
-                    DisplayStoredCalculation(SelectedGroup);
-                else if (!IsCalculationInProgress)
-                    RecalculateVariants();
                 else
                 {
-                    Variants.Clear();
-                    SelectedVariant = null;
-                    SelectionMessage = "Выполняется расчёт вариантов для всех проёмов.";
-                    RaiseVariantsProperties();
+                    RefreshExistingLintelTypeOptions(SelectedGroup);
+                    if (SelectedGroup?.IsCalculated == true)
+                        DisplayStoredCalculation(SelectedGroup);
+                    else if (!IsCalculationInProgress)
+                        RecalculateVariants();
+                    else
+                    {
+                        Variants.Clear();
+                        SelectedVariant = null;
+                        SelectionMessage = "Выполняется расчёт вариантов для всех проёмов.";
+                        RaiseVariantsProperties();
+                    }
                 }
             }
         }
@@ -934,12 +1089,14 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
 
-        public bool HasEditorVariant => SelectedVariant != null || SelectedGroup?.HasExistingLintel == true;
+        public bool HasEditorVariant => SelectedGroup != null;
         public bool CanReverseEditor => EditorRows.Count > 1;
         public string EditorRestoreButtonText => SelectedGroup?.HasExistingLintel == true
             ? "Вернуть тип"
             : "Вернуть расчёт";
-        public string EditorTypeName => BuildEditorTypeName();
+        public string EditorTypeName => !string.IsNullOrWhiteSpace(SelectedVariant?.ReadyCompositeTypeName)
+            ? SelectedVariant.ReadyCompositeTypeName
+            : BuildEditorTypeName();
         public bool EditorTypeExists => !string.IsNullOrWhiteSpace(EditorTypeName)
                                         && _existingCompositeTypeNames.Contains(EditorTypeName);
         public bool CanLoadExistingEditorType => CanInteract
@@ -963,12 +1120,55 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int EditorPackageWidthMm => EditorRows.Sum(row => row.WidthMm + row.GapMm);
         public int EditorSignedWidthDeltaMm => EditorPackageWidthMm - EditorWallWidthMm;
         public int EditorWidthDeltaMm => Math.Abs(EditorSignedWidthDeltaMm);
-        public bool EditorWidthIsWithinTolerance => EditorWidthDeltaMm <= WallWidthToleranceMm;
+        public bool EditorWidthIsWithinTolerance => EditorHasMetal
+                                                    || EditorWidthDeltaMm <= WallWidthToleranceMm;
         public string EditorWallWidthText => SelectedGroup == null ? "—" : EditorWallWidthMm + " мм";
         public string EditorPackageWidthText => EditorRows.Count == 0 ? "—" : EditorPackageWidthMm + " мм";
         public string EditorWidthDeltaText => EditorRows.Count == 0
             ? "—"
             : (EditorSignedWidthDeltaMm > 0 ? "+" : string.Empty) + EditorSignedWidthDeltaMm + " мм";
+        //11.09.26 - металлические перемычки + подбор
+        public bool EditorHasMetal => EditorRows.Any(row => row.IsMetal)
+                                      || SelectedVariant?.LayoutSegments.Any(segment =>
+                                          !segment.IsGap
+                                          && segment.Material == LintelMaterialV3.Metal) == true
+                                      || SelectedExistingLintelType?.Components.Any(component =>
+                                          component.Material == LintelMaterialV3.Metal) == true;
+        public int EditorPackageWallOffsetMm
+        {
+            get => _editorPackageWallOffsetMm;
+            set
+            {
+                if (_editorPackageWallOffsetMm == value) return;
+                _editorPackageWallOffsetMm = value;
+                RaisePropertyChanged(nameof(EditorPackageWallOffsetMm));
+            }
+        }
+
+        public LintelStripTypeOptionV3 SelectedStripType
+        {
+            get => _selectedStripType;
+            set
+            {
+                if (ReferenceEquals(_selectedStripType, value)) return;
+                _selectedStripType = value ?? StripTypeOptions.FirstOrDefault();
+                RaisePropertyChanged(nameof(SelectedStripType));
+                RaiseEditorProperties();
+            }
+        }
+
+        public int EditorStripLayoutMm
+        {
+            get => _editorStripLayoutMm;
+            set
+            {
+                int normalized = Math.Max(0, value);
+                if (_editorStripLayoutMm == normalized) return;
+                _editorStripLayoutMm = normalized;
+                RaisePropertyChanged(nameof(EditorStripLayoutMm));
+                RaiseEditorProperties();
+            }
+        }
 
         public ExistingLintelTypeOptionV3 SelectedExistingLintelType
         {
@@ -982,19 +1182,23 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RaisePropertyChanged(nameof(ExistingLintelTypeSelectionText));
                 if (!_isUpdatingExistingLintelTypeSelection
                     && value != null
-                    && SelectedGroup?.HasExistingLintel == true)
+                    && SelectedGroup != null)
                 {
+                    bool wasRestoringEditor = _isRestoringEditor;
                     _isRestoringEditor = true;
                     try
                     {
-                        _selectedVariant = null;
-                        RaisePropertyChanged(nameof(SelectedVariant));
+                        if (SelectedGroup.HasExistingLintel)
+                        {
+                            _selectedVariant = null;
+                            RaisePropertyChanged(nameof(SelectedVariant));
+                        }
+                        LoadEditorFromExistingTypeOption(value);
                     }
                     finally
                     {
-                        _isRestoringEditor = false;
+                        _isRestoringEditor = wasRestoringEditor;
                     }
-                    LoadEditorFromExistingTypeOption(value);
                 }
             }
         }
@@ -1006,8 +1210,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             ? "Текущий тип: " + (SelectedGroup.ExistingLintelTypeNames ?? "—")
             : "Текущий тип: —";
         public string ExistingLintelTypeSelectionText => SelectedExistingLintelType == null
-            ? "Выберите тип для замены."
-            : "Будет установлен тип «" + SelectedExistingLintelType.TypeName + "».";
+            ? SelectedGroup?.HasExistingLintel == true
+                ? "Выберите тип для замены."
+                : "Выберите готовый тип для ручного назначения."
+            : "Выбран тип «" + SelectedExistingLintelType.TypeName + "».";
 
         public CompositeTypeNameConflictOptionV3 SelectedTypeNameConflictOption
         {
@@ -1032,17 +1238,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                 string normalized = LintelSupportPadSelectionV3.Normalize(value);
                 if (string.Equals(_selectedLeftSupportPad, normalized, StringComparison.Ordinal)) return;
                 _selectedLeftSupportPad = normalized;
-                if (!_isUpdatingSupportPadSelection && SelectedVariant != null)
-                {
-                    SelectedVariant.LeftSupportPadTypeName = normalized;
-                    SelectedVariant.SupportPadsInitialized = true;
-                    SelectedVariant.SupportPadSourceTypeName = EditorTypeName;
-                }
                 if (!_isUpdatingSupportPadSelection)
                     _supportPadSelectionEdited = true;
                 RaisePropertyChanged(nameof(SelectedLeftSupportPad));
                 if (!_isUpdatingSupportPadSelection)
+                {
                     RefreshSupportPadDifferences();
+                }
             }
         }
 
@@ -1054,17 +1256,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                 string normalized = LintelSupportPadSelectionV3.Normalize(value);
                 if (string.Equals(_selectedRightSupportPad, normalized, StringComparison.Ordinal)) return;
                 _selectedRightSupportPad = normalized;
-                if (!_isUpdatingSupportPadSelection && SelectedVariant != null)
-                {
-                    SelectedVariant.RightSupportPadTypeName = normalized;
-                    SelectedVariant.SupportPadsInitialized = true;
-                    SelectedVariant.SupportPadSourceTypeName = EditorTypeName;
-                }
                 if (!_isUpdatingSupportPadSelection)
                     _supportPadSelectionEdited = true;
                 RaisePropertyChanged(nameof(SelectedRightSupportPad));
                 if (!_isUpdatingSupportPadSelection)
+                {
                     RefreshSupportPadDifferences();
+                }
             }
         }
 
@@ -1086,7 +1284,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string SupportPadDifferencesText => _supportPadDifferencesText;
         public string SupportPadSettingsHeader => SupportPadsHaveExistingTypeDifferences
             ? "Дополнительные параметры типа · опорные подушки отличаются"
-            : "Дополнительные параметры типа (опорные подушки, уголки, планка)";
+            : "Дополнительные параметры типа (опорные подушки и металл)";
 
         public bool HasSelectedGroup => SelectedGroup != null;
         public bool SplitLintelsByZeroElevation
@@ -1148,7 +1346,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                    && SelectedGroup.ExistingLintelIds.Count > 0
                                                  : SelectedGroup != null
                                                    && !SelectedGroup.HasExistingLintel
-                                                   && SelectedVariant != null
                                                    && EditorRows.Count > 0);
         public bool CanPlaceSelectedLintels => CanInteract
                                                && !IsExistingLintelsTabActive
@@ -1311,7 +1508,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
         public string CatalogSummaryText => _catalogLoadError == null
-            ? "Каталог: " + _lintelCatalog.Count + " типов"
+            ? "Каталог: " + _lintelCatalog.Count + " типов · автоподбор ЖБ"
             : "Ошибка каталога";
         public string VariantsSummaryText => SelectedGroup == null
             ? "Выберите проём"
@@ -1592,20 +1789,20 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(IsMasonry65));
             RaisePropertyChanged(nameof(IsMasonry88));
             RaisePropertyChanged(nameof(IsPartition));
-            if (SelectedGroup?.HasExistingLintel == true)
+            if (SelectedGroup != null)
                 RefreshExistingLintelTypeOptions(SelectedGroup);
             RecalculateVariants();
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private void SetLintelMaterial(LintelMaterialV3 value)
         {
             if (_lintelMaterial == value) return;
             _lintelMaterial = value;
             RaisePropertyChanged(nameof(IsReinforcedConcrete));
             RaisePropertyChanged(nameof(IsMetal));
-            if (SelectedGroup?.HasExistingLintel == true)
+            if (SelectedGroup != null)
                 RefreshExistingLintelTypeOptions(SelectedGroup);
-            RecalculateVariants();
         }
 
         private void RaiseSelectedGroupProperties()
@@ -1616,6 +1813,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(CanRecalculateAll));
             RaisePropertyChanged(nameof(CanSaveVariantChanges));
             RaisePropertyChanged(nameof(CanPlaceSelectedLintels));
+            RaisePropertyChanged(nameof(HasEditorVariant));
             RaisePropertyChanged(nameof(SaveVariantButtonText));
             RaisePropertyChanged(nameof(SelectedOpeningCaption));
             RaisePropertyChanged(nameof(SelectedOpeningWidthText));
@@ -1654,15 +1852,431 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RequiredBearingWidth2Mm = group.RequiredSupportWidth2Mm,
                 ValidationError = group.SupportParameterError,
                 MasonryCourseHeightMm = (int)_masonryType,
-                Material = _lintelMaterial,
+                Material = LintelMaterialV3.ReinforcedConcrete,
                 WallWidthToleranceMm = WallWidthToleranceMm,
                 MaximumVariants = 5
             };
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private LintelSelectionResultV3 CalculateGroup(OpeningGroupCardV3 group)
         {
-            return LintelSelectionEngineV3.Calculate(_lintelCatalog, CreateSelectionRequest(group));
+            LintelSelectionRequestV3 selectionRequest = CreateSelectionRequest(group);
+            int minimumBearingLintelHeightMm = _lintelCatalog
+                .Where(item => item != null
+                               && item.IsBearing
+                               && item.HeightMm > 0
+                               && LintelSelectionEngineV3.IsSuitableCatalogItem(
+                                   item,
+                                   selectionRequest,
+                                   true))
+                .Select(item => item.HeightMm)
+                .DefaultIfEmpty(0)
+                .Min();
+            bool firstSideNeedsAngle = group?.ClearHeightToSupport1Mm > 0
+                                       && minimumBearingLintelHeightMm > 0
+                                       && group.ClearHeightToSupport1Mm + 0.5
+                                       < minimumBearingLintelHeightMm;
+            bool secondSideNeedsAngle = group?.ClearHeightToSupport2Mm > 0
+                                        && minimumBearingLintelHeightMm > 0
+                                        && group.ClearHeightToSupport2Mm + 0.5
+                                        < minimumBearingLintelHeightMm;
+            if (group?.SupportType > 0
+                && string.IsNullOrWhiteSpace(group.SupportParameterError)
+                && (firstSideNeedsAngle || secondSideNeedsAngle))
+            {
+                return CreateLowClearanceMetalResult(
+                    group,
+                    minimumBearingLintelHeightMm);
+            }
+
+            double maximumBearingHeightMm = new[]
+                {
+                    group?.ClearHeightToSupport1Mm ?? 0,
+                    group?.ClearHeightToSupport2Mm ?? 0
+                }
+                .Where(value => value > 0)
+                .DefaultIfEmpty(0)
+                .Min();
+            IEnumerable<LintelCatalogItemV3> heightFilteredCatalog = maximumBearingHeightMm <= 0
+                ? _lintelCatalog
+                : _lintelCatalog.Where(item => item == null
+                                               || !item.IsBearing
+                                               || item.HeightMm <= maximumBearingHeightMm + 0.5);
+            return LintelSelectionEngineV3.Calculate(heightFilteredCatalog, selectionRequest);
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private LintelSelectionResultV3 CreateLowClearanceMetalResult(
+            OpeningGroupCardV3 group,
+            int minimumBearingLintelHeightMm)
+        {
+            var result = new LintelSelectionResultV3();
+            bool firstSideSupported = group.ClearHeightToSupport1Mm > 0;
+            bool secondSideSupported = group.ClearHeightToSupport2Mm > 0;
+            bool firstSideNeedsAngle = firstSideSupported
+                                       && group.ClearHeightToSupport1Mm + 0.5
+                                       < minimumBearingLintelHeightMm;
+            bool secondSideNeedsAngle = secondSideSupported
+                                        && group.ClearHeightToSupport2Mm + 0.5
+                                        < minimumBearingLintelHeightMm;
+
+            // Составное семейство ставится от грани, в которую направлена его
+            // ориентация. При двух плитах это сторона 2; при одной плите команда
+            // уже разворачивает экземпляр к единственной опоре.
+            double startBearingMm;
+            double endBearingMm;
+            double startClearHeightMm;
+            double endClearHeightMm;
+            bool startSideSupported;
+            bool endSideSupported;
+            bool startSideNeedsAngle;
+            bool endSideNeedsAngle;
+            if (group.SupportType == 1)
+            {
+                bool supportIsFirst = firstSideSupported;
+                startBearingMm = supportIsFirst
+                    ? group.RequiredSupportWidth1Mm
+                    : group.RequiredSupportWidth2Mm;
+                startClearHeightMm = supportIsFirst
+                    ? group.ClearHeightToSupport1Mm
+                    : group.ClearHeightToSupport2Mm;
+                startSideSupported = true;
+                startSideNeedsAngle = supportIsFirst
+                    ? firstSideNeedsAngle
+                    : secondSideNeedsAngle;
+                endBearingMm = 0;
+                endClearHeightMm = 0;
+                endSideSupported = false;
+                endSideNeedsAngle = false;
+            }
+            else
+            {
+                startBearingMm = group.RequiredSupportWidth2Mm;
+                startClearHeightMm = group.ClearHeightToSupport2Mm;
+                startSideSupported = secondSideSupported;
+                startSideNeedsAngle = secondSideNeedsAngle;
+                endBearingMm = group.RequiredSupportWidth1Mm;
+                endClearHeightMm = group.ClearHeightToSupport1Mm;
+                endSideSupported = firstSideSupported;
+                endSideNeedsAngle = firstSideNeedsAngle;
+            }
+
+            LintelCatalogItemV3 startAngle = startSideNeedsAngle
+                ? FindAutomaticBearingAngle(false)
+                : null;
+            LintelCatalogItemV3 endAngle = endSideNeedsAngle
+                ? FindAutomaticBearingAngle(true)
+                : null;
+            if (startSideNeedsAngle && startAngle == null
+                || endSideNeedsAngle && endAngle == null)
+            {
+                result.Message = "Недостаточный зазор до плиты требует металлической опоры, "
+                                 + "но в каталоге не найдены уголки 125×125×8"
+                                 + (endSideNeedsAngle ? " и зеркальный 125×125×8" : string.Empty)
+                                 + ". Минимальная высота несущей ЖБ-перемычки — "
+                                 + minimumBearingLintelHeightMm.ToString(CultureInfo.InvariantCulture)
+                                 + " мм.";
+                return result;
+            }
+
+            int lengthMm = Math.Max(1, (int)Math.Round(group.OpeningWidthMm + 500.0));
+            int startAngleThicknessMm = startAngle == null ? 0 : GetAngleThicknessMm(startAngle);
+            int endAngleThicknessMm = endAngle == null ? 0 : GetAngleThicknessMm(endAngle);
+            int startHeightMm = startAngle == null
+                ? 0
+                : Math.Max(
+                    0,
+                    (int)Math.Round(startClearHeightMm) - startAngleThicknessMm);
+            int endHeightMm = endAngle == null
+                ? 0
+                : Math.Max(
+                    0,
+                    (int)Math.Round(endClearHeightMm) - endAngleThicknessMm);
+
+            int availableCentralZoneMm = (int)Math.Round(
+                group.WallWidthMm
+                - (startAngle == null ? 0 : startBearingMm)
+                - (endAngle == null ? 0 : endBearingMm)
+                - startAngleThicknessMm
+                - endAngleThicknessMm);
+            int angleCount = (startAngle == null ? 0 : 1) + (endAngle == null ? 0 : 1);
+            int preferredCentralWidthMm = availableCentralZoneMm
+                                          - angleCount * LintelSelectionEngineV3.InterElementGapMm;
+            if (preferredCentralWidthMm <= 0)
+            {
+                result.Message = "После учёта опирания плит между уголками не осталось места "
+                                 + "для железобетонной перемычки.";
+                return result;
+            }
+
+            bool bearingAtStart = startSideSupported && !startSideNeedsAngle;
+            bool bearingAtEnd = endSideSupported && !endSideNeedsAngle;
+            var centralRequest = new LintelSelectionRequestV3
+            {
+                OpeningWidthMm = group.OpeningWidthMm,
+                WallWidthMm = preferredCentralWidthMm,
+                SupportType = bearingAtStart || bearingAtEnd ? 1 : 0,
+                RequiredBearingWidth1Mm = bearingAtStart
+                    ? startBearingMm
+                    : bearingAtEnd ? endBearingMm : 0,
+                RequiredBearingWidth2Mm = 0,
+                ValidationError = group.SupportParameterError,
+                MasonryCourseHeightMm = (int)_masonryType,
+                Material = LintelMaterialV3.ReinforcedConcrete,
+                WallWidthToleranceMm = WallWidthToleranceMm,
+                MaximumVariants = 50
+            };
+            double maximumCentralBearingHeightMm = bearingAtStart
+                ? startClearHeightMm
+                : bearingAtEnd ? endClearHeightMm : 0;
+            IEnumerable<LintelCatalogItemV3> centralCatalog = maximumCentralBearingHeightMm <= 0
+                ? _lintelCatalog
+                : _lintelCatalog.Where(item => item == null
+                                               || !item.IsBearing
+                                               || item.HeightMm <= maximumCentralBearingHeightMm + 0.5);
+            LintelSelectionResultV3 centralResult = LintelSelectionEngineV3.Calculate(
+                centralCatalog,
+                centralRequest);
+            List<LintelSelectionVariantV3> centralVariants = centralResult.Variants
+                .Where(variant => variant.TotalWidthMm <= availableCentralZoneMm)
+                .Take(5)
+                .ToList();
+            if (centralVariants.Count == 0)
+            {
+                result.Message = "Для свободной зоны между плитами шириной "
+                                 + preferredCentralWidthMm.ToString(CultureInfo.InvariantCulture)
+                                 + " мм не удалось подобрать ЖБ-перемычки без захода под низкую плиту. "
+                                 + (centralResult.Message ?? string.Empty);
+                return result;
+            }
+
+            foreach (LintelSelectionVariantV3 centralVariant in centralVariants)
+            {
+                result.Variants.Add(CreateMixedMetalVariant(
+                    group,
+                    centralVariant,
+                    bearingAtEnd,
+                    startAngle,
+                    endAngle,
+                    lengthMm,
+                    startHeightMm,
+                    endHeightMm,
+                    startBearingMm,
+                    startAngleThicknessMm,
+                    availableCentralZoneMm,
+                    preferredCentralWidthMm,
+                    result.Variants.Count + 1));
+            }
+            result.EligibleItemCount = centralResult.EligibleItemCount
+                                       + (startAngle == null ? 0 : 1)
+                                       + (endAngle == null ? 0 : 1);
+            var lowSides = new List<string>();
+            if (firstSideNeedsAngle)
+                lowSides.Add("сторона 1: "
+                             + Math.Round(group.ClearHeightToSupport1Mm)
+                                 .ToString(CultureInfo.InvariantCulture) + " мм");
+            if (secondSideNeedsAngle)
+                lowSides.Add("сторона 2: "
+                             + Math.Round(group.ClearHeightToSupport2Mm)
+                                 .ToString(CultureInfo.InvariantCulture) + " мм");
+            result.Message = "Недостаточный зазор определён отдельно по сторонам ("
+                             + string.Join("; ", lowSides)
+                             + "). Уголки подняты до низа соответствующих плит, "
+                             + "между ними подобраны ЖБ-перемычки на отметке верха проёма.";
+            return result;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private LintelSelectionVariantV3 CreateMixedMetalVariant(
+            OpeningGroupCardV3 group,
+            LintelSelectionVariantV3 centralVariant,
+            bool bearingAtEnd,
+            LintelCatalogItemV3 startAngle,
+            LintelCatalogItemV3 endAngle,
+            int metalLengthMm,
+            int startHeightMm,
+            int endHeightMm,
+            double startBearingMm,
+            int startAngleThicknessMm,
+            int availableCentralZoneMm,
+            int preferredCentralWidthMm,
+            int rank)
+        {
+            List<LintelLayoutSegmentV3> centralComponents = centralVariant.LayoutSegments
+                .Where(segment => !segment.IsGap)
+                .Select(CloneLayoutSegment)
+                .ToList();
+            if (bearingAtEnd)
+                centralComponents.Reverse();
+
+            var segments = new List<LintelLayoutSegmentV3>();
+            if (startAngle != null)
+                segments.Add(CreateAutomaticAngleSegment(startAngle, metalLengthMm));
+
+            int availableAngleGapsMm = Math.Max(
+                0,
+                availableCentralZoneMm - centralVariant.TotalWidthMm);
+            int startAngleGapMm = startAngle == null
+                ? 0
+                : endAngle == null
+                    ? availableAngleGapsMm
+                    : availableAngleGapsMm / 2;
+            int endAngleGapMm = endAngle == null
+                ? 0
+                : startAngle == null
+                    ? availableAngleGapsMm
+                    : availableAngleGapsMm - startAngleGapMm;
+            if (startAngleGapMm > 0)
+                segments.Add(CreateGapSegment(startAngleGapMm));
+
+            for (int index = 0; index < centralComponents.Count; index++)
+            {
+                if (index > 0)
+                    segments.Add(CreateGapSegment(LintelSelectionEngineV3.InterElementGapMm));
+                segments.Add(centralComponents[index]);
+            }
+
+            if (endAngle != null)
+            {
+                if (endAngleGapMm > 0)
+                    segments.Add(CreateGapSegment(endAngleGapMm));
+                segments.Add(CreateAutomaticAngleSegment(endAngle, metalLengthMm));
+            }
+
+            int layoutWidthMm = segments.Sum(segment => segment.WidthMm);
+            double diagramScale = 348.0 / Math.Max(1, layoutWidthMm);
+            foreach (LintelLayoutSegmentV3 segment in segments)
+                segment.DisplayWidth = Math.Max(1, segment.WidthMm * diagramScale);
+
+            List<LintelLayoutSegmentV3> components = segments
+                .Where(segment => !segment.IsGap)
+                .ToList();
+            List<IGrouping<string, LintelLayoutSegmentV3>> markGroups = components
+                .GroupBy(segment => segment.Mark, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            string composition = string.Join(" + ", markGroups.Select(markGroup =>
+                markGroup.Count() > 1
+                    ? markGroup.Key + " × " + markGroup.Count()
+                    : markGroup.Key));
+            string compositionKey = string.Join("|", markGroups
+                .OrderBy(markGroup => markGroup.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(markGroup => markGroup.Key + "x" + markGroup.Count()))
+                                    + "@" + metalLengthMm.ToString(CultureInfo.InvariantCulture)
+                                    + "#" + preferredCentralWidthMm.ToString(CultureInfo.InvariantCulture);
+            int roundedWallWidthMm = (int)Math.Round(group.WallWidthMm);
+            int requiredBearingWidthMm = (int)Math.Ceiling(Math.Min(
+                group.WallWidthMm,
+                Math.Max(0, group.RequiredSupportWidth1Mm)
+                + Math.Max(0, group.RequiredSupportWidth2Mm)));
+            int packageWallOffsetMm = startAngle == null
+                ? 0
+                : (int)Math.Round(
+                    startAngle.WidthMm - startBearingMm - startAngleThicknessMm);
+
+            return new LintelSelectionVariantV3
+            {
+                Rank = rank,
+                CompositionKey = compositionKey,
+                CompositionText = composition,
+                TotalWidthMm = layoutWidthMm,
+                SignedWidthDeltaMm = layoutWidthMm - roundedWallWidthMm,
+                WidthDeltaMm = Math.Abs(layoutWidthMm - roundedWallWidthMm),
+                BearingWidthMm = centralVariant.BearingWidthMm
+                                 + (startAngle?.WidthMm ?? 0)
+                                 + (endAngle?.WidthMm ?? 0),
+                RequiredBearingWidthMm = requiredBearingWidthMm,
+                ElementCount = components.Count,
+                DistinctMarkCount = markGroups.Count,
+                MinimumLengthMm = Math.Min(centralVariant.MinimumLengthMm, metalLengthMm),
+                MaximumLengthMm = Math.Max(centralVariant.MaximumLengthMm, metalLengthMm),
+                OpeningWidthExcessScore = centralVariant.OpeningWidthExcessScore,
+                LengthExcessScore = centralVariant.LengthExcessScore,
+                PriorityScore = centralVariant.PriorityScore,
+                MinimumPriority = centralVariant.MinimumPriority,
+                AveragePriority = centralVariant.AveragePriority,
+                WallWidthToleranceMm = WallWidthToleranceMm,
+                LeftSupportPadTypeName = LintelSupportPadSelectionV3.None,
+                RightSupportPadTypeName = LintelSupportPadSelectionV3.None,
+                SupportPadsInitialized = true,
+                PackageWallOffsetMm = packageWallOffsetMm,
+                StripTypeIdValue = -1,
+                MainLintelHeightMm = startAngle == null ? 0 : startHeightMm,
+                SecondLintelHeightMm = endAngle == null ? 0 : endHeightMm,
+                LayoutSegments = segments
+            };
+        }
+
+        private static LintelLayoutSegmentV3 CloneLayoutSegment(LintelLayoutSegmentV3 source)
+        {
+            return new LintelLayoutSegmentV3
+            {
+                Mark = source.Mark,
+                RevitFamilyName = source.RevitFamilyName,
+                Material = source.Material,
+                LengthMm = source.LengthMm,
+                HeightMm = source.HeightMm,
+                WidthMm = source.WidthMm,
+                IsBearing = source.IsBearing
+            };
+        }
+
+        private static LintelLayoutSegmentV3 CreateAutomaticAngleSegment(
+            LintelCatalogItemV3 angle,
+            int lengthMm)
+        {
+            return new LintelLayoutSegmentV3
+            {
+                Mark = angle.Mark,
+                RevitFamilyName = angle.RevitFamilyName,
+                Material = LintelMaterialV3.Metal,
+                LengthMm = lengthMm,
+                HeightMm = angle.HeightMm,
+                WidthMm = angle.WidthMm,
+                IsBearing = true
+            };
+        }
+
+        private static LintelLayoutSegmentV3 CreateGapSegment(int widthMm)
+        {
+            return new LintelLayoutSegmentV3
+            {
+                Mark = "Зазор",
+                WidthMm = Math.Max(0, widthMm),
+                IsGap = true
+            };
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static int GetAngleThicknessMm(LintelCatalogItemV3 angle)
+        {
+            int thicknessMm = ReadIntegerTokens(angle?.Mark)
+                .Skip(2)
+                .FirstOrDefault(value => value > 0 && value <= 30);
+            return thicknessMm > 0 ? thicknessMm : 8;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private LintelCatalogItemV3 FindAutomaticBearingAngle(bool mirrored)
+        {
+            return _lintelCatalog
+                .Where(item => item != null
+                               && GetCatalogItemMaterial(item) == LintelMaterialV3.Metal
+                               && item.WidthMm == 125
+                               && IsAngleDescription((item.Mark ?? string.Empty)
+                                                     + " " + (item.RevitFamilyName ?? string.Empty)))
+                .Where(item =>
+                {
+                    string normalized = NormalizeProfileText(
+                        (item.Mark ?? string.Empty) + " " + (item.RevitFamilyName ?? string.Empty));
+                    return normalized.Contains("зерк") == mirrored
+                           && !normalized.Contains("перовниз");
+                })
+                .OrderByDescending(item => ReadIntegerTokens(item.Mark)
+                    .Skip(2)
+                    .FirstOrDefault() == 8)
+                .ThenBy(item => item.Mark, _naturalComparer)
+                .FirstOrDefault();
         }
 
         private LintelSelectionResultV3 CreateCatalogErrorResult()
@@ -1695,6 +2309,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 ApplyCalculationStatus(group, result);
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private void DisplayStoredCalculation(OpeningGroupCardV3 group)
         {
             Variants.Clear();
@@ -1704,6 +2319,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (activeVariant == null || !Variants.Contains(activeVariant))
                 activeVariant = Variants.FirstOrDefault();
             SelectedVariant = activeVariant;
+            if (activeVariant == null)
+                RestoreEditorFromCalculation();
             SelectionMessage = group.CalculationMessage ?? "Варианты не рассчитаны.";
             RaiseVariantsProperties();
         }
@@ -1724,6 +2341,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
 
         // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+        //11.09.26 - металлические перемычки + подбор
         private void ApplyExistingLintelAssessment(
             OpeningGroupCardV3 group,
             LintelSelectionResultV3 result)
@@ -1795,6 +2413,20 @@ namespace FerrumAddinDev.LintelCreator_v3
                         _document,
                         lintel.Symbol,
                         false);
+                    option.StripTypeId = LintelPlacementEngineV3.ReadCompositeSymbolStripTypeId(
+                        lintel.Symbol);
+                    FamilySymbol strip = option.StripTypeId == null
+                        || option.StripTypeId == ElementId.InvalidElementId
+                        ? null
+                        : _document.GetElement(option.StripTypeId) as FamilySymbol;
+                    option.StripFamilyName = strip?.FamilyName;
+                    option.StripTypeName = strip?.Name;
+                    option.StripLayoutMm = LintelPlacementEngineV3.ReadCompositeSymbolStripLayoutMm(
+                        lintel.Symbol);
+                    option.MainLintelHeightMm = LintelPlacementEngineV3.ReadCompositeSymbolMainLintelHeightMm(
+                        lintel.Symbol);
+                    option.SecondLintelHeightMm = LintelPlacementEngineV3.ReadCompositeSymbolSecondLintelHeightMm(
+                        lintel.Symbol);
                 }
             }
             return option;
@@ -1878,7 +2510,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                     }
                 }
                 int wallWidth = (int)Math.Round(group.WallWidthMm);
-                if (Math.Abs(packageWidth - wallWidth) > WallWidthToleranceMm)
+                bool containsMetal = componentItems.Any(IsMetalCatalogItem)
+                                     || orderedComponents.Any(component =>
+                                         component.Material == LintelMaterialV3.Metal);
+                if (!containsMetal && Math.Abs(packageWidth - wallWidth) > WallWidthToleranceMm)
                 {
                     errors.Add("ширина фактического комплекта " + packageWidth
                                + " мм не соответствует стене " + wallWidth
@@ -1899,6 +2534,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return errors;
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private void ApplyExistingTypeSettings(OpeningGroupCardV3 group)
         {
             string typeName = (group?.ExistingLintelTypeNames ?? string.Empty)
@@ -1919,7 +2555,11 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RaisePropertyChanged(nameof(IsPartition));
             }
 
-            LintelMaterialV3 material = IsMetalCompositeTypeName(typeName)
+            ExistingLintelTypeOptionV3 currentType = FindCurrentExistingTypeOption(group);
+            bool containsMetal = currentType?.Components.Any(component =>
+                                     component.Material == LintelMaterialV3.Metal) == true
+                                 || IsMetalCompositeTypeName(typeName);
+            LintelMaterialV3 material = containsMetal
                 ? LintelMaterialV3.Metal
                 : LintelMaterialV3.ReinforcedConcrete;
             if (_lintelMaterial != material)
@@ -1930,6 +2570,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private void RefreshExistingLintelTypeOptions(OpeningGroupCardV3 selectedGroup)
         {
             List<OpeningGroupCardV3> sourceGroups = GetExistingSourceGroups(selectedGroup);
@@ -1972,7 +2613,7 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private List<OpeningGroupCardV3> GetExistingSourceGroups(OpeningGroupCardV3 selectedGroup)
         {
-            if (selectedGroup?.HasExistingLintel != true)
+            if (selectedGroup == null)
                 return new List<OpeningGroupCardV3>();
             return new List<OpeningGroupCardV3> { selectedGroup };
         }
@@ -2011,7 +2652,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                     return false;
             }
 
-            bool isMetal = IsMetalCompositeTypeName(option.TypeName);
+            bool isMetal = option.Components.Any(component => component.Material == LintelMaterialV3.Metal)
+                           || IsMetalCompositeTypeName(option.TypeName);
             return _lintelMaterial == LintelMaterialV3.Metal ? isMetal : !isMetal;
         }
 
@@ -2021,6 +2663,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                    || double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static bool IsMetalCompositeTypeName(string typeName)
         {
             string name = typeName ?? string.Empty;
@@ -2042,28 +2685,55 @@ namespace FerrumAddinDev.LintelCreator_v3
             return string.Equals(cleaned, "Тестовый вариант", StringComparison.OrdinalIgnoreCase);
         }
 
+        //11.09.26 - металлические перемычки + подбор
         public bool SaveEditorChangesToActiveVariant()
         {
             if (!CanSaveVariantChanges) return false;
 
             OpeningGroupCardV3 group = SelectedGroup;
             LintelSelectionVariantV3 previousVariant = SelectedVariant;
-            LintelSelectionVariantV3 savedVariant = CreateVariantFromEditor(group, previousVariant.Rank);
+            int rank = previousVariant?.Rank
+                       ?? Math.Max(1, group.CalculatedVariants.Select(variant => variant.Rank).DefaultIfEmpty(0).Max() + 1);
+            LintelSelectionVariantV3 savedVariant = CreateVariantFromEditor(group, rank);
             if (savedVariant == null) return false;
+            if (SelectedExistingLintelType != null)
+            {
+                List<LintelPlacementComponentRequestV3> savedComponents =
+                    CreatePlacementComponents(savedVariant);
+                if (GetCachedCompositionDifferences(
+                        SelectedExistingLintelType,
+                        savedComponents,
+                        savedVariant.LeftSupportPadTypeName,
+                        savedVariant.RightSupportPadTypeName,
+                        true).Count == 0
+                    && AreAdditionalTypeSettingsEqual(SelectedExistingLintelType))
+                {
+                    savedVariant.ReadyCompositeFamilyName = SelectedExistingLintelType.FamilyName;
+                    savedVariant.ReadyCompositeTypeName = SelectedExistingLintelType.TypeName;
+                    savedVariant.ReadyCompositeTypeIdValue = GetElementIdValue(
+                        SelectedExistingLintelType.TypeId);
+                }
+            }
             ApplyExistingTypeWarning(group, savedVariant);
 
-            int storedIndex = group.CalculatedVariants.IndexOf(previousVariant);
-            int visibleIndex = Variants.IndexOf(previousVariant);
-            if (storedIndex < 0 || visibleIndex < 0) return false;
+            int storedIndex = previousVariant == null ? -1 : group.CalculatedVariants.IndexOf(previousVariant);
+            int visibleIndex = previousVariant == null ? -1 : Variants.IndexOf(previousVariant);
 
             // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
             _isRestoringEditor = true;
             try
             {
-                group.CalculatedVariants[storedIndex] = savedVariant;
+                if (storedIndex >= 0)
+                    group.CalculatedVariants[storedIndex] = savedVariant;
+                else
+                    group.CalculatedVariants.Add(savedVariant);
                 group.ActiveVariant = savedVariant;
-                Variants[visibleIndex] = savedVariant;
+                if (visibleIndex >= 0)
+                    Variants[visibleIndex] = savedVariant;
+                else
+                    Variants.Add(savedVariant);
                 SelectedVariant = savedVariant;
+                group.IsCalculated = true;
             }
             finally
             {
@@ -2105,7 +2775,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                                             components,
                                             leftSupportPad,
                                             rightSupportPad,
-                                            true).Count == 0;
+                                            true).Count == 0
+                                        && AreAdditionalTypeSettingsEqual(selectedReadyType);
             string requestedTypeName = useSelectedReadyType
                 ? selectedReadyType.TypeName
                 : BuildPlacementTypeName(SelectedGroup, components);
@@ -2118,6 +2789,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                     leftSupportPad,
                     rightSupportPad,
                     true);
+            if (sameNameType != null && !AreAdditionalTypeSettingsEqual(sameNameType))
+                sameNameDifferences.Add("планка, её раскладка или высоты вложенных перемычек отличаются");
 
             var request = new LintelTypeReplacementRequestV3
             {
@@ -2131,13 +2804,48 @@ namespace FerrumAddinDev.LintelCreator_v3
                     ? string.Empty
                     : string.Join("; ", sameNameDifferences),
                 LeftSupportPadTypeName = leftSupportPad,
-                RightSupportPadTypeName = rightSupportPad
+                RightSupportPadTypeName = rightSupportPad,
+                PackageWallOffsetMm = EditorHasMetal ? EditorPackageWallOffsetMm : 0,
+                StripTypeId = EditorHasMetal
+                    ? SelectedStripType?.TypeId ?? ElementId.InvalidElementId
+                    : ElementId.InvalidElementId,
+                StripLayoutMm = EditorHasMetal ? EditorStripLayoutMm : 0,
+                MainLintelHeightMm = _mainLintelHeightMm,
+                SecondLintelHeightMm = _secondLintelHeightMm
             };
             request.Components.AddRange(components);
             request.LintelIds.AddRange(SelectedGroup.ExistingLintelIds
                 .GroupBy(id => id.Value)
                 .Select(group => group.First()));
+            foreach (ElementId lintelId in request.LintelIds)
+            {
+                XYZ lintelPoint = (_document.GetElement(lintelId)?.Location as LocationPoint)?.Point;
+                OpeningPlacementTargetV3 target = SelectedGroup.PlacementTargets
+                    .Where(item => item?.Location != null)
+                    .OrderBy(item => lintelPoint == null
+                        ? 0
+                        : PlanarDistance(lintelPoint, item.Location))
+                    .FirstOrDefault();
+                if (target == null) continue;
+                request.Positions.Add(new LintelReplacementPositionV3
+                {
+                    LintelId = lintelId,
+                    WallId = target.WallId,
+                    OpeningLocation = target.Location,
+                    WallOrientation = target.WallOrientation,
+                    SupportDirection = target.SupportDirection,
+                    SupportType = target.SupportType
+                });
+            }
             return request.LintelIds.Count == 0 ? null : request;
+        }
+
+        private static double PlanarDistance(XYZ first, XYZ second)
+        {
+            if (first == null || second == null) return double.MaxValue;
+            double dx = first.X - second.X;
+            double dy = first.Y - second.Y;
+            return Math.Sqrt(dx * dx + dy * dy);
         }
 
         internal void BeginLintelTypeReplacement(int lintelCount)
@@ -2188,7 +2896,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                                 FamilyName = component.FamilyName,
                                 TypeName = component.TypeName,
                                 Order = component.Order,
-                                OffsetToNextMm = component.OffsetToNextMm
+                                OffsetToNextMm = component.OffsetToNextMm,
+                                Material = component.Material
                             }));
                         group.IsCalculated = false;
                     }
@@ -2245,13 +2954,23 @@ namespace FerrumAddinDev.LintelCreator_v3
 
                 List<LintelPlacementComponentRequestV3> components =
                     CreatePlacementComponents(group.ActiveVariant);
-                if (components.Count == 0)
+                ExistingLintelTypeOptionV3 readyType = _allExistingLintelTypeOptions.FirstOrDefault(option =>
+                    group.ActiveVariant.ReadyCompositeTypeIdValue > 0
+                    && option.TypeId?.Value == group.ActiveVariant.ReadyCompositeTypeIdValue)
+                    ?? (!string.IsNullOrWhiteSpace(group.ActiveVariant.ReadyCompositeTypeName)
+                        ? FindExistingTypeOption(
+                            group.ActiveVariant.ReadyCompositeTypeName,
+                            group.ActiveVariant.ReadyCompositeFamilyName)
+                        : null);
+                if (components.Count == 0 && readyType == null)
                     continue;
 
-                string compositeTypeName = BuildPlacementTypeName(group, components);
+                string compositeTypeName = readyType == null
+                    ? BuildPlacementTypeName(group, components)
+                    : readyType.TypeName;
                 EnsureVariantSupportPads(group.ActiveVariant, compositeTypeName);
-                ExistingLintelTypeOptionV3 sameNameType = FindExistingTypeOption(compositeTypeName);
-                List<string> typeDifferences = sameNameType == null
+                ExistingLintelTypeOptionV3 sameNameType = readyType ?? FindExistingTypeOption(compositeTypeName);
+                List<string> typeDifferences = readyType != null || sameNameType == null
                     ? new List<string>()
                     : GetCachedCompositionDifferences(
                         sameNameType,
@@ -2262,6 +2981,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 var groupRequest = new LintelPlacementGroupRequestV3
                 {
                     GroupKey = group.Key,
+                    CompositeFamilyName = readyType?.FamilyName
+                                          ?? group.ActiveVariant.ReadyCompositeFamilyName,
                     WallTypeName = group.WallTypeName,
                     CompositeTypeName = compositeTypeName,
                     HasExistingTypeDifference = typeDifferences.Count > 0,
@@ -2269,7 +2990,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                         ? string.Empty
                         : string.Join("; ", typeDifferences),
                     LeftSupportPadTypeName = group.ActiveVariant.LeftSupportPadTypeName,
-                    RightSupportPadTypeName = group.ActiveVariant.RightSupportPadTypeName
+                    RightSupportPadTypeName = group.ActiveVariant.RightSupportPadTypeName,
+                    PackageWallOffsetMm = group.ActiveVariant.PackageWallOffsetMm,
+                    ExistingCompositeTypeId = readyType?.TypeId,
+                    StripTypeId = GetTypeIdFromValue(group.ActiveVariant.StripTypeIdValue),
+                    StripLayoutMm = group.ActiveVariant.StripLayoutMm,
+                    MainLintelHeightMm = group.ActiveVariant.MainLintelHeightMm,
+                    SecondLintelHeightMm = group.ActiveVariant.SecondLintelHeightMm
                 };
                 groupRequest.Targets.AddRange(group.PlacementTargets);
                 groupRequest.Components.AddRange(components);
@@ -2405,6 +3132,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             LintelSelectionVariantV3 variant)
         {
             var result = new List<LintelPlacementComponentRequestV3>();
+            IEnumerable<LintelCatalogItemV3> catalogCandidates = EditorCatalogItems
+                .Concat(_lintelCatalog)
+                .Where(item => item != null)
+                .Distinct();
             foreach (LintelLayoutSegmentV3 segment in variant.LayoutSegments)
             {
                 if (segment.IsGap)
@@ -2414,24 +3145,41 @@ namespace FerrumAddinDev.LintelCreator_v3
                     continue;
                 }
 
-                LintelCatalogItemV3 item = _lintelCatalog.FirstOrDefault(candidate =>
+                LintelCatalogItemV3 item = catalogCandidates.FirstOrDefault(candidate =>
+                                               string.Equals(
+                                                   candidate.Mark,
+                                                   segment.Mark,
+                                                   StringComparison.OrdinalIgnoreCase)
+                                               && candidate.WidthMm == segment.WidthMm
+                                               && (string.IsNullOrWhiteSpace(segment.RevitFamilyName)
+                                                   || string.Equals(
+                                                       candidate.RevitFamilyName,
+                                                       segment.RevitFamilyName,
+                                                       StringComparison.OrdinalIgnoreCase)))
+                                           ?? catalogCandidates.FirstOrDefault(candidate =>
                                                string.Equals(
                                                    candidate.Mark,
                                                    segment.Mark,
                                                    StringComparison.OrdinalIgnoreCase)
                                                && candidate.WidthMm == segment.WidthMm)
-                                           ?? _lintelCatalog.FirstOrDefault(candidate =>
+                                           ?? catalogCandidates.FirstOrDefault(candidate =>
                                                string.Equals(
                                                    candidate.Mark,
                                                    segment.Mark,
                                                    StringComparison.OrdinalIgnoreCase));
                 if (item == null) return new List<LintelPlacementComponentRequestV3>();
 
+                int lengthMm = segment.LengthMm > 0 ? segment.LengthMm : item.LengthMm;
+                LintelMaterialV3 material = GetCatalogItemMaterial(item);
                 result.Add(new LintelPlacementComponentRequestV3
                 {
                     Mark = item.Mark,
                     RevitFamilyName = item.RevitFamilyName,
-                    LengthMm = item.LengthMm,
+                    RevitTypeName = material == LintelMaterialV3.Metal
+                        ? BuildMetalRevitTypeName(item, lengthMm)
+                        : item.Mark,
+                    Material = material,
+                    LengthMm = lengthMm,
                     WidthMm = segment.WidthMm,
                     IsBearing = segment.IsBearing,
                     MaximumOpeningWidthMm = item.MaximumOpeningWidthMm,
@@ -2440,6 +3188,45 @@ namespace FerrumAddinDev.LintelCreator_v3
                 });
             }
             return result;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static string BuildMetalRevitTypeName(LintelCatalogItemV3 item, int lengthMm)
+        {
+            string mark = item?.Mark ?? string.Empty;
+            if (TryReadMetalLength(mark, out int existingLength)
+                && existingLength == lengthMm)
+                return mark;
+
+            string description = (item?.RevitFamilyName ?? string.Empty)
+                                 + " " + mark
+                                 + " " + (item?.Family ?? string.Empty);
+            if (IsChannelDescription(description))
+            {
+                string profile = ReadChannelProfileCode(mark);
+                if (!string.IsNullOrWhiteSpace(profile))
+                {
+                    string normalized = NormalizeProfileText(description);
+                    return normalized.Contains("поворот") || normalized.Contains("наребро")
+                        ? profile + "_на ребро_" + lengthMm.ToString(CultureInfo.InvariantCulture)
+                        : profile + " " + lengthMm.ToString(CultureInfo.InvariantCulture);
+                }
+            }
+            return lengthMm.ToString(CultureInfo.InvariantCulture);
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static string ReadChannelProfileCode(string text)
+        {
+            string value = text ?? string.Empty;
+            for (int index = 0; index < value.Length; index++)
+            {
+                char character = char.ToUpperInvariant(value[index]);
+                if (character != 'П' && character != 'P') continue;
+                string digits = new string(value.Skip(index + 1).TakeWhile(char.IsDigit).ToArray());
+                if (digits.Length > 0) return "П" + digits;
+            }
+            return string.Empty;
         }
 
         private void EnsureVariantSupportPads(
@@ -2475,7 +3262,9 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (group == null || components.Count == 0)
                 return;
 
-            string typeName = BuildPlacementTypeName(group, components);
+            string typeName = string.IsNullOrWhiteSpace(variant.ReadyCompositeTypeName)
+                ? BuildPlacementTypeName(group, components)
+                : variant.ReadyCompositeTypeName;
             EnsureVariantSupportPads(variant, typeName);
             ExistingLintelTypeOptionV3 existingType = FindExistingTypeOption(typeName);
             if (existingType == null)
@@ -2515,7 +3304,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 LintelPlacementComponentRequestV3 selected = selectedComponents[index];
                 bool typeMatches = string.Equals(
                     existing.TypeName,
-                    selected.Mark,
+                    selected.RevitTypeName ?? selected.Mark,
                     StringComparison.Ordinal);
                 bool familyMatches = string.IsNullOrWhiteSpace(existing.FamilyName)
                                      || string.IsNullOrWhiteSpace(selected.RevitFamilyName)
@@ -2542,6 +3331,17 @@ namespace FerrumAddinDev.LintelCreator_v3
                         + (selected.IsBearing ? "Несущая" : "Ненесущая") + "»");
                 }
 
+                LintelMaterialV3 existingMaterial = existingItem == null
+                    ? existing.Material
+                    : GetCatalogItemMaterial(existingItem);
+                if (existingMaterial != selected.Material)
+                {
+                    differences.Add(
+                        (index + 1).ToString(CultureInfo.InvariantCulture)
+                        + "ПР: материал существует «"
+                        + GetMaterialDisplayName(existingMaterial)
+                        + "», выбран «" + GetMaterialDisplayName(selected.Material) + "»");
+                }
                 if (index < commonCount - 1)
                 {
                     int selectedOffsetMm = selected.WidthMm + selected.GapAfterMm;
@@ -2595,15 +3395,34 @@ namespace FerrumAddinDev.LintelCreator_v3
                 side + ": существует «" + existingValue + "», выбрано «" + selectedValue + "»");
         }
 
+        private bool AreAdditionalTypeSettingsEqual(ExistingLintelTypeOptionV3 existingType)
+        {
+            if (existingType == null) return false;
+            long existingStripTypeId = GetElementIdValue(existingType.StripTypeId);
+            long selectedStripTypeId = GetElementIdValue(SelectedStripType?.TypeId);
+            bool stripSettingsMatch = existingStripTypeId == selectedStripTypeId
+                                      && (selectedStripTypeId < 0
+                                          || existingType.StripLayoutMm == EditorStripLayoutMm);
+            return stripSettingsMatch
+                   && existingType.MainLintelHeightMm == _mainLintelHeightMm
+                   && existingType.SecondLintelHeightMm == _secondLintelHeightMm;
+        }
+
         private static string FormatPlacementComponent(LintelPlacementComponentRequestV3 component)
         {
             if (component == null) return "не определено";
             return string.IsNullOrWhiteSpace(component.RevitFamilyName)
-                ? component.Mark ?? "не определено"
-                : component.RevitFamilyName + " : " + (component.Mark ?? "не определено");
+                ? component.RevitTypeName ?? component.Mark ?? "не определено"
+                : component.RevitFamilyName + " : "
+                  + (component.RevitTypeName ?? component.Mark ?? "не определено");
         }
 
-        private static string BuildPlacementTypeName(
+        private static string GetMaterialDisplayName(LintelMaterialV3 material)
+        {
+            return material == LintelMaterialV3.Metal ? "Металл" : "Железобетон";
+        }
+
+        private string BuildPlacementTypeName(
             OpeningGroupCardV3 group,
             IList<LintelPlacementComponentRequestV3> components)
         {
@@ -2613,9 +3432,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .Where(value => value > 0)
                 .DefaultIfEmpty((int)Math.Round(group.OpeningWidthMm))
                 .Min();
-            int masonryCourse = components
-                .Select(component => component.MasonryCourseHeightMm)
-                .FirstOrDefault(value => value >= 0);
+            int masonryCourse = (int)_masonryType;
             string layout = string.Join("_", components
                 .Select(component => component.TypeCode)
                 .Where(value => !string.IsNullOrWhiteSpace(value)));
@@ -2654,6 +3471,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 segments.Add(new LintelLayoutSegmentV3
                 {
                     Mark = row.SelectedCatalogItem.Mark,
+                    RevitFamilyName = row.SelectedCatalogItem.RevitFamilyName,
+                    Material = row.Material,
+                    LengthMm = row.LengthMm,
+                    HeightMm = row.HeightMm,
                     WidthMm = row.WidthMm,
                     DisplayWidth = Math.Max(1, row.WidthMm * scale),
                     IsBearing = row.IsBearing
@@ -2704,6 +3525,11 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RightSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(SelectedRightSupportPad),
                 SupportPadsInitialized = true,
                 SupportPadSourceTypeName = EditorTypeName,
+                PackageWallOffsetMm = EditorHasMetal ? EditorPackageWallOffsetMm : 0,
+                StripTypeIdValue = EditorHasMetal ? GetElementIdValue(SelectedStripType?.TypeId) : -1,
+                StripLayoutMm = EditorHasMetal ? EditorStripLayoutMm : 0,
+                MainLintelHeightMm = _mainLintelHeightMm,
+                SecondLintelHeightMm = _secondLintelHeightMm,
                 LayoutSegments = segments
             };
         }
@@ -2714,7 +3540,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                                        ?? EditorCatalogItems.FirstOrDefault();
             if (item == null) return;
 
-            var row = new LintelEditorRowV3(item);
+            var row = new LintelEditorRowV3(item, GetDefaultMetalLengthMm());
+            if (row.IsMetal)
+                row.LengthMm = GetDefaultMetalLengthMm();
             SubscribeEditorRow(row);
             EditorRows.Add(row);
             UpdateEditorRowIndexes();
@@ -2753,12 +3581,23 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaiseEditorProperties();
         }
 
+        //11.09.26 - металлические перемычки + подбор
         public void RestoreEditorFromCalculation()
         {
             foreach (LintelEditorRowV3 row in EditorRows)
                 row.PropertyChanged -= EditorRow_PropertyChanged;
             EditorRows.Clear();
             RefreshEditorCatalogItems();
+            _editorPackageWallOffsetMm = SelectedVariant?.PackageWallOffsetMm ?? 0;
+            RaisePropertyChanged(nameof(EditorPackageWallOffsetMm));
+            if (SelectedVariant != null)
+                ApplyVariantAdditionalSettings(SelectedVariant);
+            else if (SelectedGroup?.HasExistingLintel == true)
+                ApplyExistingTypeAdditionalSettings(
+                    FindCurrentExistingTypeOption(SelectedGroup)
+                    ?? CreateExistingTypeOptionFromGroup(SelectedGroup));
+            else
+                ApplyVariantAdditionalSettings(null);
 
             if (SelectedVariant != null)
             {
@@ -2780,7 +3619,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                     if (!EditorCatalogItems.Contains(item))
                         EditorCatalogItems.Add(item);
 
-                    var row = new LintelEditorRowV3(item);
+                    var row = new LintelEditorRowV3(item, GetDefaultMetalLengthMm());
+                    row.LengthMm = segment.LengthMm > 0 ? segment.LengthMm : item.LengthMm;
+                    row.HeightMm = segment.HeightMm > 0 ? segment.HeightMm : item.HeightMm;
                     if (leadingGap > 0)
                     {
                         row.GapMm = leadingGap;
@@ -2827,14 +3668,24 @@ namespace FerrumAddinDev.LintelCreator_v3
                                + (SelectedGroup.ExistingLintelTypeNames ?? "—") + "».";
         }
 
+        //11.09.26 - металлические перемычки + подбор
         public bool LoadEditorFromExistingType()
         {
             ExistingLintelTypeOptionV3 option = FindExistingEditorTypeOption(EditorTypeName);
             if (!CanLoadExistingEditorType || option == null) return false;
-
-            return LoadEditorFromExistingTypeOption(option);
+            bool wasRestoringEditor = _isRestoringEditor;
+            _isRestoringEditor = true;
+            try
+            {
+                return LoadEditorFromExistingTypeOption(option);
+            }
+            finally
+            {
+                _isRestoringEditor = wasRestoringEditor;
+            }
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private bool LoadEditorFromExistingTypeOption(ExistingLintelTypeOptionV3 option)
         {
             if (option == null) return false;
@@ -2843,13 +3694,18 @@ namespace FerrumAddinDev.LintelCreator_v3
                 row.PropertyChanged -= EditorRow_PropertyChanged;
             EditorRows.Clear();
             RefreshEditorCatalogItems();
+            _editorPackageWallOffsetMm = 0;
+            RaisePropertyChanged(nameof(EditorPackageWallOffsetMm));
+            ApplyExistingTypeAdditionalSettings(option);
 
             foreach (ExistingLintelComponentV3 component in option.Components
                          .OrderBy(item => item.Order))
             {
-                LintelCatalogItemV3 item = FindCatalogItem(component.TypeName, 0);
+                LintelCatalogItemV3 item = ResolveExistingComponentCatalogItem(component);
                 if (item == null) continue;
                 LintelEditorRowV3 row = AddExistingEditorRow(item);
+                if (row.IsMetal && TryReadMetalLength(component.TypeName, out int lengthMm))
+                    row.LengthMm = lengthMm;
                 if (component.OffsetToNextMm > 0)
                 {
                     row.GapMm = Math.Max(
@@ -2862,12 +3718,52 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RestoreExistingRowsFromTypeName(option.TypeName);
 
             UpdateEditorRowIndexes();
-            SynchronizeSupportPadsFromEditorType(option, true);
+            _supportPadSelectionSourceKey = GetSupportPadSourceKey(option, option.TypeName);
+            _supportPadSelectionEdited = true;
+            ApplySupportPadSelections(
+                option.LeftSupportPadTypeName,
+                option.RightSupportPadTypeName);
             RaiseEditorProperties();
             SelectionMessage = EditorRows.Count > 0
-                ? "В редактор загружен существующий тип «" + option.TypeName + "»."
+                ? "Тип «" + option.TypeName
+                  + "» загружен в редактор. Для применения нажмите «Сохранить изменения варианта»."
                 : "Не удалось прочитать вложенные типы из «" + option.TypeName + "».";
             return EditorRows.Count > 0;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private void ApplyExistingTypeAdditionalSettings(ExistingLintelTypeOptionV3 option)
+        {
+            ApplyAdditionalSettings(
+                GetElementIdValue(option?.StripTypeId),
+                option?.StripLayoutMm ?? 0,
+                option?.MainLintelHeightMm ?? 0,
+                option?.SecondLintelHeightMm ?? 0);
+        }
+
+        private void ApplyVariantAdditionalSettings(LintelSelectionVariantV3 variant)
+        {
+            ApplyAdditionalSettings(
+                variant?.StripTypeIdValue ?? -1,
+                variant?.StripLayoutMm ?? 0,
+                variant?.MainLintelHeightMm ?? 0,
+                variant?.SecondLintelHeightMm ?? 0);
+        }
+
+        private void ApplyAdditionalSettings(
+            long stripTypeIdValue,
+            int stripLayoutMm,
+            int mainHeightMm,
+            int secondHeightMm)
+        {
+            _selectedStripType = StripTypeOptions.FirstOrDefault(option =>
+                                     GetElementIdValue(option.TypeId) == stripTypeIdValue)
+                                 ?? StripTypeOptions.FirstOrDefault();
+            _editorStripLayoutMm = Math.Max(0, stripLayoutMm);
+            _mainLintelHeightMm = mainHeightMm;
+            _secondLintelHeightMm = secondHeightMm;
+            RaisePropertyChanged(nameof(SelectedStripType));
+            RaisePropertyChanged(nameof(EditorStripLayoutMm));
         }
 
         private ExistingLintelTypeOptionV3 FindExistingEditorTypeOption(string typeName)
@@ -2901,13 +3797,20 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .FirstOrDefault();
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private void RestoreExistingLintelRows(OpeningGroupCardV3 group)
         {
-            foreach (ExistingLintelComponentV3 component in group.ExistingLintelComponents.OrderBy(item => item.Order))
+            ExistingLintelTypeOptionV3 currentType = FindCurrentExistingTypeOption(group);
+            IEnumerable<ExistingLintelComponentV3> sourceComponents = currentType?.Components.Count > 0
+                ? currentType.Components
+                : group.ExistingLintelComponents;
+            foreach (ExistingLintelComponentV3 component in sourceComponents.OrderBy(item => item.Order))
             {
-                LintelCatalogItemV3 item = FindCatalogItem(component.TypeName, 0);
+                LintelCatalogItemV3 item = ResolveExistingComponentCatalogItem(component);
                 if (item == null) continue;
                 LintelEditorRowV3 row = AddExistingEditorRow(item);
+                if (row.IsMetal && TryReadMetalLength(component.TypeName, out int lengthMm))
+                    row.LengthMm = lengthMm;
                 if (component.OffsetToNextMm > 0)
                 {
                     row.GapMm = Math.Max(
@@ -2970,12 +3873,166 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (!EditorCatalogItems.Contains(item))
                 EditorCatalogItems.Add(item);
-            var row = new LintelEditorRowV3(item);
+            var row = new LintelEditorRowV3(item, GetDefaultMetalLengthMm());
             SubscribeEditorRow(row);
             EditorRows.Add(row);
             return row;
         }
 
+        private LintelCatalogItemV3 ResolveExistingComponentCatalogItem(ExistingLintelComponentV3 component)
+        {
+            if (component == null) return null;
+            LintelCatalogItemV3 exact = FindCatalogItem(component.TypeName, 0);
+            if (exact != null && !IsStripCatalogItem(exact)) return exact;
+
+            string componentDescription = (component.FamilyName ?? string.Empty)
+                                          + " " + (component.TypeName ?? string.Empty);
+            LintelCatalogItemV3 profile = _lintelCatalog
+                .Where(item => !IsStripCatalogItem(item))
+                .Where(item => GetCatalogItemMaterial(item) == component.Material)
+                .Select(item => new
+                {
+                    Item = item,
+                    Score = GetExistingProfileMatchScore(componentDescription, component.FamilyName, item)
+                })
+                .Where(candidate => candidate.Score > 0)
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.Item.DisplayName, _naturalComparer)
+                .Select(candidate => candidate.Item)
+                .FirstOrDefault();
+            if (profile == null) return null;
+
+            return new LintelCatalogItemV3
+            {
+                Mark = component.TypeName,
+                Family = component.FamilyName,
+                TypeCode = profile.TypeCode,
+                LengthMm = TryReadMetalLength(component.TypeName, out int lengthMm)
+                    ? lengthMm
+                    : profile.LengthMm,
+                WidthMm = profile.WidthMm,
+                HeightMm = profile.HeightMm,
+                IsBearing = profile.IsBearing,
+                MinimumOpeningWidthMm = profile.MinimumOpeningWidthMm,
+                MaximumOpeningWidthMm = profile.MaximumOpeningWidthMm,
+                MinimumBearingMm = profile.MinimumBearingMm,
+                LoadCapacityKgfPerM = profile.LoadCapacityKgfPerM,
+                LoadCategory = profile.LoadCategory,
+                Priority = profile.Priority,
+                AutoSelectionAllowed = false,
+                ProductCode = profile.ProductCode,
+                Material = profile.Material,
+                StandardSeries = profile.StandardSeries,
+                Issue = profile.Issue,
+                MasonryCourseHeightMm = profile.MasonryCourseHeightMm,
+                MassKg = profile.MassKg,
+                RevitFamilyName = component.FamilyName
+            };
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static int GetExistingProfileMatchScore(
+            string componentDescription,
+            string componentFamilyName,
+            LintelCatalogItemV3 item)
+        {
+            string itemDescription = (item?.RevitFamilyName ?? string.Empty)
+                                     + " " + (item?.Mark ?? string.Empty)
+                                     + " " + (item?.Family ?? string.Empty);
+            bool componentIsAngle = IsAngleDescription(componentDescription);
+            bool itemIsAngle = IsAngleDescription(itemDescription);
+            bool componentIsChannel = IsChannelDescription(componentDescription);
+            bool itemIsChannel = IsChannelDescription(itemDescription);
+            if (componentIsAngle != itemIsAngle || componentIsChannel != itemIsChannel)
+                return 0;
+
+            int score;
+            if (componentIsAngle)
+            {
+                List<int> actualNumbers = ReadIntegerTokens(componentFamilyName).ToList();
+                List<int> expectedNumbers = ReadIntegerTokens(item.Mark).ToList();
+                List<int> actualProfile = actualNumbers.Take(2).ToList();
+                List<int> expectedProfile = expectedNumbers.Take(2).ToList();
+                if (actualProfile.Count < 2
+                    || expectedProfile.Count < 2
+                    || !actualProfile.SequenceEqual(expectedProfile))
+                    return 0;
+                score = 100;
+                if (actualNumbers.Count >= 3 && expectedNumbers.Count >= 3)
+                {
+                    if (actualNumbers[2] != expectedNumbers[2]) return 0;
+                    score += 20;
+                }
+            }
+            else if (componentIsChannel)
+            {
+                int actualProfile = ReadIntegerTokens(componentDescription)
+                    .FirstOrDefault(value => value > 0 && value < 100);
+                int expectedProfile = ReadIntegerTokens(item.Mark)
+                    .FirstOrDefault(value => value > 0 && value < 100);
+                if (actualProfile == 0 || actualProfile != expectedProfile) return 0;
+                score = 100;
+            }
+            else
+            {
+                return 0;
+            }
+
+            score += HasSameTextQualifier(componentDescription, itemDescription, "зерк") ? 12 : -12;
+            score += HasSameTextQualifier(componentDescription, itemDescription, "перовниз") ? 8 : -8;
+            score += HasSameTextQualifier(componentDescription, itemDescription, "поворот") ? 6 : -6;
+            return score;
+        }
+
+        private static bool IsAngleDescription(string text)
+        {
+            return NormalizeProfileText(text).Contains("уг");
+        }
+
+        private static bool IsChannelDescription(string text)
+        {
+            string normalized = NormalizeProfileText(text);
+            return normalized.Contains("шв") || normalized.Contains("швел");
+        }
+
+        private static string NormalizeProfileText(string text)
+        {
+            return new string((text ?? string.Empty)
+                .ToLowerInvariant()
+                .Where(char.IsLetterOrDigit)
+                .ToArray());
+        }
+
+        private static IEnumerable<int> ReadIntegerTokens(string text)
+        {
+            int value = 0;
+            bool reading = false;
+            foreach (char character in text ?? string.Empty)
+            {
+                if (char.IsDigit(character))
+                {
+                    reading = true;
+                    value = value * 10 + (character - '0');
+                }
+                else if (reading)
+                {
+                    yield return value;
+                    value = 0;
+                    reading = false;
+                }
+            }
+            if (reading) yield return value;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static bool TryReadMetalLength(string typeName, out int lengthMm)
+        {
+            List<int> values = ReadIntegerTokens(typeName).Where(value => value >= 300).ToList();
+            lengthMm = values.Count == 0 ? 0 : values.Max();
+            return lengthMm > 0;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
         private void RefreshEditorCatalogItems()
         {
             EditorCatalogItems.Clear();
@@ -2984,10 +4041,13 @@ namespace FerrumAddinDev.LintelCreator_v3
             LintelSelectionRequestV3 request = CreateEditorSelectionRequest();
 
             IEnumerable<LintelCatalogItemV3> items = _lintelCatalog
-                .Where(item => LintelSelectionEngineV3.IsSuitableCatalogItem(item, request, false)
-                                 && item.WidthMm <= request.WallWidthMm
-                                                    + request.WallWidthToleranceMm + 0.5)
-                .OrderByDescending(item => item.Priority)
+                .Where(item => !IsStripCatalogItem(item))
+                .Where(item => IsMetalCatalogItem(item)
+                               || LintelSelectionEngineV3.IsSuitableCatalogItem(item, request, false)
+                                  && item.WidthMm <= request.WallWidthMm
+                                                     + request.WallWidthToleranceMm + 0.5)
+                .OrderBy(item => IsMetalCatalogItem(item) ? 1 : 0)
+                .ThenByDescending(item => item.Priority)
                 .ThenBy(item => item.DisplayName, _naturalComparer);
 
             foreach (LintelCatalogItemV3 item in items)
@@ -3037,11 +4097,34 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private void EditorRow_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (_isUpdatingEditorDifferences) return;
+            if (_isUpdatingEditorDifferences || _isRestoringEditor) return;
             if (sender is LintelEditorRowV3 row)
             {
-                bool shouldRefreshCatalog = e.PropertyName == nameof(LintelEditorRowV3.Purpose);
+                bool materialChanged = e.PropertyName == nameof(LintelEditorRowV3.Material);
+                bool shouldRefreshCatalog = materialChanged
+                                            || e.PropertyName == nameof(LintelEditorRowV3.Purpose);
+                if (materialChanged && !row.IsApplyingCatalogItem)
+                {
+                    LintelCatalogItemV3 materialItem = EditorCatalogItems
+                        .Where(item => GetCatalogItemMaterial(item) == row.Material)
+                        .OrderByDescending(item => item.Priority)
+                        .ThenBy(item => item.DisplayName, _naturalComparer)
+                        .FirstOrDefault();
+                    if (materialItem != null)
+                        row.ApplyCatalogSuggestion(materialItem);
+                }
+                else if (row.IsMetal
+                         && e.PropertyName == nameof(LintelEditorRowV3.Purpose)
+                         && !row.IsApplyingCatalogItem)
+                {
+                    LintelCatalogItemV3 purposeItem = GetAvailableEditorCatalogItems(row)
+                        .OrderBy(item => item.DisplayName, _naturalComparer)
+                        .FirstOrDefault();
+                    if (purposeItem != null)
+                        row.ApplyCatalogSuggestion(purposeItem);
+                }
                 if (!row.IsApplyingCatalogItem
+                    && !row.IsMetal
                     && (e.PropertyName == nameof(LintelEditorRowV3.LengthMm)
                         || e.PropertyName == nameof(LintelEditorRowV3.HeightMm)
                         || e.PropertyName == nameof(LintelEditorRowV3.WidthMm)
@@ -3092,7 +4175,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             {
                 LintelSelectionRequestV3 request = CreateEditorSelectionRequest();
                 candidates = candidates
-                    .Where(item => request == null
+                    .Where(item => row.IsMetal
+                                   || request == null
                                    || LintelSelectionEngineV3.IsSuitableCatalogItem(item, request, false))
                     .ToList();
                 if (candidates.Count == 0) return null;
@@ -3135,17 +4219,20 @@ namespace FerrumAddinDev.LintelCreator_v3
         private IEnumerable<LintelCatalogItemV3> GetAvailableEditorCatalogItems(LintelEditorRowV3 row)
         {
             if (row == null) return Enumerable.Empty<LintelCatalogItemV3>();
-            double requiredBearingZoneWidth = row.IsBearing
+            double requiredBearingZoneWidth = row.IsBearing && !row.IsMetal
                 ? GetRequiredEditorBearingZoneWidth()
                 : 0;
             double maximumAvailableWidth = GetMaximumAvailableEditorRowWidth(row);
-            return EditorCatalogItems.Where(item => IsAvailableForEditorRow(
-                item,
-                row.IsBearing,
-                requiredBearingZoneWidth,
-                maximumAvailableWidth));
+            return EditorCatalogItems
+                .Where(item => GetCatalogItemMaterial(item) == row.Material)
+                .Where(item => IsAvailableForEditorRow(
+                    item,
+                    row.IsBearing,
+                    requiredBearingZoneWidth,
+                    maximumAvailableWidth));
         }
 
+        //11.09.26 - металлические перемычки + подбор
         internal static bool IsAvailableForEditorRow(
             LintelCatalogItemV3 item,
             bool isBearing,
@@ -3163,6 +4250,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         private double GetMaximumAvailableEditorRowWidth(LintelEditorRowV3 row)
         {
             if (SelectedGroup == null) return double.MaxValue;
+            if (row?.IsMetal == true || EditorRows.Any(editorRow => editorRow.IsMetal))
+                return double.MaxValue;
             double maximumPackageWidth = SelectedGroup.WallWidthMm + WallWidthToleranceMm;
             double occupiedByOtherRowsAndGaps = EditorRows.Sum(editorRow =>
                 ReferenceEquals(editorRow, row)
@@ -3171,6 +4260,41 @@ namespace FerrumAddinDev.LintelCreator_v3
             return Math.Max(0, maximumPackageWidth - occupiedByOtherRowsAndGaps);
         }
 
+        //11.09.26 - металлические перемычки + подбор
+        private static bool IsMetalCatalogItem(LintelCatalogItemV3 item)
+        {
+            return GetCatalogItemMaterial(item) == LintelMaterialV3.Metal;
+        }
+
+        private static bool IsStripCatalogItem(LintelCatalogItemV3 item)
+        {
+            string description = string.Join(" ", new[]
+            {
+                item?.Mark,
+                item?.Family,
+                item?.RevitFamilyName
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            return description.IndexOf("полос", StringComparison.OrdinalIgnoreCase) >= 0
+                   || description.IndexOf("планк", StringComparison.OrdinalIgnoreCase) >= 0
+                   || description.IndexOf("лист", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private int GetDefaultMetalLengthMm()
+        {
+            return SelectedGroup == null
+                ? 0
+                : Math.Max(0, (int)Math.Round(SelectedGroup.OpeningWidthMm) + 500);
+        }
+
+        private static LintelMaterialV3 GetCatalogItemMaterial(LintelCatalogItemV3 item)
+        {
+            return string.Equals(item?.Material, "metal", StringComparison.OrdinalIgnoreCase)
+                ? LintelMaterialV3.Metal
+                : LintelMaterialV3.ReinforcedConcrete;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
         private double GetRequiredEditorBearingZoneWidth()
         {
             if (SelectedGroup == null || SelectedGroup.SupportType <= 0) return 0;
@@ -3198,6 +4322,11 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private void RaiseEditorProperties()
         {
+            if (!EditorHasMetal && _editorPackageWallOffsetMm != 0)
+            {
+                _editorPackageWallOffsetMm = 0;
+                RaisePropertyChanged(nameof(EditorPackageWallOffsetMm));
+            }
             SynchronizeSupportPadsFromEditorType();
             UpdateEditorExistingTypeDifferences();
             RaisePropertyChanged(nameof(EditorRows));
@@ -3220,6 +4349,9 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaisePropertyChanged(nameof(EditorWallWidthText));
             RaisePropertyChanged(nameof(EditorPackageWidthText));
             RaisePropertyChanged(nameof(EditorWidthDeltaText));
+            RaisePropertyChanged(nameof(EditorHasMetal));
+            RaisePropertyChanged(nameof(SelectedStripType));
+            RaisePropertyChanged(nameof(EditorStripLayoutMm));
             RaiseSupportPadProperties();
             RaisePropertyChanged(nameof(CanSaveVariantChanges));
         }
@@ -3228,7 +4360,9 @@ namespace FerrumAddinDev.LintelCreator_v3
             ExistingLintelTypeOptionV3 explicitType = null,
             bool force = false)
         {
-            if (_isUpdatingSupportPadSelection || SelectedGroup == null) return;
+            if (_isUpdatingSupportPadSelection
+                || _isRestoringEditor && explicitType == null
+                || SelectedGroup == null) return;
 
             string editorTypeName = EditorTypeName;
             ExistingLintelTypeOptionV3 existingType = explicitType
@@ -3247,18 +4381,12 @@ namespace FerrumAddinDev.LintelCreator_v3
             string sourceKey = GetSupportPadSourceKey(existingType, editorTypeName);
             if (SelectedVariant != null)
             {
-                if (force || !SelectedVariant.SupportPadsInitialized)
-                {
-                    left = existingType?.LeftSupportPadTypeName;
-                    right = existingType?.RightSupportPadTypeName;
-                    SelectedVariant.LeftSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(left);
-                    SelectedVariant.RightSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(right);
-                    SelectedVariant.SupportPadsInitialized = true;
-                    SelectedVariant.SupportPadSourceTypeName = editorTypeName;
-                }
-                left = SelectedVariant.LeftSupportPadTypeName;
-                right = SelectedVariant.RightSupportPadTypeName;
-                SelectedVariant.SupportPadSourceTypeName = editorTypeName;
+                left = force || !SelectedVariant.SupportPadsInitialized
+                    ? existingType?.LeftSupportPadTypeName
+                    : SelectedVariant.LeftSupportPadTypeName;
+                right = force || !SelectedVariant.SupportPadsInitialized
+                    ? existingType?.RightSupportPadTypeName
+                    : SelectedVariant.RightSupportPadTypeName;
                 _supportPadSelectionSourceKey = sourceKey;
                 _supportPadSelectionEdited = true;
             }
@@ -3283,18 +4411,6 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
 
             ApplySupportPadSelections(left, right);
-        }
-        // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
-        private void PersistSelectedVariantSupportPads()
-        {
-            if (_selectedVariant == null) return;
-
-            _selectedVariant.LeftSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(
-                _selectedLeftSupportPad);
-            _selectedVariant.RightSupportPadTypeName = LintelSupportPadSelectionV3.Normalize(
-                _selectedRightSupportPad);
-            _selectedVariant.SupportPadsInitialized = true;
-            _selectedVariant.SupportPadSourceTypeName = EditorTypeName;
         }
 
         private static string GetSupportPadSourceKey(
@@ -3425,6 +4541,14 @@ namespace FerrumAddinDev.LintelCreator_v3
                         LintelCatalogItemV3 existingItem = FindExistingComponentCatalogItem(component);
                         if (existingItem != null)
                         {
+                            LintelMaterialV3 existingMaterial = GetCatalogItemMaterial(existingItem);
+                            if (existingMaterial != row.Material)
+                            {
+                                differences.Add(
+                                    "материал: существует «"
+                                    + GetMaterialDisplayName(existingMaterial)
+                                    + "», выбран «" + GetMaterialDisplayName(row.Material) + "»");
+                            }
                             AddDimensionDifference(differences, "длина", existingItem.LengthMm, row.LengthMm);
                             AddDimensionDifference(differences, "высота", existingItem.HeightMm, row.HeightMm);
                             AddDimensionDifference(differences, "ширина", existingItem.WidthMm, row.WidthMm);
@@ -3580,7 +4704,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             string layout = BuildEditorLayoutName();
             if (string.IsNullOrWhiteSpace(layout)) return string.Empty;
 
-            int masonryCourse = GetExistingLintelMasonryCourse(SelectedGroup) ?? (int)_masonryType;
+            int masonryCourse = (int)_masonryType;
             return masonryCourse.ToString(CultureInfo.InvariantCulture)
                    + "_" + wallWidth.ToString(CultureInfo.InvariantCulture)
                    + "_" + maximumOpeningWidth.ToString(CultureInfo.InvariantCulture)
@@ -3681,8 +4805,18 @@ namespace FerrumAddinDev.LintelCreator_v3
                     RightSupportPadTypeName = LintelPlacementEngineV3.ReadCompositeSymbolSupportPad(
                         document,
                         symbol,
-                        false)
+                        false),
+                    StripTypeId = LintelPlacementEngineV3.ReadCompositeSymbolStripTypeId(symbol),
+                    StripLayoutMm = LintelPlacementEngineV3.ReadCompositeSymbolStripLayoutMm(symbol),
+                    MainLintelHeightMm = LintelPlacementEngineV3.ReadCompositeSymbolMainLintelHeightMm(symbol),
+                    SecondLintelHeightMm = LintelPlacementEngineV3.ReadCompositeSymbolSecondLintelHeightMm(symbol)
                 };
+                FamilySymbol stripSymbol = option.StripTypeId == null
+                    || option.StripTypeId == ElementId.InvalidElementId
+                    ? null
+                    : document.GetElement(option.StripTypeId) as FamilySymbol;
+                option.StripFamilyName = stripSymbol?.FamilyName;
+                option.StripTypeName = stripSymbol?.Name;
                 option.Components.AddRange(
                     LintelPlacementEngineV3.ReadCompositeSymbolComponents(document, symbol));
                 options.Add(option);
@@ -3725,6 +4859,54 @@ namespace FerrumAddinDev.LintelCreator_v3
             return result;
         }
 
+        private ObservableCollection<LintelStripTypeOptionV3> CollectStripTypeOptions(Document document)
+        {
+            var result = new ObservableCollection<LintelStripTypeOptionV3>
+            {
+                new LintelStripTypeOptionV3 { TypeId = ElementId.InvalidElementId }
+            };
+            IEnumerable<FamilySymbol> symbols = new FilteredElementCollector(document)
+                .OfClass(typeof(FamilySymbol))
+                .Cast<FamilySymbol>()
+                .Where(IsStripSymbol)
+                .OrderBy(symbol => symbol.FamilyName, _naturalComparer)
+                .ThenBy(symbol => symbol.Name, _naturalComparer);
+            foreach (FamilySymbol symbol in symbols)
+            {
+                result.Add(new LintelStripTypeOptionV3
+                {
+                    TypeId = symbol.Id,
+                    FamilyName = symbol.FamilyName,
+                    TypeName = symbol.Name
+                });
+            }
+            return result;
+        }
+
+        private static bool IsStripSymbol(FamilySymbol symbol)
+        {
+            string familyName = symbol?.FamilyName ?? string.Empty;
+            string typeName = symbol?.Name ?? string.Empty;
+            return string.Equals(familyName.Trim(), "Пл", StringComparison.OrdinalIgnoreCase)
+                   || familyName.IndexOf("планк", StringComparison.OrdinalIgnoreCase) >= 0
+                   || familyName.IndexOf("полос", StringComparison.OrdinalIgnoreCase) >= 0
+                   || familyName.IndexOf("лист", StringComparison.OrdinalIgnoreCase) >= 0
+                   || typeName.IndexOf("планк", StringComparison.OrdinalIgnoreCase) >= 0
+                   || typeName.IndexOf("полос", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static long GetElementIdValue(ElementId id)
+        {
+            return id == null || id == ElementId.InvalidElementId ? -1 : id.Value;
+        }
+
+        private ElementId GetTypeIdFromValue(long value)
+        {
+            return StripTypeOptions.FirstOrDefault(option =>
+                GetElementIdValue(option.TypeId) == value)?.TypeId
+                ?? ElementId.InvalidElementId;
+        }
+
         private static bool IsSupportPadSymbol(FamilySymbol symbol)
         {
             string familyName = symbol?.FamilyName ?? string.Empty;
@@ -3732,17 +4914,21 @@ namespace FerrumAddinDev.LintelCreator_v3
             return familyName.IndexOf("опорн", StringComparison.OrdinalIgnoreCase) >= 0
                    || typeName.IndexOf("опорн", StringComparison.OrdinalIgnoreCase) >= 0
                    || familyName.StartsWith("ОП", StringComparison.OrdinalIgnoreCase)
-                   || typeName.StartsWith("ОП", StringComparison.OrdinalIgnoreCase);
+                   || typeName.StartsWith("ОП", StringComparison.OrdinalIgnoreCase)
+                   || LintelSupportPadSelectionV3.IsSupportedAngleSymbol(symbol);
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static void ApplyRevitFamilyNames(
             Document document,
             IEnumerable<LintelCatalogItemV3> catalog)
         {
-            Dictionary<string, List<FamilySymbol>> symbolsByTypeName = new FilteredElementCollector(document)
+            List<FamilySymbol> allSymbols = new FilteredElementCollector(document)
                 .OfClass(typeof(FamilySymbol))
                 .Cast<FamilySymbol>()
                 .Where(symbol => !string.IsNullOrWhiteSpace(symbol.Name))
+                .ToList();
+            Dictionary<string, List<FamilySymbol>> symbolsByTypeName = allSymbols
                 .GroupBy(symbol => symbol.Name, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
 
@@ -3750,7 +4936,23 @@ namespace FerrumAddinDev.LintelCreator_v3
             {
                 item.RevitFamilyName = null;
                 if (!symbolsByTypeName.TryGetValue(item.Mark ?? string.Empty, out List<FamilySymbol> matches))
+                {
+                    if (IsMetalCatalogItem(item) && !IsStripCatalogItem(item))
+                    {
+                        item.RevitFamilyName = allSymbols
+                            .Select(symbol => new
+                            {
+                                Symbol = symbol,
+                                Score = GetMetalFamilyMatchScore(symbol, item)
+                            })
+                            .Where(candidate => candidate.Score > 0)
+                            .OrderByDescending(candidate => candidate.Score)
+                            .ThenBy(candidate => candidate.Symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
+                            .Select(candidate => candidate.Symbol.FamilyName)
+                            .FirstOrDefault();
+                    }
                     continue;
+                }
 
                 string masonry = item.MasonryCourseHeightMm.ToString(CultureInfo.InvariantCulture);
                 FamilySymbol bestMatch = matches
@@ -3759,6 +4961,48 @@ namespace FerrumAddinDev.LintelCreator_v3
                     .FirstOrDefault();
                 item.RevitFamilyName = bestMatch?.FamilyName;
             }
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static int GetMetalFamilyMatchScore(FamilySymbol symbol, LintelCatalogItemV3 item)
+        {
+            string family = symbol?.FamilyName ?? string.Empty;
+            string revitDescription = family + " " + (symbol?.Name ?? string.Empty);
+            string catalogName = (item?.Mark ?? string.Empty) + " " + (item?.Family ?? string.Empty);
+            bool expectsAngle = IsAngleDescription(catalogName);
+            bool expectsChannel = IsChannelDescription(catalogName);
+            if (expectsAngle != IsAngleDescription(revitDescription)
+                || expectsChannel != IsChannelDescription(revitDescription))
+                return 0;
+
+            List<int> expected = ReadIntegerTokens(item?.Mark).ToList();
+            List<int> actual = ReadIntegerTokens(revitDescription).ToList();
+            int requiredProfileNumberCount = expectsAngle ? Math.Min(2, expected.Count) : 1;
+            if (requiredProfileNumberCount == 0
+                || expected.Take(requiredProfileNumberCount).Any(number => !actual.Contains(number)))
+                return 0;
+
+            int score = requiredProfileNumberCount * 10;
+            if (expectsAngle && expected.Count >= 3)
+            {
+                List<int> familyNumbers = ReadIntegerTokens(family).ToList();
+                if (familyNumbers.Count >= 3)
+                {
+                    if (familyNumbers[2] != expected[2]) return 0;
+                    score += 10;
+                }
+            }
+            if (HasSameTextQualifier(catalogName, revitDescription, "зерк")) score += 4;
+            if (HasSameTextQualifier(catalogName, revitDescription, "перовниз")) score += 3;
+            if (HasSameTextQualifier(catalogName, revitDescription, "поворот")) score += 2;
+            return score;
+        }
+
+        private static bool HasSameTextQualifier(string first, string second, string qualifier)
+        {
+            string normalizedQualifier = NormalizeProfileText(qualifier);
+            return NormalizeProfileText(first).Contains(normalizedQualifier)
+                   == NormalizeProfileText(second).Contains(normalizedQualifier);
         }
 
         private static int GetUnitFamilyMatchScore(string familyName, string typeCode, string masonry)
@@ -4210,6 +5454,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                     RequiredSupportWidthMm = first.RequiredSupportWidthMm,
                     RequiredSupportWidth1Mm = first.RequiredSupportWidth1Mm,
                     RequiredSupportWidth2Mm = first.RequiredSupportWidth2Mm,
+                    ClearHeightToSupportMm = sourceGroup
+                        .Where(x => x.ClearHeightToSupportMm > 0)
+                        .Select(x => x.ClearHeightToSupportMm)
+                        .DefaultIfEmpty(0)
+                        .Min(),
+                    ClearHeightToSupport1Mm = sourceGroup
+                        .Where(x => x.ClearHeightToSupport1Mm > 0)
+                        .Select(x => x.ClearHeightToSupport1Mm)
+                        .DefaultIfEmpty(0)
+                        .Min(),
+                    ClearHeightToSupport2Mm = sourceGroup
+                        .Where(x => x.ClearHeightToSupport2Mm > 0)
+                        .Select(x => x.ClearHeightToSupport2Mm)
+                        .DefaultIfEmpty(0)
+                        .Min(),
                     SupportParameterError = string.Join(" ", sourceGroup
                         .Select(x => x.SupportParameterError)
                         .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -4248,7 +5507,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                         FamilyName = component.FamilyName,
                         TypeName = component.TypeName,
                         Order = component.Order,
-                        OffsetToNextMm = component.OffsetToNextMm
+                        OffsetToNextMm = component.OffsetToNextMm,
+                        Material = component.Material
                     }));
                 groups.Add(card);
             }
@@ -4287,6 +5547,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 opening.SupportType.ToString(CultureInfo.InvariantCulture),
                 Math.Round(opening.RequiredSupportWidth1Mm).ToString(CultureInfo.InvariantCulture),
                 Math.Round(opening.RequiredSupportWidth2Mm).ToString(CultureInfo.InvariantCulture),
+                Math.Round(opening.ClearHeightToSupport1Mm).ToString(CultureInfo.InvariantCulture),
+                Math.Round(opening.ClearHeightToSupport2Mm).ToString(CultureInfo.InvariantCulture),
                 string.IsNullOrWhiteSpace(opening.SupportParameterError) ? "0" : "1",
                 opening.HasExistingLintel ? "1" : "0",
                 opening.ExistingLintelFamilyNames ?? string.Empty,
@@ -4301,6 +5563,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int SkippedCount { get; set; }
     }
 
+    //11.09.26 - металлические перемычки + подбор
     internal sealed class SupportBoxV3
     {
         public ElementId ElementId { get; set; }
@@ -4318,6 +5581,7 @@ namespace FerrumAddinDev.LintelCreator_v3
     internal static class OpeningCollectorV3
     {
         private const double MillimetersPerFoot = 304.8;
+        private const double DefaultSupportBearingMm = 120.0;
         private static readonly string[] IgnoredWallTokens = { "_пгп_", "_гкл_", "_фсд_", "_прг_" };
 
         public static OpeningCollectionResultV3 Collect(
@@ -4364,6 +5628,8 @@ namespace FerrumAddinDev.LintelCreator_v3
 
                     XYZ location = GetLocation(opening, hostWall, box);
                     double width = GetOpeningWidthMm(opening, box);
+                    double height = GetOpeningHeightMm(opening, box);
+                    double openingTop = GetOpeningTopElevation(opening, box, height);
                     if (width <= 0)
                     {
                         result.SkippedCount++;
@@ -4374,7 +5640,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                         hostWall,
                         GetSupportNormal(opening, hostWall),
                         location,
-                        GetSupportCheckTop(opening, box),
+                        openingTop,
                         width,
                         supports,
                         out int supportType,
@@ -4382,6 +5648,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                         out double supportWidth,
                         out double supportWidth1,
                         out double supportWidth2,
+                        out double clearHeightToSupport,
+                        out double clearHeightToSupport1,
+                        out double clearHeightToSupport2,
                         out string supportParameterError);
 
                     ElementId levelId = opening.LevelId != null && opening.LevelId != ElementId.InvalidElementId
@@ -4402,10 +5671,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                         WallTypeName = hostWall.WallType.Name,
                         LevelName = document.GetElement(levelId)?.Name ?? "Без уровня",
                         OpeningWidthMm = width,
-                        OpeningHeightMm = GetOpeningHeightMm(opening, box),
+                        OpeningHeightMm = height,
                         WallWidthMm = hostWall.Width * MillimetersPerFoot,
                         Location = location,
-                        TopElevation = box.Max.Z,
+                        TopElevation = openingTop,
                         WallOrientation = opening is FamilyInstance orientedInstance ? orientedInstance.FacingOrientation : hostWall.Orientation,
                         WidthDirection = GetWidthDirection(opening, hostWall),
                         SupportDirection = supportDirection,
@@ -4413,6 +5682,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                         RequiredSupportWidthMm = supportWidth,
                         RequiredSupportWidth1Mm = supportWidth1,
                         RequiredSupportWidth2Mm = supportWidth2,
+                        ClearHeightToSupportMm = clearHeightToSupport,
+                        ClearHeightToSupport1Mm = clearHeightToSupport1,
+                        ClearHeightToSupport2Mm = clearHeightToSupport2,
                         SupportParameterError = supportParameterError,
                         BoundingMinimum = box.Min,
                         BoundingMaximum = box.Max,
@@ -4838,6 +6110,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RequiredSupportWidthMm = cluster.Max(x => x.RequiredSupportWidthMm),
                 RequiredSupportWidth1Mm = cluster.Max(x => x.RequiredSupportWidth1Mm),
                 RequiredSupportWidth2Mm = cluster.Max(x => x.RequiredSupportWidth2Mm),
+                ClearHeightToSupportMm = cluster
+                    .Where(x => x.ClearHeightToSupportMm > 0)
+                    .Select(x => x.ClearHeightToSupportMm)
+                    .DefaultIfEmpty(0)
+                    .Min(),
+                ClearHeightToSupport1Mm = cluster
+                    .Where(x => x.ClearHeightToSupport1Mm > 0)
+                    .Select(x => x.ClearHeightToSupport1Mm)
+                    .DefaultIfEmpty(0)
+                    .Min(),
+                ClearHeightToSupport2Mm = cluster
+                    .Where(x => x.ClearHeightToSupport2Mm > 0)
+                    .Select(x => x.ClearHeightToSupport2Mm)
+                    .DefaultIfEmpty(0)
+                    .Min(),
                 SupportParameterError = JoinDistinct(cluster.Select(x => x.SupportParameterError)),
                 BoundingMinimum = new XYZ(
                     cluster.Min(x => x.BoundingMinimum.X),
@@ -4922,6 +6209,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .OrderBy(value => value, StringComparer.Ordinal));
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static List<SupportBoxV3> CollectSupportBoxes(Document document, IEnumerable<BoundingBoxXYZ> openingBoxes)
         {
             List<BoundingBoxXYZ> boxes = openingBoxes.Where(x => x != null).ToList();
@@ -4941,10 +6229,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .WherePasses(new BoundingBoxIntersectsFilter(outline))
                 .Where(element =>
                 {
-                    if (!HasParameter(element, "Опирание 1 итог")
-                        || !HasParameter(element, "Опирание 2 итог"))
-                        return false;
-
                     long typeId = element.GetTypeId().Value;
                     if (!typeCodeCache.TryGetValue(typeId, out double code))
                     {
@@ -4961,17 +6245,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .ToList();
         }
 
-        private static bool HasParameter(Element element, string parameterName)
-        {
-            if (element?.LookupParameter(parameterName) != null) return true;
-            return element is FamilyInstance familyInstance
-                   && familyInstance.Symbol?.LookupParameter(parameterName) != null;
-        }
-
         private static SupportBoxV3 CreateSupportBox(Element element)
         {
-            double firstBearing = GetLengthMm(element, "Опирание 1 итог");
-            double secondBearing = GetLengthMm(element, "Опирание 2 итог");
+            double firstBearing = GetSupportBearingLengthMm(element, "Опирание 1 итог");
+            double secondBearing = GetSupportBearingLengthMm(element, "Опирание 2 итог");
             string error = null;
             double bearingZone = 0;
 
@@ -4997,6 +6274,44 @@ namespace FerrumAddinDev.LintelCreator_v3
                 BearingZoneMm = bearingZone,
                 ParameterError = error
             };
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static double GetSupportBearingLengthMm(Element element, string parameterName)
+        {
+            Element type = element?.Document?.GetElement(element.GetTypeId());
+            if (TryGetDirectLengthMm(type, parameterName, out double typeValue))
+                return typeValue;
+            if (TryGetDirectLengthMm(element, parameterName, out double instanceValue))
+                return instanceValue;
+            return DefaultSupportBearingMm;
+        }
+
+        private static bool TryGetDirectLengthMm(
+            Element element,
+            string parameterName,
+            out double valueMm)
+        {
+            valueMm = 0;
+            Parameter parameter = element?.LookupParameter(parameterName);
+            if (parameter == null) return false;
+
+            switch (parameter.StorageType)
+            {
+                case StorageType.Double:
+                    valueMm = parameter.AsDouble() * MillimetersPerFoot;
+                    return true;
+                case StorageType.Integer:
+                    valueMm = parameter.AsInteger();
+                    return true;
+                case StorageType.String:
+                    TryParseNumber(
+                        parameter.AsString() ?? parameter.AsValueString(),
+                        out valueMm);
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static BoundingBoxXYZ GetLargestSolidBoundingBox(Element element)
@@ -5065,6 +6380,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             };
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static void DetectSupport(
             Wall wall,
             XYZ openingNormal,
@@ -5077,6 +6393,9 @@ namespace FerrumAddinDev.LintelCreator_v3
             out double requiredSupportWidthMm,
             out double requiredSupportWidth1Mm,
             out double requiredSupportWidth2Mm,
+            out double clearHeightToSupportMm,
+            out double clearHeightToSupport1Mm,
+            out double clearHeightToSupport2Mm,
             out string supportParameterError)
         {
             XYZ normal = NormalizeInPlan(openingNormal)
@@ -5092,6 +6411,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             bool second = false;
             double firstZone = 0;
             double secondZone = 0;
+            double firstClearHeight = double.MaxValue;
+            double secondClearHeight = double.MaxValue;
             var firstErrors = new List<string>();
             var secondErrors = new List<string>();
             double wallWidthMm = wall.Width * MillimetersPerFoot;
@@ -5111,18 +6432,50 @@ namespace FerrumAddinDev.LintelCreator_v3
                 if (isFirstSide)
                 {
                     first = true;
-                    if (support.BearingZoneMm > 0 && firstZone <= 0)
-                        firstZone = Math.Min(wallWidthMm, support.BearingZoneMm);
-                    else if (!string.IsNullOrWhiteSpace(support.ParameterError))
-                        firstErrors.Add(support.ParameterError);
+                    double clearHeight = verticalDistance * MillimetersPerFoot;
+                    if (clearHeight + 0.5 < firstClearHeight)
+                    {
+                        firstClearHeight = clearHeight;
+                        firstZone = support.BearingZoneMm > 0
+                            ? Math.Min(wallWidthMm, support.BearingZoneMm)
+                            : 0;
+                        firstErrors.Clear();
+                        if (!string.IsNullOrWhiteSpace(support.ParameterError))
+                            firstErrors.Add(support.ParameterError);
+                    }
+                    else if (Math.Abs(clearHeight - firstClearHeight) <= 0.5)
+                    {
+                        if (support.BearingZoneMm > 0)
+                            firstZone = Math.Max(
+                                firstZone,
+                                Math.Min(wallWidthMm, support.BearingZoneMm));
+                        else if (!string.IsNullOrWhiteSpace(support.ParameterError))
+                            firstErrors.Add(support.ParameterError);
+                    }
                 }
                 if (isSecondSide)
                 {
                     second = true;
-                    if (support.BearingZoneMm > 0 && secondZone <= 0)
-                        secondZone = Math.Min(wallWidthMm, support.BearingZoneMm);
-                    else if (!string.IsNullOrWhiteSpace(support.ParameterError))
-                        secondErrors.Add(support.ParameterError);
+                    double clearHeight = verticalDistance * MillimetersPerFoot;
+                    if (clearHeight + 0.5 < secondClearHeight)
+                    {
+                        secondClearHeight = clearHeight;
+                        secondZone = support.BearingZoneMm > 0
+                            ? Math.Min(wallWidthMm, support.BearingZoneMm)
+                            : 0;
+                        secondErrors.Clear();
+                        if (!string.IsNullOrWhiteSpace(support.ParameterError))
+                            secondErrors.Add(support.ParameterError);
+                    }
+                    else if (Math.Abs(clearHeight - secondClearHeight) <= 0.5)
+                    {
+                        if (support.BearingZoneMm > 0)
+                            secondZone = Math.Max(
+                                secondZone,
+                                Math.Min(wallWidthMm, support.BearingZoneMm));
+                        else if (!string.IsNullOrWhiteSpace(support.ParameterError))
+                            secondErrors.Add(support.ParameterError);
+                    }
                 }
             }
 
@@ -5131,6 +6484,16 @@ namespace FerrumAddinDev.LintelCreator_v3
             requiredSupportWidth1Mm = first ? firstZone : 0;
             requiredSupportWidth2Mm = second ? secondZone : 0;
             requiredSupportWidthMm = Math.Max(requiredSupportWidth1Mm, requiredSupportWidth2Mm);
+            clearHeightToSupport1Mm = firstClearHeight == double.MaxValue ? 0 : firstClearHeight;
+            clearHeightToSupport2Mm = secondClearHeight == double.MaxValue ? 0 : secondClearHeight;
+            clearHeightToSupportMm = new[]
+                {
+                    clearHeightToSupport1Mm,
+                    clearHeightToSupport2Mm
+                }
+                .Where(value => value > 0)
+                .DefaultIfEmpty(0)
+                .Min();
 
             var errors = new List<string>();
             if (first && firstZone <= 0)
@@ -5154,10 +6517,16 @@ namespace FerrumAddinDev.LintelCreator_v3
             return hostWall.Orientation;
         }
 
-        private static double GetSupportCheckTop(Element opening, BoundingBoxXYZ box)
+        //11.09.26 - металлические перемычки + подбор
+        private static double GetOpeningTopElevation(
+            Element opening,
+            BoundingBoxXYZ box,
+            double openingHeightMm)
         {
-            if (opening is FamilyInstance && opening.Location is LocationPoint locationPoint)
-                return locationPoint.Point.Z + box.Max.Z - box.Min.Z;
+            if (opening is FamilyInstance
+                && opening.Location is LocationPoint locationPoint
+                && openingHeightMm > 0)
+                return locationPoint.Point.Z + openingHeightMm / MillimetersPerFoot;
             return box.Max.Z;
         }
 
@@ -5286,7 +6655,14 @@ namespace FerrumAddinDev.LintelCreator_v3
     {
         private const double MillimetersPerFoot = 304.8;
         private const string MainLintelLengthParameterName = "Длина главной(первой) перемычки";
+        private const string StripTypeParameterName = "Планка";
+        private const string StripVisibilityParameterName = "ПЛ.Видимость";
+        private const string StripLayoutParameterName = "Раскладка пл.";
+        //11.09.26 - металлические перемычки + подбор
+        private const string MainLintelHeightParameterName = "Высота 1 перемычки";
+        private const string SecondLintelHeightParameterName = "Высота 2 перемычки";
 
+        //11.09.26 - металлические перемычки + подбор
         public static LintelPlacementResultV3 Execute(
             Document document,
             LintelPlacementRequestV3 request)
@@ -5317,7 +6693,28 @@ namespace FerrumAddinDev.LintelCreator_v3
             var typeResolutionsByGroup = new Dictionary<string, CompositeTypeResolutionV3>(StringComparer.Ordinal);
             var typeErrors = new Dictionary<string, string>(StringComparer.Ordinal);
             // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
-            List<LintelPlacementGroupRequestV3> groupsRequiringTypeChanges = request.Groups.ToList();
+            foreach (LintelPlacementGroupRequestV3 group in request.Groups.Where(group =>
+                         group.ExistingCompositeTypeId != null
+                         && group.ExistingCompositeTypeId != ElementId.InvalidElementId))
+            {
+                FamilySymbol readySymbol = document.GetElement(group.ExistingCompositeTypeId) as FamilySymbol;
+                if (!IsCompositeLintelSymbol(readySymbol))
+                {
+                    typeErrors[group.GroupKey] = "Выбранный готовый тип больше не найден в проекте.";
+                    continue;
+                }
+                symbolsByGroup[group.GroupKey] = readySymbol;
+                typeResolutionsByGroup[group.GroupKey] = new CompositeTypeResolutionV3
+                {
+                    Symbol = readySymbol,
+                    ActualTypeName = readySymbol.Name,
+                    ActionText = "Использован выбранный готовый тип без изменения его параметров."
+                };
+            }
+            List<LintelPlacementGroupRequestV3> groupsRequiringTypeChanges = request.Groups
+                .Where(group => group.ExistingCompositeTypeId == null
+                                || group.ExistingCompositeTypeId == ElementId.InvalidElementId)
+                .ToList();
 
             TransactionGroup transactionGroup = groupsRequiringTypeChanges.Count > 0
                 ? new TransactionGroup(document, "Создание и размещение перемычек v3")
@@ -5350,7 +6747,11 @@ namespace FerrumAddinDev.LintelCreator_v3
                                 try
                                 {
                                     List<FamilySymbol> componentSymbols = group.Components
-                                        .Select(component => FindUnitSymbol(unitSymbolsByName, component))
+                                        .Select(component => GetOrCreateUnitSymbol(
+                                            document,
+                                            unitSymbolsByName,
+                                            component,
+                                            out bool ignoredCreated))
                                         .ToList();
                                     if (componentSymbols.Any(symbol => symbol == null))
                                     {
@@ -5359,7 +6760,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                                             .First(item => item.symbol == null)
                                             .component;
                                         throw new InvalidOperationException(
-                                            "Не найден тип вложенной перемычки «" + missing.Mark + "»"
+                                            "Не найден тип вложенной перемычки «"
+                                            + (missing.RevitTypeName ?? missing.Mark) + "»"
                                             + (string.IsNullOrWhiteSpace(missing.RevitFamilyName)
                                                 ? "."
                                                 : " в семействе «" + missing.RevitFamilyName + "»."));
@@ -5482,7 +6884,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                                     continue;
                                 }
 
-                                bool mustReadActualComponents = typeResolution?.HasConflict == true
+                                bool mustReadActualComponents = group.ExistingCompositeTypeId != null
+                                                                && group.ExistingCompositeTypeId != ElementId.InvalidElementId
+                                                                || typeResolution?.HasConflict == true
                                                                 && !typeResolution.TypeCacheChanged;
                                 List<ExistingLintelComponentV3> actualComponents = null;
                                 if (mustReadActualComponents
@@ -5499,11 +6903,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                                         new ExistingLintelComponentV3
                                         {
                                             FamilyName = component.RevitFamilyName,
-                                            TypeName = component.Mark,
+                                            TypeName = component.RevitTypeName ?? component.Mark,
                                             Order = index,
                                             OffsetToNextMm = index < group.Components.Count - 1
                                                 ? component.WidthMm + component.GapAfterMm
-                                                : 0
+                                                : 0,
+                                            Material = component.Material
                                         }));
 
                                 using (var groupSubTransaction = new SubTransaction(document))
@@ -5519,7 +6924,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                 symbol,
                                                 group.WallTypeName,
                                                 target,
-                                                floorNumbersByLevelId));
+                                                floorNumbersByLevelId,
+                                                group.PackageWallOffsetMm));
                                         }
 
                                         groupSubTransaction.Commit();
@@ -5574,12 +6980,17 @@ namespace FerrumAddinDev.LintelCreator_v3
             return result;
         }
 
+        //11.09.26 - металлические перемычки + подбор
         internal static FamilySymbol ResolveCompositeSymbolForReplacement(
             Document document,
             string typeName,
             IList<LintelPlacementComponentRequestV3> components,
             string leftSupportPadTypeName,
             string rightSupportPadTypeName,
+            ElementId stripTypeId,
+            int stripLayoutMm,
+            int mainLintelHeightMm,
+            int secondLintelHeightMm,
             bool hasExistingTypeDifference,
             string existingTypeDifferenceText,
             CompositeTypeNameConflictActionV3 conflictAction,
@@ -5614,8 +7025,18 @@ namespace FerrumAddinDev.LintelCreator_v3
                         group => group.Key,
                         group => group.ToList(),
                         StringComparer.OrdinalIgnoreCase);
+            bool unitTypeCreated = false;
             List<FamilySymbol> componentSymbols = components
-                .Select(component => FindUnitSymbol(unitSymbolsByName, component))
+                .Select(component =>
+                {
+                    FamilySymbol symbol = GetOrCreateUnitSymbol(
+                        document,
+                        unitSymbolsByName,
+                        component,
+                        out bool created);
+                    unitTypeCreated |= created;
+                    return symbol;
+                })
                 .ToList();
             if (componentSymbols.Any(symbol => symbol == null))
             {
@@ -5624,7 +7045,11 @@ namespace FerrumAddinDev.LintelCreator_v3
                     .First(item => item.symbol == null)
                     .component;
                 throw new InvalidOperationException(
-                    "Не найден тип вложенной перемычки «" + missing.Mark + "». ");
+                    "Не найден тип вложенной перемычки «"
+                    + (missing.RevitTypeName ?? missing.Mark) + "»"
+                    + (string.IsNullOrWhiteSpace(missing.RevitFamilyName)
+                        ? "."
+                        : " в семействе «" + missing.RevitFamilyName + "»."));
             }
 
             var groupRequest = new LintelPlacementGroupRequestV3
@@ -5633,6 +7058,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 CompositeTypeName = typeName,
                 LeftSupportPadTypeName = leftSupportPadTypeName,
                 RightSupportPadTypeName = rightSupportPadTypeName,
+                StripTypeId = stripTypeId,
+                StripLayoutMm = stripLayoutMm,
+                MainLintelHeightMm = mainLintelHeightMm,
+                SecondLintelHeightMm = secondLintelHeightMm,
                 HasExistingTypeDifference = hasExistingTypeDifference,
                 ExistingTypeDifferenceText = existingTypeDifferenceText
             };
@@ -5648,7 +7077,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (resolution.Symbol == null)
                 throw new InvalidOperationException(
                     resolution.Error ?? "Создание типа перемычки отменено.");
-            typeCacheChanged = resolution.TypeCacheChanged;
+            typeCacheChanged = resolution.TypeCacheChanged || unitTypeCreated;
             return resolution.Symbol;
         }
 
@@ -5680,26 +7109,296 @@ namespace FerrumAddinDev.LintelCreator_v3
                        StringComparison.OrdinalIgnoreCase);
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static FamilySymbol FindUnitSymbol(
             IDictionary<string, List<FamilySymbol>> symbolsByName,
             LintelPlacementComponentRequestV3 component)
         {
             if (symbolsByName == null
                 || component == null
-                || string.IsNullOrWhiteSpace(component.Mark)
-                || !symbolsByName.TryGetValue(component.Mark, out List<FamilySymbol> matches))
+                || string.IsNullOrWhiteSpace(component.Mark))
                 return null;
-            if (!string.IsNullOrWhiteSpace(component.RevitFamilyName))
+            string requestedTypeName = string.IsNullOrWhiteSpace(component.RevitTypeName)
+                ? component.Mark
+                : component.RevitTypeName;
+            if (symbolsByName.TryGetValue(requestedTypeName, out List<FamilySymbol> matches))
             {
-                FamilySymbol exact = matches.FirstOrDefault(symbol => string.Equals(
+                if (!string.IsNullOrWhiteSpace(component.RevitFamilyName))
+                {
+                    FamilySymbol exact = matches.FirstOrDefault(symbol => string.Equals(
+                        symbol.FamilyName,
+                        component.RevitFamilyName,
+                        StringComparison.OrdinalIgnoreCase));
+                    if (exact != null) return exact;
+                }
+                if (component.Material != LintelMaterialV3.Metal && matches.Count > 0)
+                    return matches[0];
+                FamilySymbol metalMatch = matches
+                    .Select(symbol => new
+                    {
+                        Symbol = symbol,
+                        Score = GetMetalUnitSymbolMatchScore(symbol, component)
+                    })
+                    .Where(candidate => candidate.Score > 0)
+                    .OrderByDescending(candidate => candidate.Score)
+                    .ThenBy(candidate => candidate.Symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
+                    .Select(candidate => candidate.Symbol)
+                    .FirstOrDefault();
+                if (metalMatch != null) return metalMatch;
+            }
+
+            if (component.Material != LintelMaterialV3.Metal
+                || component.LengthMm <= 0)
+                return null;
+            return symbolsByName.Values
+                .SelectMany(group => group)
+                .Where(symbol => string.IsNullOrWhiteSpace(component.RevitFamilyName)
+                                 || string.Equals(
+                                     symbol.FamilyName,
+                                     component.RevitFamilyName,
+                                     StringComparison.OrdinalIgnoreCase))
+                .Select(symbol => new
+                {
+                    Symbol = symbol,
+                    Score = GetMetalUnitSymbolMatchScore(symbol, component)
+                })
+                .Where(candidate => candidate.Score > 0)
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.Symbol.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(candidate => candidate.Symbol)
+                .FirstOrDefault();
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static FamilySymbol GetOrCreateUnitSymbol(
+            Document document,
+            IDictionary<string, List<FamilySymbol>> symbolsByName,
+            LintelPlacementComponentRequestV3 component,
+            out bool typeCreated)
+        {
+            typeCreated = false;
+            FamilySymbol existing = FindUnitSymbol(symbolsByName, component);
+            if (existing != null
+                || component?.Material != LintelMaterialV3.Metal
+                || component.LengthMm <= 0)
+                return existing;
+
+            string requestedTypeName = string.IsNullOrWhiteSpace(component.RevitTypeName)
+                ? component.Mark
+                : component.RevitTypeName;
+            FamilySymbol template = FindMetalUnitTemplate(symbolsByName, component);
+            if (template == null || string.IsNullOrWhiteSpace(requestedTypeName))
+                return null;
+
+            using (var subTransaction = new SubTransaction(document))
+            {
+                subTransaction.Start();
+                try
+                {
+                    FamilySymbol created = template.Duplicate(requestedTypeName) as FamilySymbol;
+                    if (created == null)
+                        throw new InvalidOperationException(
+                            "Не удалось создать металлический тип «" + requestedTypeName + "».");
+                    if (!string.Equals(created.Name, requestedTypeName, StringComparison.Ordinal))
+                        throw new InvalidOperationException(
+                            "Revit создал металлический тип с именем «" + created.Name
+                            + "» вместо «" + requestedTypeName + "».");
+
+                    Parameter length = FindParameterByNormalizedName(created, "ADSK_Размер_Длина");
+                    if (length == null || length.IsReadOnly)
+                        throw new InvalidOperationException(
+                            "В металлическом семействе «" + created.FamilyName
+                            + "» не найден доступный параметр типа «ADSK_Размер_Длина».");
+                    SetLengthParameter(length, component.LengthMm);
+                    document.Regenerate();
+
+                    double actualLength = GetLengthParameterMm(length);
+                    if (double.IsNaN(actualLength)
+                        || Math.Abs(actualLength - component.LengthMm) > 0.5)
+                        throw new InvalidOperationException(
+                            "Для металлического типа «" + requestedTypeName
+                            + "» не удалось задать длину "
+                            + component.LengthMm.ToString(CultureInfo.InvariantCulture) + " мм.");
+
+                    subTransaction.Commit();
+                    if (!symbolsByName.TryGetValue(
+                            requestedTypeName,
+                            out List<FamilySymbol> createdMatches))
+                    {
+                        createdMatches = new List<FamilySymbol>();
+                        symbolsByName[requestedTypeName] = createdMatches;
+                    }
+                    createdMatches.Add(created);
+                    typeCreated = true;
+                    return created;
+                }
+                catch
+                {
+                    subTransaction.RollBack();
+                    throw;
+                }
+            }
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static FamilySymbol FindMetalUnitTemplate(
+            IDictionary<string, List<FamilySymbol>> symbolsByName,
+            LintelPlacementComponentRequestV3 component)
+        {
+            IEnumerable<FamilySymbol> candidates = symbolsByName?.Values.SelectMany(group => group)
+                                                   ?? Enumerable.Empty<FamilySymbol>();
+            if (!string.IsNullOrWhiteSpace(component?.RevitFamilyName))
+            {
+                candidates = candidates.Where(symbol => string.Equals(
                     symbol.FamilyName,
                     component.RevitFamilyName,
                     StringComparison.OrdinalIgnoreCase));
-                if (exact != null) return exact;
             }
-            return matches.FirstOrDefault();
+
+            return candidates
+                .Select(symbol => new
+                {
+                    Symbol = symbol,
+                    Score = GetMetalUnitTemplateMatchScore(symbol, component)
+                })
+                .Where(candidate => candidate.Score > 0)
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.Symbol.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(candidate => candidate.Symbol)
+                .FirstOrDefault();
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static int GetMetalUnitTemplateMatchScore(
+            FamilySymbol symbol,
+            LintelPlacementComponentRequestV3 component)
+        {
+            if (symbol == null || component == null) return 0;
+
+            string mark = component.Mark ?? string.Empty;
+            string symbolDescription = (symbol.FamilyName ?? string.Empty)
+                                       + " " + (symbol.Name ?? string.Empty);
+            string normalizedMark = NormalizePlacementProfileText(mark);
+            string normalizedSymbol = NormalizePlacementProfileText(symbolDescription);
+            bool isAngle = normalizedMark.Contains("уг");
+            bool isChannel = normalizedMark.Contains("шв");
+            if (!isAngle && !isChannel) return 0;
+            if (isAngle != normalizedSymbol.Contains("уг")
+                || isChannel != normalizedSymbol.Contains("шв"))
+                return 0;
+
+            bool exactFamily = !string.IsNullOrWhiteSpace(component.RevitFamilyName)
+                               && string.Equals(
+                                   symbol.FamilyName,
+                                   component.RevitFamilyName,
+                                   StringComparison.OrdinalIgnoreCase);
+            List<int> expectedNumbers = ReadIntegerTokensForPlacement(mark).ToList();
+            List<int> actualNumbers = ReadIntegerTokensForPlacement(symbolDescription).ToList();
+            int requiredProfileNumberCount = isAngle
+                ? Math.Min(2, expectedNumbers.Count)
+                : Math.Min(1, expectedNumbers.Count);
+            if (requiredProfileNumberCount == 0
+                || expectedNumbers.Take(requiredProfileNumberCount)
+                    .Any(number => !actualNumbers.Contains(number)))
+                return 0;
+
+            if (!HasSamePlacementQualifier(normalizedMark, normalizedSymbol, "зерк")
+                || !HasSamePlacementQualifier(normalizedMark, normalizedSymbol, "перовниз")
+                || !HasSamePlacementQualifier(normalizedMark, normalizedSymbol, "поворот"))
+                return 0;
+
+            if (isAngle && expectedNumbers.Count >= 3)
+            {
+                List<int> familyNumbers = ReadIntegerTokensForPlacement(symbol.FamilyName).ToList();
+                if (familyNumbers.Count >= 3 && familyNumbers[2] != expectedNumbers[2])
+                    return 0;
+            }
+
+            return (exactFamily ? 1000 : 100)
+                   + requiredProfileNumberCount * 10;
+        }
+
+        private static bool HasSamePlacementQualifier(
+            string normalizedFirst,
+            string normalizedSecond,
+            string qualifier)
+        {
+            return (normalizedFirst ?? string.Empty).Contains(qualifier)
+                   == (normalizedSecond ?? string.Empty).Contains(qualifier);
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static int GetMetalUnitSymbolMatchScore(
+            FamilySymbol symbol,
+            LintelPlacementComponentRequestV3 component)
+        {
+            string symbolDescription = (symbol?.FamilyName ?? string.Empty)
+                                       + " " + (symbol?.Name ?? string.Empty);
+            List<int> symbolNumbers = ReadIntegerTokensForPlacement(symbolDescription).ToList();
+            double parameterLength = GetLengthParameterMm(
+                FindParameterByNormalizedName(symbol, "ADSK_Размер_Длина"));
+            bool lengthMatches = symbolNumbers.Contains(component.LengthMm)
+                                 || !double.IsNaN(parameterLength)
+                                 && Math.Abs(parameterLength - component.LengthMm) <= 0.5;
+            if (!lengthMatches) return 0;
+
+            string mark = component.Mark ?? string.Empty;
+            List<int> profileNumbers = ReadIntegerTokensForPlacement(mark).ToList();
+            bool isAngle = mark.IndexOf("уг", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool isChannel = mark.IndexOf("шв", StringComparison.OrdinalIgnoreCase) >= 0;
+            int requiredCount = isAngle ? Math.Min(2, profileNumbers.Count) : isChannel ? 1 : 0;
+            if (requiredCount > 0
+                && profileNumbers.Take(requiredCount).Any(number => !symbolNumbers.Contains(number)))
+                return 0;
+
+            int score = 100 + requiredCount * 10;
+            if (isAngle && profileNumbers.Count >= 3)
+            {
+                List<int> familyNumbers = ReadIntegerTokensForPlacement(symbol?.FamilyName).ToList();
+                if (familyNumbers.Count >= 3)
+                {
+                    if (familyNumbers[2] != profileNumbers[2]) return 0;
+                    score += 10;
+                }
+            }
+            string normalizedMark = NormalizePlacementProfileText(mark);
+            string normalizedSymbol = NormalizePlacementProfileText(symbolDescription);
+            if (normalizedMark.Contains("зерк") == normalizedSymbol.Contains("зерк")) score += 5;
+            if (normalizedMark.Contains("перовниз") == normalizedSymbol.Contains("перовниз")) score += 4;
+            if (normalizedMark.Contains("поворот") == normalizedSymbol.Contains("поворот")) score += 3;
+            return score;
+        }
+
+        private static IEnumerable<int> ReadIntegerTokensForPlacement(string text)
+        {
+            int value = 0;
+            bool reading = false;
+            foreach (char character in text ?? string.Empty)
+            {
+                if (char.IsDigit(character))
+                {
+                    reading = true;
+                    value = value * 10 + (character - '0');
+                }
+                else if (reading)
+                {
+                    yield return value;
+                    value = 0;
+                    reading = false;
+                }
+            }
+            if (reading) yield return value;
+        }
+
+        private static string NormalizePlacementProfileText(string text)
+        {
+            return new string((text ?? string.Empty)
+                .ToLowerInvariant()
+                .Where(char.IsLetterOrDigit)
+                .ToArray());
         }
         // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+        //11.09.26 - металлические перемычки + подбор
         private static CompositeTypeResolutionV3 GetOrCreateCompositeSymbol(
             Document document,
             IList<FamilySymbol> compositeCandidates,
@@ -5716,7 +7415,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                 ? matches
                 : new List<FamilySymbol>();
             FamilySymbol existing = exactNameMatches
-                .OrderByDescending(CountAvailableSlots)
+                .OrderByDescending(symbol => !string.IsNullOrWhiteSpace(group.CompositeFamilyName)
+                                             && string.Equals(
+                                                 symbol.FamilyName,
+                                                 group.CompositeFamilyName,
+                                                 StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(CountAvailableSlots)
                 .ThenBy(symbol => symbol.FamilyName, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
             if (existing != null)
@@ -5736,13 +7440,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                                 componentSymbols,
                                 group.LeftSupportPadTypeName,
                                 group.RightSupportPadTypeName,
+                                group.StripTypeId,
+                                group.StripLayoutMm,
+                                group.MainLintelHeightMm,
+                                group.SecondLintelHeightMm,
                                 symbolsByName);
                             if (!IsCompositeSymbolConfigured(
                                     existing,
                                     group.Components,
                                     componentSymbols,
                                     group.LeftSupportPadTypeName,
-                                    group.RightSupportPadTypeName))
+                                    group.RightSupportPadTypeName,
+                                    group.StripTypeId,
+                                    group.StripLayoutMm,
+                                    group.MainLintelHeightMm,
+                                    group.SecondLintelHeightMm))
                                 throw new InvalidOperationException(
                                     "После замены состав типа не соответствует выбранному варианту.");
                             replaceTransaction.Commit();
@@ -5828,6 +7540,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             };
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static FamilySymbol CreateCompositeSymbol(
             Document document,
             IList<FamilySymbol> compositeCandidates,
@@ -5858,13 +7571,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                             componentSymbols,
                             group.LeftSupportPadTypeName,
                             group.RightSupportPadTypeName,
+                            group.StripTypeId,
+                            group.StripLayoutMm,
+                            group.MainLintelHeightMm,
+                            group.SecondLintelHeightMm,
                             symbolsByName);
                         if (!IsCompositeSymbolConfigured(
                                 created,
                                 group.Components,
                                 componentSymbols,
                                 group.LeftSupportPadTypeName,
-                                group.RightSupportPadTypeName))
+                                group.RightSupportPadTypeName,
+                                group.StripTypeId,
+                                group.StripLayoutMm,
+                                group.MainLintelHeightMm,
+                                group.SecondLintelHeightMm))
                             throw new InvalidOperationException(
                                 "После создания состав типа, видимость или отступы не совпали"
                                 + " с выбранным вариантом.");
@@ -5925,12 +7646,17 @@ namespace FerrumAddinDev.LintelCreator_v3
                 : -1;
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static bool IsCompositeSymbolConfigured(
             FamilySymbol symbol,
             IList<LintelPlacementComponentRequestV3> components,
             IList<FamilySymbol> componentSymbols,
             string leftSupportPadTypeName,
-            string rightSupportPadTypeName)
+            string rightSupportPadTypeName,
+            ElementId stripTypeId,
+            int stripLayoutMm,
+            int mainLintelHeightMm,
+            int secondLintelHeightMm)
         {
             if (symbol == null
                 || components == null
@@ -5966,6 +7692,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                         || Math.Abs(actualOffset - expectedOffset) > 0.5)
                         return false;
                 }
+
             }
 
             foreach (Parameter visibility in symbol.Parameters.Cast<Parameter>())
@@ -5977,6 +7704,18 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
             if (!IsSupportPadConfigured(symbol, true, leftSupportPadTypeName)
                 || !IsSupportPadConfigured(symbol, false, rightSupportPadTypeName))
+                return false;
+            if (!IsStripConfigured(symbol, stripTypeId, stripLayoutMm))
+                return false;
+
+            if (!IsOptionalHeightConfigured(
+                    symbol,
+                    MainLintelHeightParameterName,
+                    mainLintelHeightMm)
+                || !IsOptionalHeightConfigured(
+                    symbol,
+                    SecondLintelHeightParameterName,
+                    secondLintelHeightMm))
                 return false;
 
             double expectedMainLength = GetLongestNestedLintelLengthMm(
@@ -5991,6 +7730,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return true;
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static List<string> GetCompositeConfigurationDifferences(
             Document document,
             FamilySymbol symbol,
@@ -6051,6 +7791,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                             + " мм");
                     }
                 }
+
             }
 
             foreach (Parameter visibility in symbol.Parameters.Cast<Parameter>())
@@ -6105,6 +7846,119 @@ namespace FerrumAddinDev.LintelCreator_v3
             return LintelSupportPadSelectionV3.Normalize(supportPadSymbol?.Name);
         }
 
+        internal static ElementId ReadCompositeSymbolStripTypeId(FamilySymbol symbol)
+        {
+            if (!IsBooleanParameterEnabled(FindStripVisibilityParameter(symbol)))
+                return ElementId.InvalidElementId;
+
+            Parameter parameter = FindParameterByNormalizedName(symbol, StripTypeParameterName);
+            return parameter?.StorageType == StorageType.ElementId
+                ? parameter.AsElementId()
+                : ElementId.InvalidElementId;
+        }
+
+        internal static int ReadCompositeSymbolStripLayoutMm(FamilySymbol symbol)
+        {
+            double value = GetLengthParameterMm(
+                FindParameterByNormalizedName(symbol, StripLayoutParameterName));
+            return double.IsNaN(value) ? 0 : Math.Max(0, (int)Math.Round(value));
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        internal static int ReadCompositeSymbolMainLintelHeightMm(FamilySymbol symbol)
+        {
+            double value = GetLengthParameterMm(
+                FindParameterByNormalizedName(symbol, MainLintelHeightParameterName));
+            return double.IsNaN(value) ? 0 : (int)Math.Round(value);
+        }
+
+        internal static int ReadCompositeSymbolSecondLintelHeightMm(FamilySymbol symbol)
+        {
+            double value = GetLengthParameterMm(
+                FindParameterByNormalizedName(symbol, SecondLintelHeightParameterName));
+            return double.IsNaN(value) ? 0 : (int)Math.Round(value);
+        }
+
+        private static bool IsOptionalHeightConfigured(
+            FamilySymbol symbol,
+            string parameterName,
+            int expectedValueMm)
+        {
+            Parameter parameter = FindParameterByNormalizedName(symbol, parameterName);
+            if (parameter == null) return true;
+            double actualValueMm = GetLengthParameterMm(parameter);
+            return !double.IsNaN(actualValueMm)
+                   && Math.Abs(actualValueMm - expectedValueMm) <= 0.5;
+        }
+
+        private static bool IsStripConfigured(
+            FamilySymbol symbol,
+            ElementId selectedTypeId,
+            int selectedLayoutMm)
+        {
+            bool shouldBeVisible = selectedTypeId != null
+                                   && selectedTypeId != ElementId.InvalidElementId;
+            Parameter visibility = FindStripVisibilityParameter(symbol);
+            if (visibility == null) return false;
+            if (IsBooleanParameterEnabled(visibility) != shouldBeVisible) return false;
+            if (!shouldBeVisible) return true;
+
+            ElementId actualTypeId = ReadCompositeSymbolStripTypeId(symbol);
+            if (actualTypeId == null
+                || actualTypeId == ElementId.InvalidElementId
+                || actualTypeId.Value != selectedTypeId.Value)
+                return false;
+
+            double actualLayout = GetLengthParameterMm(
+                FindParameterByNormalizedName(symbol, StripLayoutParameterName));
+            return double.IsNaN(actualLayout)
+                ? selectedLayoutMm == 0
+                : Math.Abs(actualLayout - selectedLayoutMm) <= 0.5;
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static void ConfigureStrip(
+            FamilySymbol symbol,
+            ElementId selectedTypeId,
+            int selectedLayoutMm)
+        {
+            bool shouldBeVisible = selectedTypeId != null
+                                   && selectedTypeId != ElementId.InvalidElementId;
+            Parameter visibility = FindStripVisibilityParameter(symbol);
+            if (visibility == null || visibility.IsReadOnly)
+                throw new InvalidOperationException(
+                    "Не найден доступный параметр «" + StripVisibilityParameterName + "».");
+
+            if (!shouldBeVisible)
+            {
+                SetBooleanParameter(visibility, false);
+                return;
+            }
+
+            Parameter stripType = FindParameterByNormalizedName(symbol, StripTypeParameterName);
+            if (stripType != null && !stripType.IsReadOnly
+                && stripType.StorageType == StorageType.ElementId)
+            {
+                if (!stripType.Set(selectedTypeId))
+                    throw new InvalidOperationException(
+                        "Параметр «" + StripTypeParameterName + "» не принял выбранное значение.");
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "Не найден доступный параметр типа «" + StripTypeParameterName + "».");
+            }
+
+            Parameter stripLayout = FindParameterByNormalizedName(symbol, StripLayoutParameterName);
+            if (stripLayout != null && !stripLayout.IsReadOnly)
+                SetLengthParameter(stripLayout, selectedLayoutMm);
+            else if (selectedLayoutMm != 0)
+                throw new InvalidOperationException(
+                    "Не найден доступный параметр типа «" + StripLayoutParameterName + "».");
+
+            SetBooleanParameter(visibility, true);
+        }
+
         private static bool IsSupportPadConfigured(
             FamilySymbol symbol,
             bool isLeft,
@@ -6113,6 +7967,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             selectedTypeName = LintelSupportPadSelectionV3.Normalize(selectedTypeName);
             Parameter visibility = FindSupportPadVisibilityParameter(symbol, isLeft);
             bool shouldBeVisible = !LintelSupportPadSelectionV3.IsNone(selectedTypeName);
+            if (visibility == null) return false;
             if (IsBooleanParameterEnabled(visibility) != shouldBeVisible) return false;
             if (!shouldBeVisible) return true;
 
@@ -6123,6 +7978,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return string.Equals(current?.Name, selectedTypeName, StringComparison.Ordinal);
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static void ConfigureSupportPad(
             FamilySymbol symbol,
             bool isLeft,
@@ -6178,13 +8034,19 @@ namespace FerrumAddinDev.LintelCreator_v3
             return familyName.IndexOf("опорн", StringComparison.OrdinalIgnoreCase) >= 0
                    || typeName.IndexOf("опорн", StringComparison.OrdinalIgnoreCase) >= 0
                    || familyName.StartsWith("ОП", StringComparison.OrdinalIgnoreCase)
-                   || typeName.StartsWith("ОП", StringComparison.OrdinalIgnoreCase);
+                   || typeName.StartsWith("ОП", StringComparison.OrdinalIgnoreCase)
+                   || LintelSupportPadSelectionV3.IsSupportedAngleSymbol(symbol);
         }
 
         private static Parameter FindSupportPadVisibilityParameter(FamilySymbol symbol, bool isLeft)
         {
             return symbol?.LookupParameter(
                 isLeft ? "ОП-1-Л.Видимость" : "ОП-1-П.Видимость");
+        }
+
+        private static Parameter FindStripVisibilityParameter(FamilySymbol symbol)
+        {
+            return FindParameterByNormalizedName(symbol, StripVisibilityParameterName);
         }
 
         private static Parameter FindSupportPadTypeParameter(FamilySymbol symbol, bool isLeft)
@@ -6225,7 +8087,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 {
                     FamilyName = componentSymbol.FamilyName,
                     TypeName = componentSymbol.Name,
-                    Order = result.Count
+                    Order = result.Count,
+                    Material = IsMetalComponentSymbol(componentSymbol)
+                        ? LintelMaterialV3.Metal
+                        : LintelMaterialV3.ReinforcedConcrete
                 };
                 string offsetName = "Отступ от " + slot.ToString(CultureInfo.InvariantCulture)
                                     + " до " + (slot + 1).ToString(CultureInfo.InvariantCulture);
@@ -6272,12 +8137,17 @@ namespace FerrumAddinDev.LintelCreator_v3
                 : double.NaN;
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static void ConfigureCompositeSymbol(
             FamilySymbol symbol,
             IList<LintelPlacementComponentRequestV3> components,
             IList<FamilySymbol> componentSymbols,
             string leftSupportPadTypeName,
             string rightSupportPadTypeName,
+            ElementId stripTypeId,
+            int stripLayoutMm,
+            int mainLintelHeightMm,
+            int secondLintelHeightMm,
             IDictionary<string, List<FamilySymbol>> symbolsByName)
         {
             for (int index = 0; index < components.Count; index++)
@@ -6316,6 +8186,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                         offset,
                         components[index].WidthMm + components[index].GapAfterMm);
                 }
+
             }
 
             foreach (Parameter visibility in symbol.Parameters.Cast<Parameter>()
@@ -6345,6 +8216,19 @@ namespace FerrumAddinDev.LintelCreator_v3
 
             ConfigureSupportPad(symbol, true, leftSupportPadTypeName, symbolsByName);
             ConfigureSupportPad(symbol, false, rightSupportPadTypeName, symbolsByName);
+            ConfigureStrip(symbol, stripTypeId, stripLayoutMm);
+
+            Parameter mainLintelHeight = FindParameterByNormalizedName(
+                symbol,
+                MainLintelHeightParameterName);
+            if (mainLintelHeight != null && !mainLintelHeight.IsReadOnly)
+                SetLengthParameter(mainLintelHeight, mainLintelHeightMm);
+
+            Parameter secondLintelHeight = FindParameterByNormalizedName(
+                symbol,
+                SecondLintelHeightParameterName);
+            if (secondLintelHeight != null && !secondLintelHeight.IsReadOnly)
+                SetLengthParameter(secondLintelHeight, secondLintelHeightMm);
         }
         // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
         private static double GetLongestNestedLintelLengthMm(
@@ -6368,7 +8252,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                       componentSymbol,
                                                       "Длина");
                 double actualLength = GetLengthParameterMm(actualLengthParameter);
-                double length = !double.IsNaN(actualLength) && actualLength > 0
+                double length = components[index]?.Material == LintelMaterialV3.Metal
+                                && components[index].LengthMm > 0
+                    ? components[index].LengthMm
+                    : !double.IsNaN(actualLength) && actualLength > 0
                     ? actualLength
                     : components[index]?.LengthMm ?? 0;
                 longest = Math.Max(longest, length);
@@ -6422,6 +8309,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                                     && number == slot)
                 .OrderBy(parameter => parameter.Definition?.Name, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static bool IsMetalComponentSymbol(FamilySymbol symbol)
+        {
+            string familyName = symbol?.FamilyName ?? string.Empty;
+            string typeName = symbol?.Name ?? string.Empty;
+            string name = familyName + " " + typeName;
+            string normalized = NormalizePlacementProfileText(name);
+            return normalized.Contains("уг")
+                   || normalized.Contains("шв")
+                   || name.IndexOf("двутав", StringComparison.OrdinalIgnoreCase) >= 0
+                   || name.IndexOf("сталь", StringComparison.OrdinalIgnoreCase) >= 0
+                   || name.IndexOf("лист", StringComparison.OrdinalIgnoreCase) >= 0
+                   || name.IndexOf("полос", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool IsNestedFamilyTypeParameter(FamilySymbol owner, Parameter parameter)
@@ -6546,12 +8448,14 @@ namespace FerrumAddinDev.LintelCreator_v3
                     "Не удалось записать параметр «" + parameter.Definition?.Name + "».");
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private static PlacedLintelDataV3 PlaceLintel(
             Document document,
             FamilySymbol symbol,
             string wallTypeName,
             OpeningPlacementTargetV3 target,
-            IReadOnlyDictionary<long, int> floorNumbersByLevelId)
+            IReadOnlyDictionary<long, int> floorNumbersByLevelId,
+            int packageWallOffsetMm)
         {
             Wall wall = document.GetElement(target.WallId) as Wall;
             if (wall == null)
@@ -6570,7 +8474,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 throw new InvalidOperationException("Не найден уровень проёма.");
             double topOffset = target.TopElevation - level.ProjectElevation;
             XYZ point = new XYZ(target.Location.X, target.Location.Y, topOffset)
-                        + baseOrientation * (wall.Width / 2.0);
+                        + baseOrientation * (wall.Width / 2.0 + packageWallOffsetMm / MillimetersPerFoot);
             FamilyInstance lintel = document.Create.NewFamilyInstance(
                 point,
                 symbol,
@@ -6672,6 +8576,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
     }
 
+    //11.09.26 - металлические перемычки + подбор
     internal static class LintelTypeReplacementEngineV3
     {
         private const double MillimetersPerFoot = 304.8;
@@ -6726,6 +8631,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                             request.Components,
                             request.LeftSupportPadTypeName,
                             request.RightSupportPadTypeName,
+                            request.StripTypeId,
+                            request.StripLayoutMm,
+                            request.MainLintelHeightMm,
+                            request.SecondLintelHeightMm,
                             request.HasExistingTypeDifference,
                             request.ExistingTypeDifferenceText,
                             request.NameConflictAction,
@@ -6762,6 +8671,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                                         resultId = changedId;
                                 }
 
+                                if (request.PackageWallOffsetMm != 0
+                                    && request.Components.Any(component =>
+                                        component.Material == LintelMaterialV3.Metal))
+                                {
+                                    FamilyInstance resultLintel = document.GetElement(resultId) as FamilyInstance
+                                                                  ?? lintel;
+                                    LintelReplacementPositionV3 position = request.Positions.FirstOrDefault(item =>
+                                        item.LintelId?.Value == lintelId.Value);
+                                    MoveLintelForPackageOffset(
+                                        document,
+                                        resultLintel,
+                                        position,
+                                        request.PackageWallOffsetMm);
+                                }
+
                                 subTransaction.Commit();
                                 result.ChangedItems.Add(new LintelTypeReplacementItemResultV3
                                 {
@@ -6783,7 +8707,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                         document.Regenerate();
                         ElementId representativeId = result.ChangedItems.First().ResultId;
                         FamilyInstance representative = document.GetElement(representativeId) as FamilyInstance;
-                        result.Components.AddRange(ReadComponents(document, representative));
+                        result.Components.AddRange(
+                            LintelPlacementEngineV3.ReadCompositeSymbolComponents(
+                                document,
+                                representative?.Symbol));
                     }
                     transaction.Commit();
                 }
@@ -6805,6 +8732,48 @@ namespace FerrumAddinDev.LintelCreator_v3
                        symbol.get_Parameter(BuiltInParameter.ALL_MODEL_MODEL)?.AsString(),
                        "Перемычки составные",
                        StringComparison.OrdinalIgnoreCase);
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static void MoveLintelForPackageOffset(
+            Document document,
+            FamilyInstance lintel,
+            LintelReplacementPositionV3 position,
+            int packageWallOffsetMm)
+        {
+            if (document == null || lintel == null || packageWallOffsetMm == 0) return;
+            XYZ currentPoint = (lintel.Location as LocationPoint)?.Point;
+            if (currentPoint == null)
+                throw new InvalidOperationException("У перемычки отсутствует точка вставки для общего смещения.");
+
+            Wall wall = position?.WallId == null
+                ? null
+                : document.GetElement(position.WallId) as Wall;
+            XYZ baseOrientation = position?.SupportType == 1
+                ? NormalizeInPlan(position.SupportDirection)
+                : null;
+            baseOrientation = baseOrientation
+                              ?? NormalizeInPlan(position?.WallOrientation)
+                              ?? NormalizeInPlan(wall?.Orientation)
+                              ?? NormalizeInPlan(lintel.FacingOrientation)
+                              ?? XYZ.BasisX;
+
+            XYZ move;
+            if (wall != null && position?.OpeningLocation != null)
+            {
+                XYZ targetPoint = new XYZ(
+                    position.OpeningLocation.X,
+                    position.OpeningLocation.Y,
+                    currentPoint.Z)
+                                  + baseOrientation
+                                  * (wall.Width / 2.0 + packageWallOffsetMm / MillimetersPerFoot);
+                move = targetPoint - currentPoint;
+            }
+            else
+            {
+                move = baseOrientation * (packageWallOffsetMm / MillimetersPerFoot);
+            }
+            ElementTransformUtils.MoveElement(document, lintel.Id, move);
         }
 
         private static List<ExistingLintelComponentV3> ReadComponents(

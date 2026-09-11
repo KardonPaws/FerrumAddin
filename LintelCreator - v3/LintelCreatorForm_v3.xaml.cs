@@ -41,6 +41,9 @@ namespace FerrumAddinDev.LintelCreator_v3
         private DateTime _existingLintelsSmoothScrollUntilUtc = DateTime.MinValue;
         private double _variantsSmoothScrollTarget = double.NaN;
         private DateTime _variantsSmoothScrollUntilUtc = DateTime.MinValue;
+        //11.09.26 - металлические перемычки + подбор
+        private double _existingTypesSmoothScrollTarget = double.NaN;
+        private DateTime _existingTypesSmoothScrollUntilUtc = DateTime.MinValue;
         private readonly CancellationTokenSource _calculationCancellation = new CancellationTokenSource();
         private bool _initialCalculationStarted;
         private DateTime _lastProgressRenderUtc = DateTime.MinValue;
@@ -387,11 +390,13 @@ namespace FerrumAddinDev.LintelCreator_v3
             Workspace?.RestoreEditorDefault();
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private void LoadExistingEditorType_Click(object sender, RoutedEventArgs e)
         {
             Workspace?.LoadEditorFromExistingType();
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private void SaveVariantChanges_Click(object sender, RoutedEventArgs e)
         {
             if (Workspace == null || _isClosing) return;
@@ -482,6 +487,32 @@ namespace FerrumAddinDev.LintelCreator_v3
                 ref _variantsSmoothScrollTarget,
                 ref _variantsSmoothScrollUntilUtc,
                 e);
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private void ExistingLintelTypes_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            ScrollViewer scrollViewer = FindVisualChild<ScrollViewer>(ExistingLintelTypesListBox);
+            if (scrollViewer == null || scrollViewer.ScrollableWidth <= 0) return;
+
+            DateTime now = DateTime.UtcNow;
+            if (double.IsNaN(_existingTypesSmoothScrollTarget)
+                || now >= _existingTypesSmoothScrollUntilUtc
+                || _existingTypesSmoothScrollTarget < 0
+                || _existingTypesSmoothScrollTarget > scrollViewer.ScrollableWidth
+                || Math.Abs(_existingTypesSmoothScrollTarget - scrollViewer.HorizontalOffset) < 0.5)
+            {
+                _existingTypesSmoothScrollTarget = scrollViewer.HorizontalOffset;
+            }
+
+            _existingTypesSmoothScrollTarget = Math.Max(0, Math.Min(
+                scrollViewer.ScrollableWidth,
+                _existingTypesSmoothScrollTarget - e.Delta * 0.8));
+            _existingTypesSmoothScrollUntilUtc = now.AddMilliseconds(220);
+            SmoothScrollAnimatorV3.AnimateHorizontal(
+                scrollViewer,
+                _existingTypesSmoothScrollTarget);
+            e.Handled = true;
         }
 
         private static void SmoothScrollListBox(
@@ -616,6 +647,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                 typeof(double),
                 typeof(SmoothScrollAnimatorV3),
                 new PropertyMetadata(0.0, AnimatedVerticalOffsetChanged));
+        private static readonly DependencyProperty AnimatedHorizontalOffsetProperty =
+            DependencyProperty.RegisterAttached(
+                "AnimatedHorizontalOffset",
+                typeof(double),
+                typeof(SmoothScrollAnimatorV3),
+                new PropertyMetadata(0.0, AnimatedHorizontalOffsetChanged));
 
         public static void Animate(ScrollViewer scrollViewer, double targetOffset)
         {
@@ -638,10 +675,44 @@ namespace FerrumAddinDev.LintelCreator_v3
             scrollViewer.BeginAnimation(AnimatedVerticalOffsetProperty, animation, HandoffBehavior.SnapshotAndReplace);
         }
 
+        //11.09.26 - металлические перемычки + подбор
+        public static void AnimateHorizontal(ScrollViewer scrollViewer, double targetOffset)
+        {
+            double currentOffset = scrollViewer.HorizontalOffset;
+            scrollViewer.BeginAnimation(AnimatedHorizontalOffsetProperty, null);
+            scrollViewer.SetValue(AnimatedHorizontalOffsetProperty, currentOffset);
+
+            var animation = new DoubleAnimation
+            {
+                From = currentOffset,
+                To = targetOffset,
+                Duration = TimeSpan.FromMilliseconds(180),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            animation.Completed += (sender, args) =>
+            {
+                scrollViewer.BeginAnimation(AnimatedHorizontalOffsetProperty, null);
+                scrollViewer.SetValue(AnimatedHorizontalOffsetProperty, targetOffset);
+            };
+            scrollViewer.BeginAnimation(
+                AnimatedHorizontalOffsetProperty,
+                animation,
+                HandoffBehavior.SnapshotAndReplace);
+        }
+
         private static void AnimatedVerticalOffsetChanged(DependencyObject sender, DependencyPropertyChangedEventArgs e)
         {
             if (sender is ScrollViewer scrollViewer && e.NewValue is double offset)
                 scrollViewer.ScrollToVerticalOffset(offset);
+        }
+
+        //11.09.26 - металлические перемычки + подбор
+        private static void AnimatedHorizontalOffsetChanged(
+            DependencyObject sender,
+            DependencyPropertyChangedEventArgs e)
+        {
+            if (sender is ScrollViewer scrollViewer && e.NewValue is double offset)
+                scrollViewer.ScrollToHorizontalOffset(offset);
         }
     }
 
