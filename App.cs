@@ -347,21 +347,18 @@ namespace FerrumAddinDev
             var ComandStats = panelControl.AddItem(CommandStats) as PushButton;
             ComandStats.Enabled = true;
 
-            FamilyManagerWindow dock = new FamilyManagerWindow();
-            dockableWindow = dock;
+            //FamilyManagerWindow dock = new FamilyManagerWindow();
+            //dockableWindow = dock;
 
-            DockablePaneId id = new DockablePaneId(new Guid("{3496B5BA-F8C4-403D-AF7E-B95D25F15CED}"));
+            //DockablePaneId id = new DockablePaneId(new Guid("{3496B5BA-F8C4-403D-AF7E-B95D25F15CED}"));
             // 17.10.25 - полное откоючение фм
             bool manager = (bool)(GetElementStates(root).Where(x => x.Key.Equals("frmManager"))?.First().Value);
             // 11.12.25 - отключение уведомления о дублировании
             application.ControlledApplication.FailuresProcessing += OnFailuresProcessing;
 
-            if (manager)
-            {
                 try
                 {
-                    a.RegisterDockablePane(id, "Менеджер семейств Железно_Тест",
-                            dockableWindow as IDockablePaneProvider);
+                    //a.RegisterDockablePane(id, "Менеджер семейств Железно_Тест", dockableWindow as IDockablePaneProvider);
                     if ((admins.Count != 0 && admins.Contains(name)) || AlwaysLoad == true)
                     {
                     }
@@ -388,7 +385,7 @@ namespace FerrumAddinDev
                 {
 
                 }
-            }
+            
 
             ButtonConf(root);
             CleanOldLogFiles();
