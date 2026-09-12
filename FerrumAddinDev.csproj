@@ -96,6 +96,7 @@
     </Compile>
     <Compile Include="LintelCreator - v2\AlphanumComparatorFastString.cs" />
     <Compile Include="App.cs" />
+    <Compile Include="RibbonTabHeaderManager.cs" />
     <Compile Include="ColumnSections\CreateColumnSections.cs" />
     <Compile Include="CommandMepName.cs" />
     <Compile Include="Config\ConfiguratorShow.cs" />

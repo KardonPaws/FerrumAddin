@@ -463,6 +463,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             };
         }
 
+        //11.09.26 - металлические перемычки + подбор
         private bool TryArrangeTwoBearingSides(
             List<LintelCatalogItemV3> bearing,
             List<LintelCatalogItemV3> ordinary,
@@ -520,7 +521,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                     secondSide.Add(bearing[index]);
             }
 
-            ordered = firstSide.Concat(ordinary).Concat(secondSide).ToList();
+            // Составное семейство раскладывает 1ПР от стороны 2 (+normal),
+            // поэтому физическая сторона 1 должна завершать порядок элементов.
+            ordered = secondSide.Concat(ordinary).Concat(firstSide).ToList();
             return true;
         }
 

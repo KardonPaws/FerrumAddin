@@ -739,6 +739,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string LeftSupportPadTypeName { get; set; }
         public string RightSupportPadTypeName { get; set; }
         public int PackageWallOffsetMm { get; set; }
+        //12.09.26 - фикс направления перемычек
+        public int PackageThicknessMm { get; set; }
         public ElementId ExistingCompositeTypeId { get; set; }
         public ElementId StripTypeId { get; set; }
         public int StripLayoutMm { get; set; }
@@ -798,6 +800,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         public string LeftSupportPadTypeName { get; set; }
         public string RightSupportPadTypeName { get; set; }
         public int PackageWallOffsetMm { get; set; }
+        //12.09.26 - фикс направления перемычек
+        public int PackageThicknessMm { get; set; }
         public ElementId StripTypeId { get; set; }
         public int StripLayoutMm { get; set; }
         public int MainLintelHeightMm { get; set; }
@@ -2806,6 +2810,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 LeftSupportPadTypeName = leftSupportPad,
                 RightSupportPadTypeName = rightSupportPad,
                 PackageWallOffsetMm = EditorHasMetal ? EditorPackageWallOffsetMm : 0,
+                //12.09.26 - фикс направления перемычек
+                PackageThicknessMm = editorVariant.TotalWidthMm,
                 StripTypeId = EditorHasMetal
                     ? SelectedStripType?.TypeId ?? ElementId.InvalidElementId
                     : ElementId.InvalidElementId,
@@ -2992,6 +2998,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                     LeftSupportPadTypeName = group.ActiveVariant.LeftSupportPadTypeName,
                     RightSupportPadTypeName = group.ActiveVariant.RightSupportPadTypeName,
                     PackageWallOffsetMm = group.ActiveVariant.PackageWallOffsetMm,
+                    //12.09.26 - фикс направления перемычек
+                    PackageThicknessMm = group.ActiveVariant.TotalWidthMm,
                     ExistingCompositeTypeId = readyType?.TypeId,
                     StripTypeId = GetTypeIdFromValue(group.ActiveVariant.StripTypeIdValue),
                     StripLayoutMm = group.ActiveVariant.StripLayoutMm,
@@ -6661,6 +6669,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         //11.09.26 - металлические перемычки + подбор
         private const string MainLintelHeightParameterName = "Высота 1 перемычки";
         private const string SecondLintelHeightParameterName = "Высота 2 перемычки";
+        //12.09.26 - фикс направления перемычек
+        private const string LineDesignationOffsetParameterName = "Линия обозначения.Отступ";
 
         //11.09.26 - металлические перемычки + подбор
         public static LintelPlacementResultV3 Execute(
@@ -6910,7 +6920,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                 : 0,
                                             Material = component.Material
                                         }));
-
+                                //12.09.26 - фикс направления перемычек
                                 using (var groupSubTransaction = new SubTransaction(document))
                                 {
                                     groupSubTransaction.Start();
@@ -6925,7 +6935,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                 group.WallTypeName,
                                                 target,
                                                 floorNumbersByLevelId,
-                                                group.PackageWallOffsetMm));
+                                                group.PackageWallOffsetMm,
+                                                group.PackageThicknessMm));
                                         }
 
                                         groupSubTransaction.Commit();
@@ -8455,7 +8466,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             string wallTypeName,
             OpeningPlacementTargetV3 target,
             IReadOnlyDictionary<long, int> floorNumbersByLevelId,
-            int packageWallOffsetMm)
+            int packageWallOffsetMm,
+            int packageThicknessMm)
         {
             Wall wall = document.GetElement(target.WallId) as Wall;
             if (wall == null)
@@ -8509,6 +8521,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 lintel.LookupParameter("ZH_Этаж_Числовой"),
                 floorNumber.ToString(CultureInfo.InvariantCulture));
             SetValueStringIfWritable(lintel.LookupParameter("Видимость.Глубина"), "2000");
+            //12.09.26 - фикс направления перемычек
+            SetLineDesignationOffset(lintel, packageThicknessMm);
 
             return new PlacedLintelDataV3
             {
@@ -8516,6 +8530,17 @@ namespace FerrumAddinDev.LintelCreator_v3
                 Wall = wall,
                 WallTypeName = wallTypeName
             };
+        }
+
+        //12.09.26 - фикс направления перемычек
+        internal static void SetLineDesignationOffset(FamilyInstance lintel, int packageThicknessMm)
+        {
+            if (lintel == null || packageThicknessMm <= 0) return;
+            Parameter parameter = FindParameterByNormalizedName(
+                lintel,
+                LineDesignationOffsetParameterName);
+            if (parameter == null || parameter.IsReadOnly) return;
+            SetLengthParameter(parameter, packageThicknessMm / 2.0);
         }
 
         private static void ApplyBaseWallType(
@@ -8671,12 +8696,17 @@ namespace FerrumAddinDev.LintelCreator_v3
                                         resultId = changedId;
                                 }
 
+                                FamilyInstance resultLintel = document.GetElement(resultId) as FamilyInstance
+                                                              ?? lintel;
+                                //12.09.26 - фикс направления перемычек
+                                LintelPlacementEngineV3.SetLineDesignationOffset(
+                                    resultLintel,
+                                    request.PackageThicknessMm);
+
                                 if (request.PackageWallOffsetMm != 0
                                     && request.Components.Any(component =>
                                         component.Material == LintelMaterialV3.Metal))
                                 {
-                                    FamilyInstance resultLintel = document.GetElement(resultId) as FamilyInstance
-                                                                  ?? lintel;
                                     LintelReplacementPositionV3 position = request.Positions.FirstOrDefault(item =>
                                         item.LintelId?.Value == lintelId.Value);
                                     MoveLintelForPackageOffset(

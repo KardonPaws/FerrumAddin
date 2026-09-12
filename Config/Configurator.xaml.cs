@@ -58,6 +58,18 @@ namespace FerrumAddinDev
                     BigPicture.IsChecked = isCheckedBP;
                 }
 
+                XElement ribbonTabHeader = root.Element("RibbonTabHeader");
+                RibbonTabHeaderMode headerMode;
+                if (ribbonTabHeader != null &&
+                    Enum.TryParse(ribbonTabHeader.Attribute("Mode")?.Value, true, out headerMode))
+                {
+                    RibbonTabDisplayMode.SelectedIndex = HeaderModeToSelectedIndex(headerMode);
+                }
+                else
+                {
+                    RibbonTabDisplayMode.SelectedIndex = 0;
+                }
+
             }
             catch (Exception ex)
             {
@@ -84,7 +96,44 @@ namespace FerrumAddinDev
             }
             BP.SetAttributeValue("IsChecked", BigPicture.IsChecked);
             App.BigPicture = (bool)BigPicture.IsChecked;
-            FamilyManagerWindow.mvm.Width = (bool)BigPicture.IsChecked ? 150 : 50;
+            //FamilyManagerWindow.mvm.Width = (bool)BigPicture.IsChecked ? 150 : 50;
+
+            RibbonTabHeaderMode headerMode = SelectedIndexToHeaderMode(RibbonTabDisplayMode.SelectedIndex);
+            XElement ribbonTabHeader = root.Element("RibbonTabHeader");
+            if (ribbonTabHeader == null)
+            {
+                ribbonTabHeader = new XElement("RibbonTabHeader");
+                root.Add(ribbonTabHeader);
+            }
+
+            ribbonTabHeader.SetAttributeValue("Mode", headerMode.ToString());
+            App.RibbonTabDisplayMode = headerMode;
+        }
+
+        private static int HeaderModeToSelectedIndex(RibbonTabHeaderMode headerMode)
+        {
+            switch (headerMode)
+            {
+                case RibbonTabHeaderMode.TextOnly:
+                    return 1;
+                case RibbonTabHeaderMode.IconOnly:
+                    return 2;
+                default:
+                    return 0;
+            }
+        }
+
+        private static RibbonTabHeaderMode SelectedIndexToHeaderMode(int selectedIndex)
+        {
+            switch (selectedIndex)
+            {
+                case 1:
+                    return RibbonTabHeaderMode.TextOnly;
+                case 2:
+                    return RibbonTabHeaderMode.IconOnly;
+                default:
+                    return RibbonTabHeaderMode.IconAndText;
+            }
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)
@@ -104,9 +153,10 @@ namespace FerrumAddinDev
             SaveToggleButtonState(root);
             root.Save(xmlFilePath);
             App.ButtonConf(root);
+            RibbonTabHeaderManager.Apply(App.RibbonTabDisplayMode);
             //CreateCheckboxesFromXml();
             SaveCheckboxesToXml();
-            App.dockableWindow.Newpath();
+            //App.dockableWindow.Newpath();
             this.Close();
         }
 

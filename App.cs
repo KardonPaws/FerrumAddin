@@ -207,6 +207,22 @@ namespace FerrumAddinDev
                 root.Add(BP);
             }
             BigPicture = BP.Attribute("IsChecked").Value == "false" ? false : true;
+
+            XElement ribbonTabHeader = root.Element("RibbonTabHeader");
+            if (ribbonTabHeader == null)
+            {
+                ribbonTabHeader = new XElement("RibbonTabHeader");
+                ribbonTabHeader.SetAttributeValue("Mode", RibbonTabHeaderMode.IconAndText.ToString());
+                root.Add(ribbonTabHeader);
+            }
+
+            RibbonTabHeaderMode configuredHeaderMode;
+            RibbonTabDisplayMode = Enum.TryParse(
+                ribbonTabHeader.Attribute("Mode")?.Value,
+                true,
+                out configuredHeaderMode)
+                ? configuredHeaderMode
+                : RibbonTabHeaderMode.IconAndText;
             
             XElement frmTabPath = root.Element("TabPath");
             if (frmTabPath == null)
@@ -388,6 +404,7 @@ namespace FerrumAddinDev
             
 
             ButtonConf(root);
+            RibbonTabHeaderManager.Initialize(tabName, RibbonTabDisplayMode);
             CleanOldLogFiles();
 
             return Result.Succeeded;
@@ -417,6 +434,8 @@ namespace FerrumAddinDev
 
         public Result OnShutdown(UIControlledApplication a)
         {
+            RibbonTabHeaderManager.Shutdown();
+
             try
             {
                // a.ControlledApplication.FamilyLoadingIntoDocument -= ControlledApplication_FamilyLoadingIntoDocument;
@@ -494,6 +513,7 @@ namespace FerrumAddinDev
             }
         }
         public static bool BigPicture;
+        public static RibbonTabHeaderMode RibbonTabDisplayMode = RibbonTabHeaderMode.IconAndText;
         public static string xmlFilePath;
         public static string TabPath;
         public static string FamilyFolder;
@@ -544,8 +564,8 @@ namespace FerrumAddinDev
         {
             if (AllowLoad == false)
             {
-                Document d = e.Document;
-                dockableWindow.CustomInitiator(d);
+                //Document d = e.Document;
+                //dockableWindow.CustomInitiator(d);
             }
         }
         private DateTime openTimeStart;

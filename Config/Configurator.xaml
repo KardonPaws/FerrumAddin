@@ -67,15 +67,37 @@
         </Grid.RowDefinitions>
         <ScrollViewer VerticalScrollBarVisibility="Auto" Grid.Row="0">
             <StackPanel>
-            <Expander Header="Настройки видимости" IsExpanded="True" Margin="10px">
-                <StackPanel Margin="10,10,10,10">
+             <Expander Header="Настройки видимости" IsExpanded="True" Margin="10px">
+                 <StackPanel Margin="10,10,10,10">
                     <WrapPanel>
                         <ToggleButton Style="{StaticResource AnimatedSwitch}" Height="24" x:Name="frmManger" IsChecked="True"/>
                         <Image Margin="30,4,0,0" Source="/FerrumAddinDev;component/Resources/FamilyManager.png" Height="24" VerticalAlignment="Center"/>
                         <TextBlock Margin="10,0,0,0" Text="Менеджер семейств" VerticalAlignment="Center"/>
                     </WrapPanel>
-                </StackPanel>
-            </Expander>
+                 </StackPanel>
+             </Expander>
+                <Expander Header="Оформление вкладки Revit" IsExpanded="True" Margin="10px">
+                    <DockPanel Margin="10,8,10,10" LastChildFill="True">
+                        <Grid Width="24" Height="24" Margin="0,0,10,0" VerticalAlignment="Center">
+                            <Border Width="16" Height="16" Background="#005AA5"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Path Data="M 15.2,3.4 L 3.4,3.4 L 3.4,8.3 L 11.3,8.3 L 11.3,12.3 L 3.4,12.3 L 3.4,15.2"
+                                  Width="16" Height="16" Stretch="None"
+                                  Stroke="White" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Square" StrokeEndLineCap="Square"
+                                  StrokeLineJoin="Miter"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <StackPanel>
+                            <TextBlock Text="Заголовок вкладки" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="RibbonTabDisplayMode" SelectedIndex="0" MinWidth="190">
+                                <ComboBoxItem Content="Иконка + текст"/>
+                                <ComboBoxItem Content="Только текст"/>
+                                <ComboBoxItem Content="Только иконка"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </DockPanel>
+                </Expander>
                 <Expander Header="Настройки менеджера семейств" IsExpanded="True" Margin="10px">
                     <StackPanel x:Name="FamilyManager">
                         <DockPanel>
