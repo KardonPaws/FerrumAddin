@@ -1402,11 +1402,17 @@ namespace FerrumAddinDev.GrillageCreator_v3
             List<Line> botLines, RebarBarType typeHorizontal, RebarBarType typeTop, RebarBarType typeBot,
             int numberOfLinesTop, double verticalStep, XYZ distributionStartOffset)
         {
+            // 16.09.26 - вязанная арматура при количестве 2 и ширине > 400
+            if (topLines == null || botLines == null
+                || topLines.Count < 2 || topLines.Count != botLines.Count)
+                return;
+
             double maxStep = 400.0 / 304.8;
             XYZ depthDir = direction.CrossProduct(XYZ.BasisZ).Normalize();
             double dzBot = typeBot.BarModelDiameter / 2 + typeHorizontal.BarModelDiameter / 2.0;
             double dzTop = typeTop.BarModelDiameter / 2 + typeHorizontal.BarModelDiameter / 2.0;
             double dz = Math.Max(dzBot, dzTop) + typeHorizontal.BarModelDiameter / 2.0;
+            bool createSingleFrameAroundTwoBars = botLines.Count == 2;
 
             int i = 0;
             const double tolerance = 1e-6;
@@ -1424,7 +1430,9 @@ namespace FerrumAddinDev.GrillageCreator_v3
                 }
 
                 double d0 = botLines[i].GetEndPoint(0).DistanceTo(botLines[j].GetEndPoint(0));
-                if (d0 > maxStep + tolerance)
+                // При двух продольных стержнях другой пары для хомута нет:
+                // создаём один общий прямоугольный каркас независимо от ширины.
+                if (d0 > maxStep + tolerance && !createSingleFrameAroundTwoBars)
                     break;
 
                 XYZ botC = botLines[i].GetEndPoint(0)
