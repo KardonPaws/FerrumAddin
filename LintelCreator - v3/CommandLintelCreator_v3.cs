@@ -6016,7 +6016,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (wall == null || wall.WallType == null || wall.WallType.Kind == WallKind.Curtain) return false;
             string name = (wall.WallType.Name ?? string.Empty).ToLowerInvariant();
-            return IgnoredWallTokens.All(token => !name.Contains(token));
+            // 24.09.26 - прг_клд добавлен в перемычки
+            return IgnoredWallTokens.All(token => !name.Contains(token)) || name.Contains("прг_клд");
         }
 
         private static double DistanceToWallCurve(Wall wall, XYZ point)
