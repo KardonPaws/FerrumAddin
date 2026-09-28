@@ -371,6 +371,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         public int StripLayoutMm { get; set; }
         public int MainLintelHeightMm { get; set; }
         public int SecondLintelHeightMm { get; set; }
+        //28.09.26 - готовые перемычки "на ребро"
+        public bool IsEdgewise { get; set; }
         public List<ExistingLintelComponentV3> Components { get; }
             = new List<ExistingLintelComponentV3>();
 
@@ -758,6 +760,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         public LintelMaterialV3 Material { get; set; }
         public int LengthMm { get; set; }
         public int WidthMm { get; set; }
+        //28.09.26 - готовые перемычки "на ребро"
+        public int HeightMm { get; set; }
         public int GapAfterMm { get; set; }
         public bool IsBearing { get; set; }
         public int MaximumOpeningWidthMm { get; set; }
@@ -844,6 +848,8 @@ namespace FerrumAddinDev.LintelCreator_v3
 
     public sealed class LintelOpeningWorkspaceV3 : NotifyObjectV3
     {
+        //28.09.26 - готовые перемычки "на ребро"
+        private const string EdgewiseCompositeTypePrefix = "на ребро";
         private readonly Document _document;
         private readonly List<ElementId> _initialSelectionIds;
         private readonly AlphanumComparatorFastString _naturalComparer = new AlphanumComparatorFastString();
@@ -2392,13 +2398,16 @@ namespace FerrumAddinDev.LintelCreator_v3
                     StringComparison.Ordinal));
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private ExistingLintelTypeOptionV3 CreateExistingTypeOptionFromGroup(
             OpeningGroupCardV3 group)
         {
+            string typeName = group?.ExistingLintelTypeNames;
             var option = new ExistingLintelTypeOptionV3
             {
                 FamilyName = group?.ExistingLintelFamilyNames,
-                TypeName = group?.ExistingLintelTypeNames
+                TypeName = typeName,
+                IsEdgewise = TryGetBaseCompositeTypeName(typeName, out _)
             };
             if (group != null)
             {
@@ -2436,6 +2445,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return option;
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private List<string> GetExistingLintelValidationErrors(
             OpeningGroupCardV3 group,
             ExistingLintelTypeOptionV3 currentType)
@@ -2449,7 +2459,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 return errors;
             }
 
-            string[] parts = (currentType.TypeName ?? string.Empty).Split('_');
+            string[] parts = GetBaseCompositeTypeName(currentType.TypeName).Split('_');
             if (parts.Length < 4)
             {
                 errors.Add("имя типа не содержит параметры толщины стены и максимального проёма");
@@ -2463,7 +2473,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             else
             {
                 int requiredWallWidth = NormalizeWallWidth((int)Math.Round(group.WallWidthMm));
-                if (Math.Abs(typeWallWidth - requiredWallWidth) > 0.5)
+                double allowedWallWidthDifference = currentType.IsEdgewise
+                    ? WallWidthToleranceMm
+                    : 0.5;
+                if (Math.Abs(typeWallWidth - requiredWallWidth) > allowedWallWidthDifference)
                 {
                     errors.Add("толщина типа " + Math.Round(typeWallWidth)
                                + " мм не соответствует стене " + requiredWallWidth + " мм");
@@ -2510,7 +2523,9 @@ namespace FerrumAddinDev.LintelCreator_v3
                     }
                     else
                     {
-                        packageWidth += componentItems[index].WidthMm;
+                        packageWidth += GetEffectiveCatalogItemWidthMm(
+                            componentItems[index],
+                            currentType.IsEdgewise);
                     }
                 }
                 int wallWidth = (int)Math.Round(group.WallWidthMm);
@@ -2539,13 +2554,14 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
 
         //11.09.26 - металлические перемычки + подбор
+        //28.09.26 - готовые перемычки "на ребро"
         private void ApplyExistingTypeSettings(OpeningGroupCardV3 group)
         {
             string typeName = (group?.ExistingLintelTypeNames ?? string.Empty)
                 .Split('+')
                 .Select(value => value.Trim())
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-            string firstPart = (typeName ?? string.Empty).Split('_').FirstOrDefault();
+            string firstPart = GetBaseCompositeTypeName(typeName).Split('_').FirstOrDefault();
             LintelMasonryTypeV3 masonry = firstPart == "88"
                 ? LintelMasonryTypeV3.Brick88
                 : firstPart == "65"
@@ -2635,13 +2651,14 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private bool IsExistingTypeGeometrySuitable(
             ExistingLintelTypeOptionV3 option,
             IList<OpeningGroupCardV3> sourceGroups)
         {
             if (option == null || string.IsNullOrWhiteSpace(option.TypeName)) return false;
             if (IsErrorCompositeTypeName(option.TypeName)) return true;
-            string[] parts = option.TypeName.Split('_');
+            string[] parts = GetBaseCompositeTypeName(option.TypeName).Split('_');
             if (parts.Length < 4) return false;
             if (_masonryType == LintelMasonryTypeV3.Brick65 && parts[0] != "65") return false;
             if (_masonryType == LintelMasonryTypeV3.Brick88 && parts[0] != "88") return false;
@@ -2650,7 +2667,11 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (!TryParseTypeNumber(parts[2], out double maximumOpeningWidth)) return false;
             foreach (OpeningGroupCardV3 group in sourceGroups)
             {
-                if (Math.Abs(typeWallWidth - NormalizeWallWidth((int)Math.Round(group.WallWidthMm))) > 0.5)
+                double allowedWallWidthDifference = option.IsEdgewise
+                    ? WallWidthToleranceMm
+                    : 0.5;
+                if (Math.Abs(typeWallWidth - NormalizeWallWidth((int)Math.Round(group.WallWidthMm)))
+                    > allowedWallWidthDifference)
                     return false;
                 if (maximumOpeningWidth + 0.5 < group.OpeningWidthMm)
                     return false;
@@ -2665,6 +2686,84 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             return double.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out value)
                    || double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+        }
+
+        //28.09.26 - готовые перемычки "на ребро"
+        private static bool TryGetBaseCompositeTypeName(string typeName, out string baseTypeName)
+        {
+            string cleaned = new string((typeName ?? string.Empty)
+                    .Where(character => !char.IsControl(character)
+                                        && CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.Format)
+                    .ToArray())
+                .Trim();
+            baseTypeName = cleaned;
+            if (cleaned.StartsWith(EdgewiseCompositeTypePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                int separatorIndex = EdgewiseCompositeTypePrefix.Length;
+                if (separatorIndex < cleaned.Length && IsEdgewiseNameSeparator(cleaned[separatorIndex]))
+                {
+                    while (separatorIndex < cleaned.Length
+                           && IsEdgewiseNameSeparator(cleaned[separatorIndex]))
+                        separatorIndex++;
+
+                    baseTypeName = cleaned.Substring(separatorIndex).Trim();
+                    return !string.IsNullOrWhiteSpace(baseTypeName);
+                }
+            }
+
+            if (cleaned.EndsWith(EdgewiseCompositeTypePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                int prefixIndex = cleaned.Length - EdgewiseCompositeTypePrefix.Length;
+                if (prefixIndex > 0 && IsEdgewiseNameSeparator(cleaned[prefixIndex - 1]))
+                {
+                    int baseNameEnd = prefixIndex;
+                    while (baseNameEnd > 0 && IsEdgewiseNameSeparator(cleaned[baseNameEnd - 1]))
+                        baseNameEnd--;
+
+                    baseTypeName = cleaned.Substring(0, baseNameEnd).Trim();
+                    return !string.IsNullOrWhiteSpace(baseTypeName);
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsEdgewiseNameSeparator(char character)
+        {
+            return char.IsWhiteSpace(character)
+                   || character == '_'
+                   || character == '-'
+                   || character == ':';
+        }
+
+        private static string GetBaseCompositeTypeName(string typeName)
+        {
+            return TryGetBaseCompositeTypeName(typeName, out string baseTypeName)
+                ? baseTypeName
+                : (typeName ?? string.Empty).Trim();
+        }
+
+        private static int GetEffectiveCatalogItemWidthMm(
+            LintelCatalogItemV3 item,
+            bool compositeIsEdgewise)
+        {
+            if (item == null) return 0;
+            bool itemIsAlreadyEdgewise = TryGetBaseCompositeTypeName(item.Mark, out _);
+            return compositeIsEdgewise && !itemIsAlreadyEdgewise
+                ? item.HeightMm
+                : item.WidthMm;
+        }
+
+        private static int GetEffectivePlacementComponentWidthMm(
+            LintelPlacementComponentRequestV3 component,
+            bool compositeIsEdgewise)
+        {
+            if (component == null) return 0;
+            string typeName = component.RevitTypeName ?? component.Mark;
+            bool itemIsAlreadyEdgewise = TryGetBaseCompositeTypeName(typeName, out _);
+            return compositeIsEdgewise && !itemIsAlreadyEdgewise
+                ? component.HeightMm
+                : component.WidthMm;
         }
 
         //11.09.26 - металлические перемычки + подбор
@@ -2753,6 +2852,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return true;
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         internal LintelTypeReplacementRequestV3 CreateTypeReplacementRequest()
         {
             if (!IsExistingLintelsTabActive
@@ -2811,7 +2911,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RightSupportPadTypeName = rightSupportPad,
                 PackageWallOffsetMm = EditorHasMetal ? EditorPackageWallOffsetMm : 0,
                 //12.09.26 - фикс направления перемычек
-                PackageThicknessMm = editorVariant.TotalWidthMm,
+                PackageThicknessMm = GetPackageThicknessMm(
+                    editorVariant,
+                    useSelectedReadyType ? selectedReadyType : null,
+                    components),
                 StripTypeId = EditorHasMetal
                     ? SelectedStripType?.TypeId ?? ElementId.InvalidElementId
                     : ElementId.InvalidElementId,
@@ -2945,6 +3048,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         internal LintelPlacementRequestV3 CreatePlacementRequest()
         {
             var request = new LintelPlacementRequestV3
@@ -2999,7 +3103,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                     RightSupportPadTypeName = group.ActiveVariant.RightSupportPadTypeName,
                     PackageWallOffsetMm = group.ActiveVariant.PackageWallOffsetMm,
                     //12.09.26 - фикс направления перемычек
-                    PackageThicknessMm = group.ActiveVariant.TotalWidthMm,
+                    PackageThicknessMm = GetPackageThicknessMm(
+                        group.ActiveVariant,
+                        readyType,
+                        components),
                     ExistingCompositeTypeId = readyType?.TypeId,
                     StripTypeId = GetTypeIdFromValue(group.ActiveVariant.StripTypeIdValue),
                     StripLayoutMm = group.ActiveVariant.StripLayoutMm,
@@ -3136,6 +3243,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             }
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private List<LintelPlacementComponentRequestV3> CreatePlacementComponents(
             LintelSelectionVariantV3 variant)
         {
@@ -3189,6 +3297,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                     Material = material,
                     LengthMm = lengthMm,
                     WidthMm = segment.WidthMm,
+                    HeightMm = segment.HeightMm > 0 ? segment.HeightMm : item.HeightMm,
                     IsBearing = segment.IsBearing,
                     MaximumOpeningWidthMm = item.MaximumOpeningWidthMm,
                     MasonryCourseHeightMm = item.MasonryCourseHeightMm,
@@ -3196,6 +3305,22 @@ namespace FerrumAddinDev.LintelCreator_v3
                 });
             }
             return result;
+        }
+
+        //28.09.26 - готовые перемычки "на ребро"
+        private static int GetPackageThicknessMm(
+            LintelSelectionVariantV3 variant,
+            ExistingLintelTypeOptionV3 readyType,
+            IEnumerable<LintelPlacementComponentRequestV3> components)
+        {
+            if (readyType?.IsEdgewise != true)
+                return variant?.TotalWidthMm ?? 0;
+
+            return (components ?? Enumerable.Empty<LintelPlacementComponentRequestV3>())
+                .Sum(component => Math.Max(
+                                      0,
+                                      GetEffectivePlacementComponentWidthMm(component, true))
+                                  + Math.Max(0, component.GapAfterMm));
         }
 
         //11.09.26 - металлические перемычки + подбор
@@ -3257,6 +3382,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             variant.SupportPadSourceTypeName = compositeTypeName;
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private void ApplyExistingTypeWarning(
             OpeningGroupCardV3 group,
             LintelSelectionVariantV3 variant)
@@ -3284,8 +3410,15 @@ namespace FerrumAddinDev.LintelCreator_v3
                 variant.LeftSupportPadTypeName,
                 variant.RightSupportPadTypeName,
                 true);
+            if (!AreAdditionalTypeSettingsEqual(existingType, variant))
+                differences.Add("планка, её раскладка или высоты вложенных перемычек отличаются");
             if (differences.Count == 0)
+            {
+                variant.ReadyCompositeFamilyName = existingType.FamilyName;
+                variant.ReadyCompositeTypeName = existingType.TypeName;
+                variant.ReadyCompositeTypeIdValue = GetElementIdValue(existingType.TypeId);
                 return;
+            }
 
             variant.HasExistingTypeDifference = true;
             variant.ExistingTypeDifferenceText = "Имя типа «" + typeName
@@ -3294,6 +3427,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                  + " При размещении существующий тип будет обновлён.";
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private List<string> GetCachedCompositionDifferences(
             ExistingLintelTypeOptionV3 existingType,
             IList<LintelPlacementComponentRequestV3> selectedComponents,
@@ -3352,7 +3486,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 }
                 if (index < commonCount - 1)
                 {
-                    int selectedOffsetMm = selected.WidthMm + selected.GapAfterMm;
+                    int selectedWidthMm = GetEffectivePlacementComponentWidthMm(
+                        selected,
+                        existingType?.IsEdgewise == true);
+                    int selectedOffsetMm = selectedWidthMm + selected.GapAfterMm;
                     if (Math.Abs(existing.OffsetToNextMm - selectedOffsetMm) > 0.5)
                     {
                         differences.Add(
@@ -3416,6 +3553,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                    && existingType.SecondLintelHeightMm == _secondLintelHeightMm;
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
+        private static bool AreAdditionalTypeSettingsEqual(
+            ExistingLintelTypeOptionV3 existingType,
+            LintelSelectionVariantV3 variant)
+        {
+            if (existingType == null || variant == null) return false;
+            long existingStripTypeId = GetElementIdValue(existingType.StripTypeId);
+            bool stripSettingsMatch = existingStripTypeId == variant.StripTypeIdValue
+                                      && (variant.StripTypeIdValue < 0
+                                          || existingType.StripLayoutMm == variant.StripLayoutMm);
+            return stripSettingsMatch
+                   && existingType.MainLintelHeightMm == variant.MainLintelHeightMm
+                   && existingType.SecondLintelHeightMm == variant.SecondLintelHeightMm;
+        }
+
         private static string FormatPlacementComponent(LintelPlacementComponentRequestV3 component)
         {
             if (component == null) return "не определено";
@@ -3444,10 +3596,19 @@ namespace FerrumAddinDev.LintelCreator_v3
             string layout = string.Join("_", components
                 .Select(component => component.TypeCode)
                 .Where(value => !string.IsNullOrWhiteSpace(value)));
-            return masonryCourse.ToString(CultureInfo.InvariantCulture)
-                   + "_" + wallWidth.ToString(CultureInfo.InvariantCulture)
-                   + "_" + maximumOpeningWidth.ToString(CultureInfo.InvariantCulture)
-                   + "_" + layout;
+            string typeName = masonryCourse.ToString(CultureInfo.InvariantCulture)
+                              + "_" + wallWidth.ToString(CultureInfo.InvariantCulture)
+                              + "_" + maximumOpeningWidth.ToString(CultureInfo.InvariantCulture)
+                              + "_" + layout;
+            //28.09.26 - готовые перемычки "на ребро"
+            bool allComponentsAreEdgewise = components.Count > 0
+                                            && components.All(component =>
+                                                TryGetBaseCompositeTypeName(
+                                                    component.RevitTypeName ?? component.Mark,
+                                                    out _));
+            return allComponentsAreEdgewise
+                ? typeName + "_" + EdgewiseCompositeTypePrefix
+                : typeName;
         }
 
         private LintelSelectionVariantV3 CreateVariantFromEditor(OpeningGroupCardV3 group, int rank)
@@ -3694,6 +3855,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
 
         //11.09.26 - металлические перемычки + подбор
+        //28.09.26 - готовые перемычки "на ребро"
         private bool LoadEditorFromExistingTypeOption(ExistingLintelTypeOptionV3 option)
         {
             if (option == null) return false;
@@ -3716,9 +3878,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                     row.LengthMm = lengthMm;
                 if (component.OffsetToNextMm > 0)
                 {
+                    int componentWidthMm = GetEffectiveCatalogItemWidthMm(item, option.IsEdgewise);
                     row.GapMm = Math.Max(
                         0,
-                        (int)Math.Round(component.OffsetToNextMm - row.WidthMm));
+                        (int)Math.Round(component.OffsetToNextMm - componentWidthMm));
                 }
             }
 
@@ -3783,6 +3946,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return FindExistingTypeOption(typeName, preferredFamily);
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private ExistingLintelTypeOptionV3 FindExistingTypeOption(
             string typeName,
             string preferredFamilyName = null)
@@ -3791,6 +3955,17 @@ namespace FerrumAddinDev.LintelCreator_v3
             List<ExistingLintelTypeOptionV3> matches = _allExistingLintelTypeOptions
                 .Where(option => string.Equals(option.TypeName, typeName, StringComparison.Ordinal))
                 .ToList();
+            if (matches.Count == 0)
+            {
+                string baseTypeName = GetBaseCompositeTypeName(typeName);
+                matches = _allExistingLintelTypeOptions
+                    .Where(option => option.IsEdgewise
+                                     && string.Equals(
+                                         GetBaseCompositeTypeName(option.TypeName),
+                                         baseTypeName,
+                                         StringComparison.Ordinal))
+                    .ToList();
+            }
             if (!string.IsNullOrWhiteSpace(preferredFamilyName))
             {
                 ExistingLintelTypeOptionV3 sameFamily = matches.FirstOrDefault(option => string.Equals(
@@ -3806,9 +3981,12 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
 
         //11.09.26 - металлические перемычки + подбор
+        //28.09.26 - готовые перемычки "на ребро"
         private void RestoreExistingLintelRows(OpeningGroupCardV3 group)
         {
             ExistingLintelTypeOptionV3 currentType = FindCurrentExistingTypeOption(group);
+            bool isEdgewise = currentType?.IsEdgewise == true
+                              || TryGetBaseCompositeTypeName(group?.ExistingLintelTypeNames, out _);
             IEnumerable<ExistingLintelComponentV3> sourceComponents = currentType?.Components.Count > 0
                 ? currentType.Components
                 : group.ExistingLintelComponents;
@@ -3821,9 +3999,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                     row.LengthMm = lengthMm;
                 if (component.OffsetToNextMm > 0)
                 {
+                    int componentWidthMm = GetEffectiveCatalogItemWidthMm(item, isEdgewise);
                     row.GapMm = Math.Max(
                         0,
-                        (int)Math.Round(component.OffsetToNextMm - row.WidthMm));
+                        (int)Math.Round(component.OffsetToNextMm - componentWidthMm));
                 }
             }
 
@@ -3831,10 +4010,11 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RestoreExistingRowsFromTypeName(group.ExistingLintelTypeNames);
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private void RestoreExistingRowsFromTypeName(string typeName)
         {
             string name = (typeName ?? string.Empty).Split('+').FirstOrDefault()?.Trim();
-            string[] parts = name?.Split('_');
+            string[] parts = GetBaseCompositeTypeName(name).Split('_');
             if (parts == null || parts.Length < 4) return;
             if (!int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int maximumOpeningWidth))
                 maximumOpeningWidth = 0;
@@ -4489,6 +4669,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         }
 
         // 04.09.26 - кнопка для выбора в окне + изменения работы с сущ. перемычками
+        //28.09.26 - готовые перемычки "на ребро"
         private void UpdateEditorExistingTypeDifferences()
         {
             if (_isUpdatingEditorDifferences) return;
@@ -4571,7 +4752,10 @@ namespace FerrumAddinDev.LintelCreator_v3
 
                         if (index < commonCount - 1)
                         {
-                            int selectedOffsetMm = row.WidthMm + row.GapMm;
+                            int selectedWidthMm = GetEffectiveCatalogItemWidthMm(
+                                row.SelectedCatalogItem,
+                                existingType.IsEdgewise);
+                            int selectedOffsetMm = selectedWidthMm + row.GapMm;
                             int existingOffsetMm = (int)Math.Round(component.OffsetToNextMm);
                             if (Math.Abs(component.OffsetToNextMm - selectedOffsetMm) > 0.5)
                             {
@@ -4713,10 +4897,19 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (string.IsNullOrWhiteSpace(layout)) return string.Empty;
 
             int masonryCourse = (int)_masonryType;
-            return masonryCourse.ToString(CultureInfo.InvariantCulture)
-                   + "_" + wallWidth.ToString(CultureInfo.InvariantCulture)
-                   + "_" + maximumOpeningWidth.ToString(CultureInfo.InvariantCulture)
-                   + "_" + layout;
+            string typeName = masonryCourse.ToString(CultureInfo.InvariantCulture)
+                              + "_" + wallWidth.ToString(CultureInfo.InvariantCulture)
+                              + "_" + maximumOpeningWidth.ToString(CultureInfo.InvariantCulture)
+                              + "_" + layout;
+            //28.09.26 - готовые перемычки "на ребро"
+            bool allRowsAreEdgewise = EditorRows.Count > 0
+                                      && EditorRows.All(row =>
+                                          TryGetBaseCompositeTypeName(
+                                              row.SelectedCatalogItem?.Mark,
+                                              out _));
+            return allRowsAreEdgewise
+                ? typeName + "_" + EdgewiseCompositeTypePrefix
+                : typeName;
         }
 
         private int GetEditorRowMaximumOpeningWidth(LintelEditorRowV3 row)
@@ -4786,6 +4979,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             return wallWidthMm;
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private void RefreshExistingCompositeTypeCache(Document document)
         {
             List<FamilySymbol> symbols = new FilteredElementCollector(document)
@@ -4805,6 +4999,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                     TypeId = symbol.Id,
                     FamilyName = symbol.FamilyName,
                     TypeName = symbol.Name,
+                    IsEdgewise = TryGetBaseCompositeTypeName(symbol.Name, out _),
                     SupportCategory = GetCompositeTypeSupportCategory(symbol.Name),
                     LeftSupportPadTypeName = LintelPlacementEngineV3.ReadCompositeSymbolSupportPad(
                         document,
@@ -4835,13 +5030,18 @@ namespace FerrumAddinDev.LintelCreator_v3
             foreach (string name in options
                          .Select(option => option.TypeName?.Trim())
                          .Where(name => !string.IsNullOrWhiteSpace(name)))
+            {
                 _existingCompositeTypeNames.Add(name);
+                if (TryGetBaseCompositeTypeName(name, out string baseTypeName))
+                    _existingCompositeTypeNames.Add(baseTypeName);
+            }
         }
 
+        //28.09.26 - готовые перемычки "на ребро"
         private static int GetCompositeTypeSupportCategory(string typeName)
         {
             if (IsErrorCompositeTypeName(typeName)) return 2;
-            string[] parts = (typeName ?? string.Empty).Split('_');
+            string[] parts = GetBaseCompositeTypeName(typeName).Split('_');
             if (parts.Length < 4) return 0;
             bool firstBearing = (parts[3] ?? string.Empty).Any(char.IsUpper);
             if (parts.Length == 4) return firstBearing ? 1 : 0;
@@ -5661,6 +5861,20 @@ namespace FerrumAddinDev.LintelCreator_v3
                         out double clearHeightToSupport2,
                         out string supportParameterError);
 
+                    //28.09.26 - готовые перемычки "на ребро"
+                    if (IsPrgKldWall(hostWall))
+                    {
+                        supportType = 0;
+                        supportDirection = XYZ.Zero;
+                        supportWidth = 0;
+                        supportWidth1 = 0;
+                        supportWidth2 = 0;
+                        clearHeightToSupport = 0;
+                        clearHeightToSupport1 = 0;
+                        clearHeightToSupport2 = 0;
+                        supportParameterError = null;
+                    }
+
                     ElementId levelId = opening.LevelId != null && opening.LevelId != ElementId.InvalidElementId
                         ? opening.LevelId
                         : hostWall.LevelId;
@@ -6018,6 +6232,12 @@ namespace FerrumAddinDev.LintelCreator_v3
             string name = (wall.WallType.Name ?? string.Empty).ToLowerInvariant();
             // 24.09.26 - прг_клд добавлен в перемычки
             return IgnoredWallTokens.All(token => !name.Contains(token)) || name.Contains("прг_клд");
+        }
+
+        //28.09.26 - готовые перемычки "на ребро"
+        private static bool IsPrgKldWall(Wall wall)
+        {
+            return wall?.WallType?.Name?.IndexOf("ПРГ_КЛД", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static double DistanceToWallCurve(Wall wall, XYZ point)
