@@ -71,6 +71,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         public LintelMaterialV3 Material { get; set; }
         public int WallWidthToleranceMm { get; set; }
         public int MaximumVariants { get; set; } = 5;
+        //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+        public bool UseEdgewiseCatalogItems { get; set; }
     }
 
     public sealed class LintelLayoutSegmentV3
@@ -279,6 +281,9 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (request.Material == LintelMaterialV3.Metal)
                 return "В каталоге нет металлических перемычек, соответствующих выбранным параметрам.";
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+            if (request.UseEdgewiseCatalogItems)
+                return "В каталоге нет перемычек «на ребро» с длиной, достаточной для проёма и табличного опирания.";
             if (request.MasonryCourseHeightMm == 0)
                 return "В каталоге нет перемычек для перегородок.";
 
@@ -307,7 +312,13 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             if (item == null || request == null || item.WidthMm <= 0)
                 return false;
-            if (requireAutoSelection && !item.AutoSelectionAllowed)
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+            bool isEdgewiseItem = IsEdgewiseCatalogItem(item);
+            if (request.UseEdgewiseCatalogItems != isEdgewiseItem)
+                return false;
+            if (requireAutoSelection
+                && !request.UseEdgewiseCatalogItems
+                && !item.AutoSelectionAllowed)
                 return false;
 
             string materialCode = requireAutoSelection
@@ -321,6 +332,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                    && (item.MaximumOpeningWidthMm <= 0
                        || request.OpeningWidthMm <= item.MaximumOpeningWidthMm + 0.5)
                    && item.LengthMm + 0.5 >= GetRequiredLength(request, item);
+        }
+
+        //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+        private static bool IsEdgewiseCatalogItem(LintelCatalogItemV3 item)
+        {
+            return item?.Mark?.EndsWith("_на ребро", StringComparison.OrdinalIgnoreCase) == true;
         }
 
         internal static int GetLengthExcess(LintelSelectionRequestV3 request, LintelCatalogItemV3 item)

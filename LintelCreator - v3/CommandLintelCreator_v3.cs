@@ -1853,6 +1853,8 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         private LintelSelectionRequestV3 CreateSelectionRequest(OpeningGroupCardV3 group)
         {
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки»
+            bool useEdgewiseCatalogItems = _masonryType == LintelMasonryTypeV3.Partition;
             return new LintelSelectionRequestV3
             {
                 OpeningWidthMm = group.OpeningWidthMm,
@@ -1861,10 +1863,13 @@ namespace FerrumAddinDev.LintelCreator_v3
                 RequiredBearingWidth1Mm = group.RequiredSupportWidth1Mm,
                 RequiredBearingWidth2Mm = group.RequiredSupportWidth2Mm,
                 ValidationError = group.SupportParameterError,
-                MasonryCourseHeightMm = (int)_masonryType,
+                MasonryCourseHeightMm = useEdgewiseCatalogItems
+                    ? (int)LintelMasonryTypeV3.Brick88
+                    : (int)_masonryType,
                 Material = LintelMaterialV3.ReinforcedConcrete,
                 WallWidthToleranceMm = WallWidthToleranceMm,
-                MaximumVariants = 5
+                MaximumVariants = 5,
+                UseEdgewiseCatalogItems = useEdgewiseCatalogItems
             };
         }
 
@@ -2562,11 +2567,14 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .Select(value => value.Trim())
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
             string firstPart = GetBaseCompositeTypeName(typeName).Split('_').FirstOrDefault();
-            LintelMasonryTypeV3 masonry = firstPart == "88"
-                ? LintelMasonryTypeV3.Brick88
-                : firstPart == "65"
-                    ? LintelMasonryTypeV3.Brick65
-                    : LintelMasonryTypeV3.Partition;
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+            LintelMasonryTypeV3 masonry = TryGetBaseCompositeTypeName(typeName, out _)
+                ? LintelMasonryTypeV3.Partition
+                : firstPart == "88"
+                    ? LintelMasonryTypeV3.Brick88
+                    : firstPart == "65"
+                        ? LintelMasonryTypeV3.Brick65
+                        : LintelMasonryTypeV3.Partition;
             if (_masonryType != masonry)
             {
                 _masonryType = masonry;
@@ -2660,8 +2668,12 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (IsErrorCompositeTypeName(option.TypeName)) return true;
             string[] parts = GetBaseCompositeTypeName(option.TypeName).Split('_');
             if (parts.Length < 4) return false;
-            if (_masonryType == LintelMasonryTypeV3.Brick65 && parts[0] != "65") return false;
-            if (_masonryType == LintelMasonryTypeV3.Brick88 && parts[0] != "88") return false;
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+            LintelMasonryTypeV3 requiredMasonryType = _masonryType;
+            if (requiredMasonryType == LintelMasonryTypeV3.Partition && !option.IsEdgewise) return false;
+            if (requiredMasonryType != LintelMasonryTypeV3.Partition && option.IsEdgewise) return false;
+            if (requiredMasonryType == LintelMasonryTypeV3.Brick65 && parts[0] != "65") return false;
+            if (requiredMasonryType == LintelMasonryTypeV3.Brick88 && parts[0] != "88") return false;
 
             if (!TryParseTypeNumber(parts[1], out double typeWallWidth)) return false;
             if (!TryParseTypeNumber(parts[2], out double maximumOpeningWidth)) return false;
@@ -3592,7 +3604,10 @@ namespace FerrumAddinDev.LintelCreator_v3
                 .Where(value => value > 0)
                 .DefaultIfEmpty((int)Math.Round(group.OpeningWidthMm))
                 .Min();
-            int masonryCourse = (int)_masonryType;
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+            int masonryCourse = _masonryType == LintelMasonryTypeV3.Partition
+                ? (int)LintelMasonryTypeV3.Brick88
+                : (int)_masonryType;
             string layout = string.Join("_", components
                 .Select(component => component.TypeCode)
                 .Where(value => !string.IsNullOrWhiteSpace(value)));
@@ -4896,7 +4911,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             string layout = BuildEditorLayoutName();
             if (string.IsNullOrWhiteSpace(layout)) return string.Empty;
 
-            int masonryCourse = (int)_masonryType;
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+            int masonryCourse = _masonryType == LintelMasonryTypeV3.Partition
+                ? (int)LintelMasonryTypeV3.Brick88
+                : (int)_masonryType;
             string typeName = masonryCourse.ToString(CultureInfo.InvariantCulture)
                               + "_" + wallWidth.ToString(CultureInfo.InvariantCulture)
                               + "_" + maximumOpeningWidth.ToString(CultureInfo.InvariantCulture)
@@ -5643,7 +5661,12 @@ namespace FerrumAddinDev.LintelCreator_v3
         private static List<OpeningGroupCardV3> BuildGroups(IEnumerable<OpeningRecordV3> openings)
         {
             var groups = new List<OpeningGroupCardV3>();
-            foreach (IGrouping<string, OpeningRecordV3> sourceGroup in openings.GroupBy(BuildGroupKey))
+            //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+            IEnumerable<OpeningRecordV3> visibleOpenings = (openings ?? Enumerable.Empty<OpeningRecordV3>())
+                .Where(opening => opening != null
+                                  && opening.WallWidthMm
+                                  >= OpeningCollectorV3.MinimumVisibleWallWidthMm - 0.01);
+            foreach (IGrouping<string, OpeningRecordV3> sourceGroup in visibleOpenings.GroupBy(BuildGroupKey))
             {
                 OpeningRecordV3 first = sourceGroup.First();
                 var card = new OpeningGroupCardV3
@@ -5789,6 +5812,8 @@ namespace FerrumAddinDev.LintelCreator_v3
     internal static class OpeningCollectorV3
     {
         private const double MillimetersPerFoot = 304.8;
+        //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+        internal const double MinimumVisibleWallWidthMm = 88.0;
         private const double DefaultSupportBearingMm = 120.0;
         private static readonly string[] IgnoredWallTokens = { "_пгп_", "_гкл_", "_фсд_", "_прг_" };
 
@@ -5829,6 +5854,14 @@ namespace FerrumAddinDev.LintelCreator_v3
 
                     Wall hostWall = FindHostWall(document, opening, box, curtainHosts);
                     if (!IsUsableHostWall(hostWall))
+                    {
+                        result.SkippedCount++;
+                        continue;
+                    }
+
+                    //30.09.26 - перемычки "на ребро" рассчитываются в режиме «Перегородки
+                    double wallWidthMm = hostWall.Width * MillimetersPerFoot;
+                    if (wallWidthMm < MinimumVisibleWallWidthMm - 0.01)
                     {
                         result.SkippedCount++;
                         continue;
@@ -5894,7 +5927,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                         LevelName = document.GetElement(levelId)?.Name ?? "Без уровня",
                         OpeningWidthMm = width,
                         OpeningHeightMm = height,
-                        WallWidthMm = hostWall.Width * MillimetersPerFoot,
+                        WallWidthMm = wallWidthMm,
                         Location = location,
                         TopElevation = openingTop,
                         WallOrientation = opening is FamilyInstance orientedInstance ? orientedInstance.FacingOrientation : hostWall.Orientation,
