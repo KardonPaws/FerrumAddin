@@ -363,6 +363,18 @@ namespace FerrumAddinDev
             var ComandStats = panelControl.AddItem(CommandStats) as PushButton;
             ComandStats.Enabled = true;
 
+            PushButtonData foundationPit = new PushButtonData("foundationPit", "Объем котлована",
+                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "zhFoundationPit24.dll"),
+                "zhFoundationPit24.WindowParameter");
+            try
+            {
+                panelControl.AddItem(foundationPit);
+            }
+            catch
+            {
+
+            }
+
             //FamilyManagerWindow dock = new FamilyManagerWindow();
             //dockableWindow = dock;
 
