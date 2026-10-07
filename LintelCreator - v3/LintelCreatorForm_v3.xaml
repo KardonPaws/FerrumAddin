@@ -1,6 +1,6 @@
 <Window x:Class="FerrumAddinDev.LintelCreator_v3.LintelCreatorForm_v3"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:icons="clr-namespace:FerrumAddinDev"
         xmlns:local="clr-namespace:FerrumAddinDev.LintelCreator_v3"
         Title="Автоматическая раскладка перемычек — v3"
         Width="1600"
@@ -356,7 +356,7 @@
                                        Style="{StaticResource CaptionStyle}"
                                        Margin="0,2,0,0"/>
                         </StackPanel>
-                        <Button Grid.Column="1"
+                        <Button icons:ButtonIcons.Kind="Refresh" Grid.Column="1"
                                 Content="Обновить"
                                 Style="{StaticResource CompactButtonStyle}"
                                 Height="30"
@@ -480,7 +480,7 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <Button Content="＋ Добавить критерий"
+                                <Button icons:ButtonIcons.Kind="Add" Content="Добавить критерий"
                                         Style="{StaticResource SecondaryButtonStyle}"
                                         HorizontalAlignment="Left"
                                         Margin="24,5,0,0"
@@ -648,11 +648,11 @@
                                        Margin="0,3,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Content="Пересчитать все"
+                            <Button icons:ButtonIcons.Kind="Refresh" Content="Пересчитать все"
                                     Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding CanRecalculateAll}"
                                     Click="RecalculateAll_Click"/>
-                            <Button Content="Текущий"
+                            <Button icons:ButtonIcons.Kind="Refresh" Content="Текущий"
                                     Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding CanRecalculate}"
                                     Click="Recalculate_Click"
@@ -943,11 +943,11 @@
                                        Margin="0,3,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Content="Развернуть порядок"
+                            <Button icons:ButtonIcons.Kind="Reverse" Content="Развернуть порядок"
                                     Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding CanReverseEditor}"
                                     Click="ReverseEditorRows_Click"/>
-                            <Button Content="Загрузить тип"
+                            <Button icons:ButtonIcons.Kind="Load" Content="Загрузить тип"
                                     IsEnabled="{Binding CanLoadExistingEditorType}"
                                     Click="LoadExistingEditorType_Click">
                                 <Button.Style>
@@ -960,7 +960,7 @@
                                     </Style>
                                 </Button.Style>
                             </Button>
-                            <Button Content="{Binding EditorRestoreButtonText}"
+                            <Button icons:ButtonIcons.Kind="Refresh" Content="{Binding EditorRestoreButtonText}"
                                     Style="{StaticResource CompactButtonStyle}"
                                     IsEnabled="{Binding HasEditorVariant}"
                                     Click="RestoreEditor_Click"
@@ -1308,7 +1308,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Button Content="＋ Добавить перемычку"
+                            <Button icons:ButtonIcons.Kind="Add" Content="Добавить перемычку"
                                     Style="{StaticResource SecondaryButtonStyle}"
                                     HorizontalAlignment="Left"
                                     IsEnabled="{Binding HasEditorVariant}"
@@ -1530,27 +1530,31 @@
                            IsEnabled="{Binding CanInteract}"
                            IsChecked="{Binding SplitLintelsByZeroElevation, Mode=TwoWay}"/>
                 <WrapPanel Grid.Column="2">
-                    <Button Content="Нумерация"
+                    <Button icons:ButtonIcons.Kind="Number" Content="Нумерация"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanInteract}"
                             Click="NumerateLintels_Click"/>
-                    <Button Content="Нумерация влож. элементов"
+                    <Button icons:ButtonIcons.Kind="Number" Content="Нумерация влож. элементов"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanInteract}"
                             Click="NumerateNestedElements_Click"/>
-                    <Button Content="Тип основы"
+                    <Button icons:ButtonIcons.Kind="Number" Content="Низ элемента"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{Binding CanInteract}"
+                            Click="SetLintelBottomElevation_Click"/>
+                    <Button icons:ButtonIcons.Kind="Family" Content="Тип основы"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanInteract}"
                             Click="SetLintelBaseType_Click"/>
-                    <Button Content="Разрезы"
+                    <Button icons:ButtonIcons.Kind="Section" Content="Разрезы"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanInteract}"
                             Click="CreateLintelSections_Click"/>
-                    <Button Content="Марки"
+                    <Button icons:ButtonIcons.Kind="Tag" Content="Марки"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanInteract}"
                             Click="TagLintels_Click"/>
-                    <Button Content="Разрезы на листы"
+                    <Button icons:ButtonIcons.Kind="Sheet" Content="Разрезы на листы"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanInteract}"
                             Click="PlaceLintelSections_Click"
@@ -1574,12 +1578,12 @@
                            Style="{StaticResource CaptionStyle}"
                            VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="Закрыть" Style="{StaticResource SecondaryButtonStyle}" Click="Close_Click"/>
-                    <Button Content="{Binding SaveVariantButtonText}"
+                    <Button icons:ButtonIcons.Kind="Close" Content="Закрыть" Style="{StaticResource SecondaryButtonStyle}" Click="Close_Click"/>
+                    <Button icons:ButtonIcons.Kind="Save" Content="{Binding SaveVariantButtonText}"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanSaveVariantChanges}"
                             Click="SaveVariantChanges_Click"/>
-                    <Button Content="Создать типы и проставить"
+                    <Button icons:ButtonIcons.Kind="Run" Content="Создать типы и проставить"
                             IsEnabled="{Binding CanPlaceSelectedLintels}"
                             Click="CreateAndPlaceLintels_Click"
                             Margin="0">

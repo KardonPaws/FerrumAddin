@@ -742,6 +742,98 @@ namespace FerrumAddinDev.LintelCreator_v3
             return "Нумерация вложенных элементов перемычек";
         }
     }
+    // 07.10.26 - высотная отметка отдельной кнопкой
+    internal static class LintelServiceElevationV3
+    {
+        public static string FormatProjectElevationMeters(double meters)
+        {
+            return meters.ToString("+0.000;-0.000", new CultureInfo("ru-RU"));
+        }
+    }
+
+    public class SetLintelBottomElevationV3 : IExternalEventHandler
+    {
+        public void Execute(UIApplication app)
+        {
+            UIDocument uidoc = app.ActiveUIDocument;
+            Document doc = uidoc.Document;
+            List<FamilyInstance> selectedLintels = uidoc.Selection.GetElementIds()
+                .Select(id => doc.GetElement(id) as FamilyInstance)
+                .Select(instance =>
+                {
+                    while (instance?.SuperComponent is FamilyInstance parent)
+                        instance = parent;
+                    return instance;
+                })
+                .Where(LintelServiceElementFilterV3.IsLintel)
+                .GroupBy(instance => instance.Id)
+                .Select(group => group.First())
+                .ToList();
+
+            List<FamilyInstance> lintels = selectedLintels.Any()
+                ? selectedLintels
+                : new FilteredElementCollector(doc)
+                    .OfCategory(BuiltInCategory.OST_StructuralFraming)
+                    .WhereElementIsNotElementType()
+                    .OfType<FamilyInstance>()
+                    .Where(LintelServiceElementFilterV3.IsLintel)
+                    .ToList();
+
+            if (!lintels.Any())
+            {
+                TaskDialog.Show("Низ элемента", "Перемычки для обработки не найдены.");
+                return;
+            }
+
+            int updated = 0;
+            int skipped = 0;
+            using (Transaction trans = new Transaction(doc, "Заполнение отметки низа перемычек"))
+            {
+                trans.Start();
+                try
+                {
+                    foreach (FamilyInstance fi in lintels)
+                    {
+                        Level level = doc.GetElement(fi.LevelId) as Level;
+                        Parameter offset = fi.LookupParameter("Смещение от главной модели");
+                        Parameter elevation = fi.LookupParameter("ZH_Отм_низ конструкции");
+                        if (level == null || offset == null || !offset.HasValue
+                            || offset.StorageType != StorageType.Double
+                            || elevation == null || elevation.IsReadOnly
+                            || elevation.StorageType != StorageType.String)
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        elevation.Set(LintelServiceElevationV3.FormatProjectElevationMeters(
+                            Math.Round(level.Elevation * 0.3048 + offset.AsDouble() * 0.3048, 6)));
+                        updated++;
+                    }
+
+                    if (trans.Commit() != TransactionStatus.Committed)
+                        throw new InvalidOperationException("Revit не зафиксировал заполнение отметок.");
+                }
+                catch (Exception ex)
+                {
+                    if (trans.GetStatus() == TransactionStatus.Started)
+                        trans.RollBack();
+                    TaskDialog.Show("Низ элемента", ex.Message);
+                    return;
+                }
+            }
+
+            string scope = selectedLintels.Any() ? "выбранным перемычкам" : "всем перемычкам модели";
+            TaskDialog.Show("Низ элемента",
+                $"Отметка низа заполнена по {scope}.\nОбработано перемычек: {updated}.\n" +
+                $"Пропущено (нет уровня или доступных параметров): {skipped}.");
+        }
+
+        public string GetName()
+        {
+            return "Заполнение отметки низа перемычек";
+        }
+    }
 
     // 07.08.26 - отдельная кнопка тип основы в перемычках, новая логика армирования ростверка
     public class SetLintelBaseTypeV3 : IExternalEventHandler
@@ -1353,11 +1445,6 @@ namespace FerrumAddinDev.LintelCreator_v3
 
     public class TagLintelsV3 : IExternalEventHandler
     {
-        //16.02.26 - отметка для марок перемычек
-        private static string FormatProjectElevationMeters(double meters)
-        {
-            return meters.ToString("+0.000;-0.000",new CultureInfo("ru-RU"));
-        }
         public void Execute(UIApplication app)
         {
             Document doc = app.ActiveUIDocument.Document;
@@ -1420,7 +1507,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                         FamilyInstance fi = (FamilyInstance)lintel;
                         View view = doc.ActiveView;
                         //16.02.26 - отметка для марок перемычек
-                        fi.LookupParameter("ZH_Отм_низ конструкции").Set(FormatProjectElevationMeters(Math.Round((doc.GetElement(fi.LevelId) as Level).Elevation * 0.3048 + fi.LookupParameter("Смещение от главной модели").AsDouble() * 0.3048, 6)));
+                        fi.LookupParameter("ZH_Отм_низ конструкции").Set(LintelServiceElevationV3.FormatProjectElevationMeters(Math.Round((doc.GetElement(fi.LevelId) as Level).Elevation * 0.3048 + fi.LookupParameter("Смещение от главной модели").AsDouble() * 0.3048, 6)));
 
                         XYZ vd = view.ViewDirection.Normalize();
                         XYZ up = view.UpDirection.Normalize();

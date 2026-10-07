@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -34,6 +34,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="AdWindows">
+      <Private>False</Private>
       <HintPath>..\..\..\..\..\..\Program Files\Autodesk\Revit 2024\AdWindows.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
@@ -42,9 +43,11 @@
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="RevitAPI">
+      <Private>False</Private>
       <HintPath>..\..\..\..\..\..\Program Files\Autodesk\Revit 2024\RevitAPI.dll</HintPath>
     </Reference>
     <Reference Include="RevitAPIUI">
+      <Private>False</Private>
       <HintPath>..\..\..\..\..\..\Program Files\Autodesk\Revit 2024\RevitAPIUI.dll</HintPath>
     </Reference>
     <Reference Include="System" />
@@ -96,6 +99,7 @@
     </Compile>
     <Compile Include="LintelCreator - v2\AlphanumComparatorFastString.cs" />
     <Compile Include="App.cs" />
+    <Compile Include="ButtonIcons.cs" />
     <Compile Include="RibbonTabHeaderManager.cs" />
     <Compile Include="ColumnSections\CreateColumnSections.cs" />
     <Compile Include="CommandMepName.cs" />
@@ -267,8 +271,6 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>if exist "$(AppData)\Autodesk\REVIT\Addins\2024" copy "$(ProjectDir)*.addin" "$(AppData)\Autodesk\REVIT\Addins\2024"
-if exist "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev" copy "$(ProjectDir)$(OutputPath)*.dll" "$(AppData)\Autodesk\REVIT\Addins\2024\FerrumDev"
-copy "$(ProjectDir)$(OutputPath)\FerrumAddinDev.dll" "$(ProjectDir)\DLL"</PostBuildEvent>
+    <PostBuildEvent Condition="'$(Configuration)' == 'Debug'">powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)Build\Deploy-Debug.ps1" -OutputDirectory "$(TargetDir)."</PostBuildEvent>
   </PropertyGroup>
 </Project>

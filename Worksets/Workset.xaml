@@ -1,6 +1,6 @@
-﻿<Window x:Class="FerrumAddinDev.Worksets.Workset"
+<Window x:Class="FerrumAddinDev.Worksets.Workset"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:icons="clr-namespace:FerrumAddinDev"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FerrumAddinDev.Worksets"
@@ -9,7 +9,7 @@
     <Grid>
         <RadioButton Content="Выполнять по виду" x:Name="vid" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" GroupName="1" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked"/>
         <RadioButton Content="Выполнять по модели" HorizontalAlignment="Left" Margin="10,30,0,0" VerticalAlignment="Top" GroupName="1" Checked="RadioButton_Checked" Unchecked="RadioButton_Checked" IsChecked="True"/>
-        <Button Content="Выполнить" HorizontalAlignment="Center" Margin="0,66,0,0" VerticalAlignment="Top" Width="166" Click="Button_Click"/>
+        <Button icons:ButtonIcons.Kind="Run" Content="Выполнить" HorizontalAlignment="Center" Margin="0,66,0,0" VerticalAlignment="Top" Width="166" Click="Button_Click"/>
 
 
     </Grid>

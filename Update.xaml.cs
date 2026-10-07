@@ -32,9 +32,7 @@ namespace FerrumAddinDev
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
-            Process process = Process.GetCurrentProcess();
-            var updaterProcess = Process.Start(new ProcessStartInfo(App.downloadDir + "\\Updater.exe", process.Id.ToString()));
-            Process.GetProcessesByName("Revit").FirstOrDefault().Kill();
+            App.CheckForUpdates(silent: false);
             this.Close();
         }
     }

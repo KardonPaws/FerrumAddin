@@ -41,6 +41,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 ExternalEvent typeReplacementEvent = ExternalEvent.Create(typeReplacementHandler);
                 ExternalEvent lintelNumerateEvent = ExternalEvent.Create(new LintelNumerateV3());
                 ExternalEvent nestedElementsNumberingEvent = ExternalEvent.Create(new NestedElementsNumberingV3());
+                ExternalEvent setLintelBottomElevationEvent = ExternalEvent.Create(new SetLintelBottomElevationV3());
                 ExternalEvent setLintelBaseTypeEvent = ExternalEvent.Create(new SetLintelBaseTypeV3());
                 ExternalEvent createSectionsEvent = ExternalEvent.Create(new CreateSectionsForLintelsV3());
                 ExternalEvent tagLintelsEvent = ExternalEvent.Create(new TagLintelsV3());
@@ -59,6 +60,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                     typeReplacementEvent,
                     lintelNumerateEvent,
                     nestedElementsNumberingEvent,
+                    setLintelBottomElevationEvent,
                     setLintelBaseTypeEvent,
                     createSectionsEvent,
                     tagLintelsEvent,

@@ -1,6 +1,6 @@
-﻿<Window x:Class="FerrumAddinDev.LintelCreator_v2.LintelCreatorForm_v2"
+<Window x:Class="FerrumAddinDev.LintelCreator_v2.LintelCreatorForm_v2"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:icons="clr-namespace:FerrumAddinDev"
         xmlns:sys="clr-namespace:System.Collections.Generic;assembly=mscorlib"
         Title="Простановка перемычек" MinHeight="350" MinWidth="600"
         xmlns:local="clr-namespace:FerrumAddinDev.LintelCreator_v2"
@@ -53,7 +53,7 @@
 
         <!-- Первый столбец -->
         <TreeView x:Name="firstColumn1" Grid.Column="0" Margin="5">
-                <Button Content="Обновить" Click="Button_Click_6" IsEnabled="True"/>
+                <Button icons:ButtonIcons.Kind="Refresh" Content="Обновить" Click="Button_Click_6" IsEnabled="True"/>
             <TreeViewItem Header="Без перемычек"
                 ItemsSource="{Binding openingsWithoutLintel}" ItemTemplate="{StaticResource ParentElementTemplate}"/>
             <TreeViewItem Header="С перемычками"
@@ -123,14 +123,14 @@
         <!--// 19.01.26 - ошибки в перемычках -->
         <WrapPanel Orientation="Horizontal" Grid.Row="2" Grid.ColumnSpan="2" Margin="5">
             <CheckBox Checked="CheckBox_Checked" Unchecked="CheckBox_Checked" Content="Разбивать перемычки выше и ниже отм. 0,000" Margin="0,0,5,0" />
-            <Button Content="Нумерация" Margin="0,0,5,0" Click="Button_Click_1"  />
-            <Button Content="Нумерация влож. эл-ов" Margin="0,0,5,0" Click="Button_Click_2"/>
-            <Button Content="Тип основы" Margin="0,0,5,0" Click="Button_SetBaseType_Click"/>
-            <Button Content="Разрезы" Margin="0,0,5,0" Click="Button_Click_3"/>
-            <Button Content="Марки" Click="Button_Click_4" Margin="0,0,5,0"/>
-            <Button Content="Разрезы на листы" Click="Button_Click_5"/>
+            <Button icons:ButtonIcons.Kind="Number" Content="Нумерация" Margin="0,0,5,0" Click="Button_Click_1"  />
+            <Button icons:ButtonIcons.Kind="Number" Content="Нумерация влож. эл-ов" Margin="0,0,5,0" Click="Button_Click_2"/>
+            <Button icons:ButtonIcons.Kind="Family" Content="Тип основы" Margin="0,0,5,0" Click="Button_SetBaseType_Click"/>
+            <Button icons:ButtonIcons.Kind="Section" Content="Разрезы" Margin="0,0,5,0" Click="Button_Click_3"/>
+            <Button icons:ButtonIcons.Kind="Tag" Content="Марки" Click="Button_Click_4" Margin="0,0,5,0"/>
+            <Button icons:ButtonIcons.Kind="Sheet" Content="Разрезы на листы" Click="Button_Click_5"/>
         </WrapPanel>
-        <Button Grid.Row="2" Grid.Column="3" Margin="5" Content="Выполнить" Click="Button_Click" HorizontalAlignment="Right"/>
+        <Button icons:ButtonIcons.Kind="Run" Grid.Row="2" Grid.Column="3" Margin="5" Content="Выполнить" Click="Button_Click" HorizontalAlignment="Right"/>
 
     </Grid>
 </Window>

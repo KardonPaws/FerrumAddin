@@ -30,6 +30,7 @@ namespace FerrumAddinDev.LintelCreator_v3
         private readonly RevitExternalEvent _typeReplacementEvent;
         private readonly RevitExternalEvent _lintelNumerateEvent;
         private readonly RevitExternalEvent _nestedElementsNumberingEvent;
+        private readonly RevitExternalEvent _setLintelBottomElevationEvent;
         private readonly RevitExternalEvent _setLintelBaseTypeEvent;
         private readonly RevitExternalEvent _createSectionsEvent;
         private readonly RevitExternalEvent _tagLintelsEvent;
@@ -65,6 +66,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             RevitExternalEvent typeReplacementEvent,
             RevitExternalEvent lintelNumerateEvent,
             RevitExternalEvent nestedElementsNumberingEvent,
+            RevitExternalEvent setLintelBottomElevationEvent,
             RevitExternalEvent setLintelBaseTypeEvent,
             RevitExternalEvent createSectionsEvent,
             RevitExternalEvent tagLintelsEvent,
@@ -84,6 +86,7 @@ namespace FerrumAddinDev.LintelCreator_v3
             _typeReplacementEvent = typeReplacementEvent;
             _lintelNumerateEvent = lintelNumerateEvent;
             _nestedElementsNumberingEvent = nestedElementsNumberingEvent;
+            _setLintelBottomElevationEvent = setLintelBottomElevationEvent;
             _setLintelBaseTypeEvent = setLintelBaseTypeEvent;
             _createSectionsEvent = createSectionsEvent;
             _tagLintelsEvent = tagLintelsEvent;
@@ -565,6 +568,11 @@ namespace FerrumAddinDev.LintelCreator_v3
             RaiseServiceEvent(_nestedElementsNumberingEvent, "Нумерация вложенных элементов");
         }
 
+        private void SetLintelBottomElevation_Click(object sender, RoutedEventArgs e)
+        {
+            RaiseServiceEvent(_setLintelBottomElevationEvent, "Низ элемента");
+        }
+
         private void SetLintelBaseType_Click(object sender, RoutedEventArgs e)
         {
             RaiseServiceEvent(_setLintelBaseTypeEvent, "Определение типа основы");
@@ -627,6 +635,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 _typeReplacementEvent?.Dispose();
                 _lintelNumerateEvent?.Dispose();
                 _nestedElementsNumberingEvent?.Dispose();
+                _setLintelBottomElevationEvent?.Dispose();
                 _setLintelBaseTypeEvent?.Dispose();
                 _createSectionsEvent?.Dispose();
                 _tagLintelsEvent?.Dispose();
@@ -774,6 +783,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 Padding = new Thickness(10, 5, 10, 5),
                 Margin = new Thickness(0, 0, 7, 0)
             };
+            ButtonIcons.SetKind(copyButton, "Copy");
             copyButton.Click += (sender, args) =>
             {
                 try
@@ -799,6 +809,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 Padding = new Thickness(10, 5, 10, 5),
                 Margin = new Thickness(0, 0, 7, 0)
             };
+            ButtonIcons.SetKind(saveButton, "Save");
             saveButton.Click += SaveReport_Click;
             buttons.Children.Add(saveButton);
 
@@ -809,6 +820,7 @@ namespace FerrumAddinDev.LintelCreator_v3
                 Padding = new Thickness(10, 5, 10, 5),
                 IsDefault = true
             };
+            ButtonIcons.SetKind(closeButton, "Close");
             closeButton.Click += (sender, args) => Close();
             buttons.Children.Add(closeButton);
             Grid.SetRow(buttons, 2);
