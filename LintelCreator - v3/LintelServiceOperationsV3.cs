@@ -7,7 +7,9 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Windows;
 using System.Windows.Forms;
+using MessageBox = System.Windows.MessageBox;
 using View = Autodesk.Revit.DB.View;
 
 namespace FerrumAddinDev.LintelCreator_v3
@@ -911,7 +913,21 @@ namespace FerrumAddinDev.LintelCreator_v3
                                 updatedParameters++;
                             }
                         }
+                        // 26.10.26 - тип основы без вложенных семейств
+                        if (lintel.GetSubComponentIds().Count() == 0 || lintel.GetSubComponentIds() == null)
+                        {
+                            Parameter parameter = lintel?.LookupParameter(BaseTypeParameterName);
 
+                            if (parameter != null
+                                && !parameter.IsReadOnly
+                                && parameter.StorageType == StorageType.String)
+                            {
+                                parameter.Set(baseTypeValue);
+                                updatedParameters++;
+                            }
+
+                        }
+                        
                         processedLintels++;
                     }
 
