@@ -1284,8 +1284,7 @@
                                                  <TextBox Grid.Column="7"
                                                          Text="{Binding GapMm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                          Style="{StaticResource InputStyle}"
-                                                         IsReadOnly="True"
-                                                         ToolTip="Фиксированный зазор между соседними перемычками — 10 мм"
+                                                         ToolTip="Зазор после перемычки, мм (0 или больше)"
                                                          Margin="0,0,6,0"
                                                          TextAlignment="Right"/>
                                                  <StackPanel Grid.Column="8" Orientation="Horizontal">

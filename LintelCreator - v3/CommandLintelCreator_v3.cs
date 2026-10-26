@@ -524,7 +524,8 @@ namespace FerrumAddinDev.LintelCreator_v3
         private int _lengthMm;
         private int _heightMm;
         private int _widthMm;
-        private int _gapMm;
+        // 26.10.26 - ручное редактирование зазора
+        private int? _gapMm;
         private bool _canMoveUp;
         private bool _canMoveDown;
         private bool _isApplyingCatalogItem;
@@ -668,7 +669,8 @@ namespace FerrumAddinDev.LintelCreator_v3
 
         public int GapMm
         {
-            get => _gapMm;
+            // 26.10.26 - ручное редактирование зазора
+            get => _gapMm ?? (CanMoveDown ? LintelSelectionEngineV3.InterElementGapMm : 0);
             set
             {
                 int normalized = Math.Max(0, value);
@@ -697,6 +699,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                 if (_canMoveDown == value) return;
                 _canMoveDown = value;
                 RaisePropertyChanged(nameof(CanMoveDown));
+                if (!_gapMm.HasValue)
+                    RaisePropertyChanged(nameof(GapMm));
             }
         }
 
@@ -3804,8 +3808,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                     if (item == null) continue;
                     if (!EditorCatalogItems.Contains(item))
                         EditorCatalogItems.Add(item);
-
-                    var row = new LintelEditorRowV3(item, GetDefaultMetalLengthMm());
+                    // 26.10.26 - ручное редактирование зазора
+                    var row = new LintelEditorRowV3(item, GetDefaultMetalLengthMm()) { GapMm = 0 };
                     row.LengthMm = segment.LengthMm > 0 ? segment.LengthMm : item.LengthMm;
                     row.HeightMm = segment.HeightMm > 0 ? segment.HeightMm : item.HeightMm;
                     if (leadingGap > 0)
@@ -4306,8 +4310,10 @@ namespace FerrumAddinDev.LintelCreator_v3
             if (sender is LintelEditorRowV3 row)
             {
                 bool materialChanged = e.PropertyName == nameof(LintelEditorRowV3.Material);
+                // 26.10.26 - ручное редактирование зазора
                 bool shouldRefreshCatalog = materialChanged
-                                            || e.PropertyName == nameof(LintelEditorRowV3.Purpose);
+                                            || e.PropertyName == nameof(LintelEditorRowV3.Purpose)
+                                            || e.PropertyName == nameof(LintelEditorRowV3.GapMm);
                 if (materialChanged && !row.IsApplyingCatalogItem)
                 {
                     LintelCatalogItemV3 materialItem = EditorCatalogItems
@@ -4518,9 +4524,6 @@ namespace FerrumAddinDev.LintelCreator_v3
                 EditorRows[index].Index = index + 1;
                 EditorRows[index].CanMoveUp = index > 0;
                 EditorRows[index].CanMoveDown = index < EditorRows.Count - 1;
-                EditorRows[index].GapMm = index < EditorRows.Count - 1
-                    ? LintelSelectionEngineV3.InterElementGapMm
-                    : 0;
             }
             RefreshAllEditorRowCatalogItems();
         }
