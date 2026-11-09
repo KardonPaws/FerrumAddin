@@ -7448,10 +7448,16 @@ namespace FerrumAddinDev.LintelCreator_v3
         {
             typeCreated = false;
             FamilySymbol existing = FindUnitSymbol(symbolsByName, component);
-            if (existing != null
-                || component?.Material != LintelMaterialV3.Metal
-                || component.LengthMm <= 0)
+            //09.11.26 - Параметр "Длина" для металических перемычек
+            if (component?.Material != LintelMaterialV3.Metal)
                 return existing;
+            if (existing != null)
+            {
+                RequireMetalUnitLengthParameter(existing);
+                return existing;
+            }
+            if (component.LengthMm <= 0)
+                return null;
 
             string requestedTypeName = string.IsNullOrWhiteSpace(component.RevitTypeName)
                 ? component.Mark
@@ -7474,11 +7480,12 @@ namespace FerrumAddinDev.LintelCreator_v3
                             "Revit создал металлический тип с именем «" + created.Name
                             + "» вместо «" + requestedTypeName + "».");
 
-                    Parameter length = FindParameterByNormalizedName(created, "ADSK_Размер_Длина");
-                    if (length == null || length.IsReadOnly)
+                    Parameter length = RequireMetalUnitLengthParameter(created);
+                    if (length.IsReadOnly)
                         throw new InvalidOperationException(
                             "В металлическом семействе «" + created.FamilyName
-                            + "» не найден доступный параметр типа «ADSK_Размер_Длина».");
+                            + "» параметр типа «" + length.Definition.Name
+                            + "» доступен только для чтения.");
                     SetLengthParameter(length, component.LengthMm);
                     document.Regenerate();
 
@@ -7605,8 +7612,8 @@ namespace FerrumAddinDev.LintelCreator_v3
             string symbolDescription = (symbol?.FamilyName ?? string.Empty)
                                        + " " + (symbol?.Name ?? string.Empty);
             List<int> symbolNumbers = ReadIntegerTokensForPlacement(symbolDescription).ToList();
-            double parameterLength = GetLengthParameterMm(
-                FindParameterByNormalizedName(symbol, "ADSK_Размер_Длина"));
+            //09.11.26 - Параметр "Длина" для металических перемычек
+            double parameterLength = GetLengthParameterMm(FindUnitLengthParameter(symbol));
             bool lengthMatches = symbolNumbers.Contains(component.LengthMm)
                                  || !double.IsNaN(parameterLength)
                                  && Math.Abs(parameterLength - component.LengthMm) <= 0.5;
@@ -8515,13 +8522,8 @@ namespace FerrumAddinDev.LintelCreator_v3
                                                && index < componentSymbols.Count
                     ? componentSymbols[index]
                     : null;
-                Parameter actualLengthParameter = FindParameterByNormalizedName(
-                                                      componentSymbol,
-                                                      "ADSK_Размер_Длина")
-                                                  ?? FindParameterByNormalizedName(
-                                                      componentSymbol,
-                                                      "Длина");
-                double actualLength = GetLengthParameterMm(actualLengthParameter);
+                //09.11.26 - Параметр "Длина" для металических перемычек
+                double actualLength = GetLengthParameterMm(FindUnitLengthParameter(componentSymbol));
                 double length = components[index]?.Material == LintelMaterialV3.Metal
                                 && components[index].LengthMm > 0
                     ? components[index].LengthMm
@@ -8607,6 +8609,20 @@ namespace FerrumAddinDev.LintelCreator_v3
             string name = parameter?.Definition?.Name ?? string.Empty;
             return name.IndexOf("перемыч", StringComparison.OrdinalIgnoreCase) >= 0
                    || name.IndexOf("тип", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+        //09.11.26 - Параметр "Длина" для металических перемычек
+        private static Parameter RequireMetalUnitLengthParameter(FamilySymbol symbol)
+        {
+            return FindUnitLengthParameter(symbol)
+                   ?? throw new InvalidOperationException(
+                       "В металлическом семействе «" + symbol.FamilyName
+                       + "» не найден ни один из параметров типа «ADSK_Размер_Длина» и «Длина».");
+        }
+
+        private static Parameter FindUnitLengthParameter(FamilySymbol symbol)
+        {
+            return FindParameterByNormalizedName(symbol, "ADSK_Размер_Длина")
+                   ?? FindParameterByNormalizedName(symbol, "Длина");
         }
 
         private static Parameter FindParameterByNormalizedName(Element element, string parameterName)

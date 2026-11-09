@@ -269,6 +269,17 @@
   <ItemGroup>
     <Resource Include="GrillageCreator - v3\GrillageCreatorBackground.png" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\zhFoundationPit24\zhFoundationPit24.csproj">
+      <Project>{68F3418C-9B69-46E8-9409-A3F37484D4C1}</Project>
+      <Name>zhFoundationPit24</Name>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\zhShaftSections24\zhShaftSections24.csproj">
+      <Project>{3b174de7-f43a-4b02-9a3f-8073abec6b64}</Project>
+      <Name>zhShaftSections24</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent Condition="'$(Configuration)' == 'Debug'">powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)Build\Deploy-Debug.ps1" -OutputDirectory "$(TargetDir)."</PostBuildEvent>
