@@ -74,7 +74,7 @@ namespace FerrumAddinDev.GrillageCreator_v3
             }
             catch (Exception ex)
             {
-
+                TaskDialog.Show("Армирование ростверка", ex.Message);
             }
         }
 
@@ -3108,35 +3108,47 @@ namespace FerrumAddinDev.GrillageCreator_v3
 
         private void CreateRebarSet(Document doc, List<Line> lines, RebarBarType barType, RebarStyle style, Element host, XYZ dir, int count, double step, bool poz, bool isKnittedMode)
         {
-            RebarShape shape = (RebarShape)new FilteredElementCollector(doc).OfClass(typeof(RebarShape)).WhereElementIsElementType().Where(x => x.Name == "Х_51").First();
             using (Transaction tx = new Transaction(doc))
             {
                 tx.Start("Создание арматуры");
                 double extensionLength = 0.08202; // Расширение в футах
                 if (isKnittedMode)
                 {
-                    List<Curve> lines2 = new List<Curve>();
-                    foreach (Line l in lines)
+                    // 10.11.26 - исправление форму хомута
+                    RebarShape shape = new FilteredElementCollector(doc).OfClass(typeof(RebarShape))
+                        .Cast<RebarShape>().FirstOrDefault(x => x.Name == "Х_51");
+                    if (shape == null || shape.RebarStyle != style ||
+                        shape.StirrupTieAttachment != StirrupTieAttachmentType.ExteriorFace)
                     {
-                        lines2.Add(l);
+                        throw new InvalidOperationException("Загрузите форму «Х_51» со стилем «Хомут / Стяжка» и присоединением к наружной грани защитного слоя.");
                     }
-                    RebarHookType hook = (RebarHookType)new FilteredElementCollector(doc).OfClass(typeof(RebarHookType)).WhereElementIsElementType().Where(x => x.Name == barType.Name).FirstOrDefault();
-                    Rebar rebarSet = Rebar.CreateFromCurves(doc, style, barType, hook, hook, host, dir, lines2, RebarHookOrientation.Left, RebarHookOrientation.Left, true, true);
-                    //rebarSet.LookupParameter("ADSK_A").Set(extendedLine.Length);
-                    if (rebarSet != null)
-                    {
-                        rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_LAYOUT_RULE).Set(3);
-                        rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_BAR_SPACING).Set(step);
-                        rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS).Set(count);
-                        rebarSet.GetShapeDrivenAccessor().BarsOnNormalSide = false;
-                        ElementId shapeToDel = rebarSet.GetShapeId();
-                        rebarSet.LookupParameter("ADSK_A_bent").Set(rebarSet.LookupParameter("ADSK_A_bent").AsDouble() + barType.BarModelDiameter);
-                        rebarSet.LookupParameter("ADSK_B_bent").Set(rebarSet.LookupParameter("ADSK_B_bent").AsDouble() + barType.BarModelDiameter);
 
-                        rebarSet.LookupParameter("Форма").Set(shape.Id);
-                        doc.Delete(shapeToDel);
-                        rebarSet.LookupParameter("ADSK_Позиция").Set("1");
+                    RebarHookType hook = new FilteredElementCollector(doc).OfClass(typeof(RebarHookType))
+                        .Cast<RebarHookType>().FirstOrDefault(x => x.Name == "Сейсмическая поперечная арматура - 135 градусов");
+                    if (hook == null)
+                    {
+                        throw new InvalidOperationException("Загрузите тип отгиба «Сейсмическая поперечная арматура - 135 градусов» для формы «Х_51».");
                     }
+
+                    List<Curve> curves = lines.Cast<Curve>().ToList();
+                    Rebar rebarSet = Rebar.CreateFromCurvesAndShape(doc, shape, barType, hook, hook, host,
+                        dir, curves, RebarHookOrientation.Right, RebarHookOrientation.Right);
+                    if (rebarSet == null || rebarSet.GetShapeId() != shape.Id)
+                    {
+                        throw new InvalidOperationException("Не удалось создать хомут формы «Х_51».");
+                    }
+
+                    // Контур задан по оси стержня, а размеры формы Х_51 — по наружным граням.
+                    SetStirrupDimension(rebarSet, "ADSK_A_bent", lines[2].Length + barType.BarModelDiameter);
+                    SetStirrupDimension(rebarSet, "ADSK_B_bent", lines[1].Length + barType.BarModelDiameter);
+                    rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_LAYOUT_RULE).Set(3);
+                    rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_BAR_SPACING).Set(step);
+                    rebarSet.get_Parameter(BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS).Set(count);
+                    using (RebarShapeDrivenAccessor accessor = rebarSet.GetShapeDrivenAccessor())
+                    {
+                        accessor.BarsOnNormalSide = accessor.Normal.DotProduct(dir) > 0;
+                    }
+                    rebarSet.LookupParameter("ADSK_Позиция").Set("1");
                 }
                 else
                 {
@@ -3187,6 +3199,17 @@ namespace FerrumAddinDev.GrillageCreator_v3
                     }
                 }
                 tx.Commit();
+            }
+        }
+        // 10.11.26 - исправление форму хомута
+        private static void SetStirrupDimension(Rebar rebar, string name, double length)
+        {
+            Parameter parameter = rebar.LookupParameter(name);
+            if (parameter == null || parameter.StorageType != StorageType.Double ||
+                (Math.Abs(parameter.AsDouble() - length) > GeometryTolerance &&
+                 (parameter.IsReadOnly || !parameter.Set(length))))
+            {
+                throw new InvalidOperationException($"Не удалось задать размер «{name}» хомута формы «Х_51».");
             }
         }
 
